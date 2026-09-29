@@ -1,0 +1,40 @@
+{
+  "configVersion": 1,
+  "models": {
+    "default": "sonnet",
+    "roles": {}
+  },
+  "budgets": {
+    "algorithm": {
+      "maxModelCalls": 17,
+      "maxRetriesPerCall": 1,
+      "maxRetriesPerJob": 4,
+      "maxInputChars": 20000,
+      "maxOutputChars": 6000,
+      "maxOutputCharsByRole": { "ACE": 10000, "PM": 10000 },
+      "callTimeoutSeconds": 120,
+      "maxDurationSeconds": 900
+    },
+    "scalp": {
+      "maxModelCalls": 7,
+      "maxRetriesPerCall": 1,
+      "maxRetriesPerJob": 2,
+      "maxInputChars": 20000,
+      "maxOutputChars": 6000,
+      "maxOutputCharsByRole": {},
+      "callTimeoutSeconds": 90,
+      "maxDurationSeconds": 300
+    },
+    "forced_direction": {
+      "maxModelCalls": 7,
+      "maxRetriesPerCall": 1,
+      "maxRetriesPerJob": 2,
+      "maxInputChars": 20000,
+      "maxOutputChars": 6000,
+      "maxOutputCharsByRole": {},
+      "callTimeoutSeconds": 90,
+      "maxDurationSeconds": 300
+    }
+  },
+  "maxConcurrentJobs": 1
+}

@@ -1,0 +1,21 @@
+{
+  "name": "pixel-trading-floor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI 멀티 에이전트 트레이딩 분석 시뮬레이션 (실제 주문 없음)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "verify": "npm run check && npm test",
+    "floor": "node src/cli/floor.ts",
+    "start": "node src/server/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.3"
+  }
+}
