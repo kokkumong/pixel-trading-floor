@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PIXEL TRADING FLOOR</title>
+<link rel="stylesheet" href="/web/app.css">
+<script type="module" src="/web/app.js"></script>
+</head>
+<body>
+<!-- Phase 6 임시 화면: 서버 API와 SSE 확인용. 픽셀 UI는 Phase 7에서 이 자리를 바꾼다 -->
+<div id="lan" class="banner warn" hidden></div>
+<div id="watermark" class="watermark" aria-hidden="true" hidden>DEMO · 실제 데이터 아님</div>
+<nav class="top"><a href="/">FLOOR</a> <a href="/reports">리포트</a> <a href="/diagnostics" id="diag-link">진단</a></nav>
+<main>
+  <h1>PIXEL TRADING FLOOR</h1>
+  <p class="note">분석 시뮬레이션입니다. 실제 주문 기능은 없습니다.</p>
+  <form id="analyze">
+    <label>종목 <input id="symbol" name="symbol" maxlength="32" value="BTC" required></label>
+    <label>모드
+      <select id="mode" name="mode">
+        <option value="algorithm">알고리즘</option>
+        <option value="scalp">스캘핑 20x</option>
+        <option value="forced_direction">강제 방향 시뮬레이션</option>
+      </select>
+    </label>
+    <button type="submit" id="go">▶ ANALYZE</button>
+    <button type="button" id="cancel" disabled>취소</button>
+  </form>
+  <p id="readonly" class="note" hidden>LAN 기기에서는 보기만 할 수 있습니다. 분석은 서버 PC에서 실행하세요.</p>
+  <p id="status"></p>
+  <p id="report" hidden><a id="report-link" href="/reports">리포트 저장됨 — 열기</a></p>
+  <pre id="log" class="log"></pre>
+</main>
+</body>
+</html>

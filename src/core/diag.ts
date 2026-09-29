@@ -1,7 +1,8 @@
 // 통합 진단 (P1 명세 8.2). `floor doctor`와 /diagnostics(Phase 6)가 같은 검사를 쓴다.
 // 결과에 비밀값(토큰, 키, 이메일)을 넣지 않는다 (P1-8-R7). 인증 방식은 구독 로그인 / API 키 / 확인 불가로만 표시한다.
-// 서버 관련 검사(포트, 서버 모드)는 서버가 생기는 Phase 6에서 더한다.
+// 서버 관련 검사(포트, 서버 모드)는 server 옵션이 있을 때만 한다 (/diagnostics: 실행 중인 서버, doctor: 시작 전 확인).
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { calendarCoverageWarnings } from './data/calendar.ts';
 import { createClockProbe, judgeClock } from './data/clock.ts';
@@ -34,6 +35,19 @@ export interface DiagOptions {
   executable?: ClaudeExecutable | null;
   /** Claude 시험 호출 (사용자가 요청했을 때만, 호출 1회 소모) */
   claudeTest?: boolean;
+  /** 포트·서버 모드 검사. running이면 이 서버가 그 포트를 쓰는 중이다 */
+  server?: { port: number; mode: 'local' | 'lan'; running: boolean };
+}
+
+export const LAN_WARNING = 'LAN 공유 중 · 암호화되지 않음';
+
+/** 127.0.0.1에서 잠깐 열어 본다 */
+export function portAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = createServer();
+    s.once('error', () => resolve(false));
+    s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
+  });
 }
 
 export interface DiagResult {
@@ -156,6 +170,17 @@ export async function runDiagnostics(o: DiagOptions): Promise<DiagResult> {
     } catch (e) {
       add({ id: `dir:${d.label}`, label: `${d.label} 쓰기`, status: 'error', code: 'E-DISK', detail: (e as Error).message, hint: '폴더 권한과 디스크 공간을 확인하세요' });
     }
+  }
+
+  // 포트와 서버 모드
+  if (o.server) {
+    const { port, mode, running } = o.server;
+    if (running) add({ id: 'port', label: '포트', status: 'ok', detail: `${port} · 이 서버가 사용 중` });
+    else if (await portAvailable(port)) add({ id: 'port', label: '포트', status: 'ok', detail: `${port} · 사용 가능` });
+    else add({ id: 'port', label: '포트', status: 'warn', detail: `${port} · 이미 사용 중`, hint: '먼저 켜져 있던 서버 창을 닫거나 PORT 환경변수로 포트를 바꾸세요' });
+    add(mode === 'lan'
+      ? { id: 'server-mode', label: '서버 모드', status: 'warn', detail: `${LAN_WARNING} — 토큰은 무단 접근을 막지만 도청은 막지 못합니다`, hint: '집·사무실의 신뢰할 수 있는 Wi-Fi에서만 쓰세요. 공용·게스트 Wi-Fi 금지' }
+      : { id: 'server-mode', label: '서버 모드', status: 'ok', detail: '로컬 전용 (127.0.0.1)' });
   }
 
   // Claude 시험 호출 (선택, 호출 1회)

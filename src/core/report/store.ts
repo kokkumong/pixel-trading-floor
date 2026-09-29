@@ -1,8 +1,8 @@
 // 리포트 저장소 (P1 명세 6.3, 6.4). reports/<이름>.json이 원본이고 .md는 JSON에서 만든다.
 // 저장: .tmp-<jobId>.json·.tmp-<jobId>.md를 쓰고 동기화 → JSON → Markdown 순서로 이름 변경 (P1-6-R5).
 // 목록은 JSON이 있는 리포트만 보여준다. 대상 파일이 있으면 덮어쓰지 않는다 (P1-6-R6).
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { FinalizeOptions } from '../job/engine.ts';
 import { isJobId } from '../job/store.ts';
 import { renderMarkdown } from './markdown.ts';
@@ -114,6 +114,7 @@ export class ReportStore {
   list(tab: ReportTab = 'analysis'): ReportSummary[] {
     const out: ReportSummary[] = [];
     for (const file of this.jsonFiles()) {
+      if (!this.inside(file)) continue; // P0-7-R8: 링크로 reports/ 밖을 가리키는 파일은 목록에도 넣지 않는다
       const r = this.read(file);
       if (!r || reportTab(r) !== tab) continue;
       out.push({
@@ -126,13 +127,33 @@ export class ReportStore {
 
   /** 리포트 ID(jobId)로 조회 (P1-6-R9). 파일명에는 앞 8자만 있으므로 내용의 jobId로 확인한다 */
   get(jobId: string): Report | null {
+    return this.locate(jobId)?.report ?? null;
+  }
+
+  /**
+   * 리포트 ID로 파일을 찾는다 (P0-7-R8). 경로 문자열을 받지 않고, 링크를 따라간 실제 경로가 reports/ 밖이면 거부한다.
+   * md는 Markdown이 아직 없으면(이름 변경 직전 중단, repair 전) null
+   */
+  locate(jobId: string): { report: Report; json: string; md: string | null } | null {
     if (!isJobId(jobId)) return null;
     for (const file of this.jsonFiles()) {
       if (!file.includes(`_${jobId.slice(0, 8)}`)) continue;
+      if (!this.inside(file)) continue;
       const r = this.read(file);
-      if (r?.jobId === jobId) return r;
+      if (r?.jobId !== jobId) continue;
+      const md = file.replace(/\.json$/, '.md');
+      return { report: r, json: file, md: existsSync(md) && this.inside(md) ? md : null };
     }
     return null;
+  }
+
+  private inside(file: string): boolean {
+    try {
+      const rel = relative(realpathSync(this.dir), realpathSync(file));
+      return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+    } catch {
+      return false;
+    }
   }
 
   /** JSON만 있고 Markdown이 없는 리포트(이름 변경 직전 중단)의 Markdown을 JSON에서 다시 만든다 */

@@ -403,3 +403,13 @@ test('녹화된 모든 종목·모드로 정상 작업이 끝나고, 입력이 �
     for (const c of driver.calls) assert.ok(c.systemPrompt.length + c.input.length <= 20_000, `${name} ${c.role} ${c.input.length}`);
   }
 });
+
+test('P1-1-R5 서버 시작 복구 대상을 고를 수 있다: web 작업만 INTERRUPTED, 진행 중 /floor 작업은 그대로', async () => {
+  const web = await setup('scalp', 'web');
+  const floor = await web.engine.createJob({ idempotencyKey: 'k-floor', mode: 'scalp', symbolInput: 'BTC', interface: 'floor' }, replayAcquirer('btc-scalp').acquirer);
+  assert.equal(floor.record.state, 'VALIDATING_DATA');
+  const ids = web.engine.recoverInterrupted(() => {}, () => false, (r) => r.executionBackend === 'subprocess_per_role');
+  assert.deepEqual(ids, [web.job.record.jobId]);
+  assert.equal(web.store.load(web.job.record.jobId).state, 'INTERRUPTED');
+  assert.equal(web.store.load(floor.record.jobId).state, 'VALIDATING_DATA');
+});

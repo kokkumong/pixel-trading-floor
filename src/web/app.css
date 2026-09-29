@@ -1,0 +1,22 @@
+/* Phase 6 임시 스타일. 픽셀 UI는 Phase 7 */
+:root { color-scheme: dark; --bg: #11131a; --fg: #e6e6e6; --muted: #9aa0ad; --warn: #ffb020; --line: #2a2f3a; --accent: #6cf; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+a { color: var(--accent); }
+nav.top { padding: 8px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 16px; }
+.banner.warn { background: var(--warn); color: #000; padding: 6px 16px; font-weight: bold; }
+.watermark { position: fixed; inset: 40% 0 auto 0; text-align: center; font-size: 48px; color: rgba(255, 176, 32, .18); pointer-events: none; transform: rotate(-12deg); z-index: 10; }
+.badge { display: inline-block; padding: 2px 8px; border: 1px solid var(--warn); color: var(--warn); }
+.note { color: var(--muted); }
+form#analyze { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+input, select, button { font: inherit; padding: 4px 8px; background: #1b1f29; color: var(--fg); border: 1px solid var(--line); }
+button:disabled { opacity: .5; }
+pre { white-space: pre-wrap; word-break: break-word; background: #0b0d12; border: 1px solid var(--line); padding: 12px; }
+pre.log { min-height: 200px; max-height: 60vh; overflow: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+tr.error td { color: #ff6b6b; }
+tr.warn td { color: var(--warn); }
+.tabs { display: flex; gap: 16px; }
+ul.files span { color: var(--muted); }
