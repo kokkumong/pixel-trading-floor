@@ -12,7 +12,8 @@
     "test": "node --test \"test/**/*.test.ts\"",
     "verify": "npm run check && npm test",
     "floor": "node src/cli/floor.ts",
-    "start": "node src/server/main.ts"
+    "start": "node src/server/main.ts",
+    "prepare": "node scripts/conventions.ts install-hooks"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

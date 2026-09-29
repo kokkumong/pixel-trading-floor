@@ -1,0 +1,30 @@
+# 이슈 검사: 제목 [FEAT]/[BUG], 빈 항목 없음. 위반하면 사유를 댓글로 남기고 닫는다 (CONVENTION.md 3장)
+name: 이슈 검사
+on:
+  issues:
+    types: [opened, edited, reopened]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - id: check
+        continue-on-error: true
+        run: node scripts/conventions.ts issue
+        env:
+          CHECK_REPORT: ${{ runner.temp }}/issue-check.md
+      - name: 규칙 위반 이슈 닫기
+        if: steps.check.outcome == 'failure' && github.event.issue.state == 'open'
+        run: |
+          printf '\n\n고친 뒤 이슈를 다시 열면(Reopen) 다시 검사합니다.\n' >> "$REPORT"
+          gh issue close "$NUMBER" --repo "$GITHUB_REPOSITORY" --comment "$(cat "$REPORT")"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPORT: ${{ runner.temp }}/issue-check.md

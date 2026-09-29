@@ -1,0 +1,27 @@
+# 통합 검증: 타입 검사 + 테스트 (npm run verify), PR 커밋 메시지 규칙 (CONVENTION.md 1장)
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - name: 커밋 메시지 검사
+        if: github.event_name == 'pull_request'
+        run: node scripts/conventions.ts commits "$BASE" "$HEAD"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
