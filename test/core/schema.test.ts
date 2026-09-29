@@ -56,11 +56,15 @@ test('V-ENTRY 진입 유형별 min·max 관계', () => {
   assert.deepEqual(c({ type: 'zone', min: 101, max: 101 }), ['V-ENTRY']);
 });
 
-test('V-UNFORCED와 V-ACTION 강제 방향 모드 규칙', () => {
+test('V-UNFORCED 강제 방향 모드에서만 필수', () => {
   const forced = proposalCtx('forced_direction');
   assert.deepEqual(codes(checkProposal(proposalOutput(), forced)), ['V-UNFORCED']);
   assert.deepEqual(codes(checkProposal(proposalOutput({ unforcedAction: 'NO_TRADE' }), forced)), []);
   assert.deepEqual(codes(checkProposal(proposalOutput({ unforcedAction: 'NO_TRADE' }), proposalCtx('scalp'))), ['V-UNFORCED']);
+});
+
+test('P0-3-T7 강제 방향 모드의 NO_TRADE 응답은 V-ACTION 스키마 오류', () => {
+  const forced = proposalCtx('forced_direction');
   assert.deepEqual(
     codes(checkProposal(proposalOutput({ action: 'NO_TRADE', unforcedAction: 'NO_TRADE' }), forced)),
     ['V-ACTION'],

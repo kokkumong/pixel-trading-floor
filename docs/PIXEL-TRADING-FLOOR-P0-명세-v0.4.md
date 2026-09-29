@@ -1,7 +1,7 @@
-# PIXEL TRADING FLOOR P0 명세 v0.3
+# PIXEL TRADING FLOOR P0 명세 v0.4
 
 - 작성일: 2026-09-29
-- 문서 버전: v0.3 (초안)
+- 문서 버전: v0.4 (초안)
 - 최근 개정: 2026-09-29
 - 상위 문서: `PIXEL-TRADING-FLOOR-구조-보완안-v1.2.md` 5장 P0
 - 후속 문서: `PIXEL-TRADING-FLOOR-P1-명세-v0.1.md`
@@ -18,6 +18,7 @@
 | v0.1 | 2026-09-29 | 보완안 v1.1의 P0 8개 항목에 대한 최초 명세 |
 | v0.2 | 2026-09-29 | 확인 필요 사항 비판적 검토 반영: 토론 조기 종료(11~13회), 판정에 `bias`·`unforcedDecision` 추가, 확신도 숫자 경계 폐지와 3단계 표시, 상한값 산식화 및 임시값 조정, 에이전트 입력 축소, LAN 토큰 만료 단축과 평문 HTTP 한계 명시, `/floor` 공통 코어 사용 의무화(9장 신설) |
 | v0.3 | 2026-09-29 | 보완안 v1.2 우선순위 개정 반영: 9장을 P0 과도기 분류(P0-F-R7~R9)와 P1 구현 계약(P0-F-R1~R6)으로 분리, 추정 시세 조건부 사용 경로 폐기, 과거 판정 회고 비활성화와의 관계 명시, 상한 실측과 리포트 버전 추적을 P1 명세로 연결, `FinalDecision.status`에 `UNSUPPORTED_SYMBOL`·`INTERRUPTED` 추가 (P0-4-R5 및 P1 상태 머신과 정합) |
+| v0.4 | 2026-09-29 | 3.6절 검증 규칙에 `V-ACTION` 추가 (2.2절 모드별 허용 행동을 스키마 검증으로 강제), 검증 항목 P0-3-T7 추가 |
 
 ## 0. P0 항목과 이 문서의 대응
 
@@ -327,6 +328,7 @@ executionBackend: subprocess_per_role | single_session
 | `V-CONF` | `confidence`가 0~100 정수 | `SCHEMA_ERROR` |
 | `V-ENTRY` | `entry.type = market`이면 min·max null 허용, `limit`이면 min = max, `zone`이면 min < max | `SCHEMA_ERROR` |
 | `V-UNFORCED` | `forced_direction`이면 `unforcedAction` 필수, 다른 모드면 null | `SCHEMA_ERROR` |
+| `V-ACTION` | `action`이 모드별 허용 행동(2.2절)에 속함. `forced_direction`에서 `NO_TRADE` 금지 | `SCHEMA_ERROR` |
 | `V-BIAS` | `forced_direction` 외 모드에서 `ENTER_LONG`이면 `BULLISH`, `ENTER_SHORT`이면 `BEARISH` | `DOWNGRADED` → `NO_TRADE` |
 | `V-DIR-LONG` | `ENTER_LONG`: `stopLoss < entry.min ≤ entry.max < targets[i]` | `DOWNGRADED` → `NO_TRADE` |
 | `V-DIR-SHORT` | `ENTER_SHORT`: `targets[i] < entry.min ≤ entry.max < stopLoss` | `DOWNGRADED` → `NO_TRADE` |
@@ -358,6 +360,7 @@ executionBackend: subprocess_per_role | single_session
 - **P0-3-T4** 규칙 위반 결과가 UI에서 녹색(정상) 판정 색으로 표시되지 않는다.
 - **P0-3-T5** 알고리즘 모드에서 `ENTER_LONG` + `BEARISH` 응답은 `V-BIAS`로 강등된다.
 - **P0-3-T6** 화면 어디에도 확신도가 `%`나 숫자 게이지로 표시되지 않는다.
+- **P0-3-T7** `forced_direction` 모드에서 `action: NO_TRADE` 응답은 `V-ACTION`으로 `SCHEMA_ERROR` 또는 재시도로 처리된다.
 
 ---
 
