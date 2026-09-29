@@ -174,3 +174,18 @@ test('P1-8 진단 표: 포트 사용 가능 여부와 서버 모드(LAN이면 �
   const none = await runDiagnostics(opts());
   assert.equal(none.checks.some((c) => c.id === 'port'), false);
 });
+
+test('P1-8.2 Node.js 보안 패치: 지원 LTS 계열의 알려진 보안 릴리스보다 오래되면 경고, LTS가 아닌 계열·지원 종료도 경고', async () => {
+  const at = (v: string, now = '2026-09-29T00:00:00Z') => runDiagnostics(opts({ nodeVersion: v, now: () => new Date(now) })).then((d) => check(d, 'node'));
+  const old = await at('22.22.0');
+  assert.equal(old.status, 'warn');
+  assert.match(old.detail, /22\.23\.2/);
+  assert.match(old.hint ?? '', /nodejs\.org/);
+  assert.equal((await at('22.23.2')).status, 'ok');
+  assert.equal((await at('24.21.0')).status, 'ok');
+  assert.equal((await at('24.18.0')).status, 'warn');
+  assert.equal((await at('26.5.1')).status, 'ok');
+  assert.equal((await at('25.9.0')).status, 'warn', '홀수 계열은 LTS가 아니다');
+  assert.equal((await at('22.23.2', '2027-05-01T00:00:00Z')).status, 'warn', '지원 종료 뒤');
+  assert.equal((await at('22.17.9')).status, 'error');
+});
