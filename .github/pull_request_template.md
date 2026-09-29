@@ -10,5 +10,5 @@ Close #
 ## 체크리스트
 - [ ] `npm run verify` 통과 (tsc + node --test)
 - [ ] 새 테스트 이름이 명세 검증 ID로 시작 (해당하는 테스트가 있으면)
-- [ ] 바뀐 동작에 맞게 명세·CLAUDE.md 갱신 (필요 없으면 그대로 체크)
+- [ ] 바뀐 동작에 맞게 명세·CLAUDE.md·docs/HANDOFF.md·docs/ARCHITECTURE.md 갱신 (필요 없으면 그대로 체크)
 - [ ] 시크릿, 실제 주문·자금 이동 기능, 새 런타임 의존성 없음

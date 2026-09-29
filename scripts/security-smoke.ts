@@ -2,7 +2,7 @@
 //   node scripts/security-smoke.ts tools     P1-7-T6: 도구 사용을 유도해도 실행되지 않고 작업 디렉터리 밖 파일 내용이 나오지 않는다 (haiku 1회)
 //   node scripts/security-smoke.ts inject    P1-7-T3: 모든 뉴스 제목 앞에 인젝션 문구를 넣은 fixture와 원본 fixture로 BTC scalp를 한 번씩 돌려 비교한다 (sonnet 5회 × 2)
 //   node scripts/security-smoke.ts inject-only  인젝션 쪽만 (sonnet 5회)
-// 결과는 표준 출력에만 쓴다. 기록은 사람이 명세·CLAUDE.md에 옮긴다.
+// 결과는 표준 출력에만 쓴다. 기록은 사람이 명세·docs/HANDOFF.md에 옮긴다.
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
