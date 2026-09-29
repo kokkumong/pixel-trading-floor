@@ -3,6 +3,7 @@
 // 두 경로의 차이는 "역할 출력을 누가 만드는가"뿐이다. 모든 상태 변경은 작업 기록에 원자적으로 저장한다 (P1-1-R1).
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { judgeClock } from '../data/clock.ts';
 import { buildRoleInput, fitInput, InputBudgetError, type PriorOutputs, type RoleInput } from '../data/project.ts';
 import type { Instrument, Resolution } from '../data/registry.ts';
 import { assembleSnapshot, hashSnapshot, type AnalysisSnapshot } from '../data/snapshot.ts';
@@ -26,6 +27,8 @@ export interface Acquirer {
   registryVersion: string;
   resolve(): Promise<Resolution>;
   collect(instrument: Instrument, marketType: MarketType): Promise<SourceRecord[]>;
+  /** 수집 중 잰 PC 시계 오차 (ms). 60초를 넘으면 스냅샷을 만들기 전에 E-CLOCK으로 막는다 (P1-8.2, E13) */
+  clockSkewMs?(): number | null;
 }
 
 export interface Job {
@@ -75,8 +78,16 @@ export interface Engine {
   finalize(job: Job, opts?: FinalizeOptions): FinalDecision | null;
   trackPid(job: Job, pid: number): void;
   untrackPid(job: Job, pid: number): void;
-  /** 서버 시작 시: 진행 중 작업을 INTERRUPTED로 바꾸고 기록된 하위 프로세스를 종료한다 (P1-1-R5) */
-  recoverInterrupted(kill?: (pid: number) => void): string[];
+  /**
+   * 서버 시작 시: 진행 중 작업을 INTERRUPTED로 바꾸고 기록된 하위 프로세스를 종료한다 (P1-1-R5).
+   * SAVING에서 멈췄는데 리포트 JSON이 온전히 저장돼 있으면(hasReport) COMPLETED로 확정한다 (P1-6-T2)
+   */
+  recoverInterrupted(kill?: (pid: number) => void, hasReport?: (jobId: string) => boolean): string[];
+  /**
+   * P1-5-T3: finalize 없이 세션이 끝난 /floor 작업 정리. 코어 명령마다 부른다.
+   * 스냅샷 뒤 maxDurationSeconds가 지난 진행 중 single_session 작업을 INTERRUPTED로 바꾼다 (지금 명령의 작업은 제외)
+   */
+  sweepAbandoned(exceptJobId?: string): string[];
 }
 
 export function createEngine(opts: EngineOptions): Engine {
@@ -151,6 +162,15 @@ export function createEngine(opts: EngineOptions): Engine {
         records = await acq.collect(res.instrument, res.marketType);
       } catch (e) {
         record.warnings.push(`수집 실패: ${(e as Error).message}`); // 모든 소스 실패로 취급 → 품질 판정에서 INSUFFICIENT_DATA
+      }
+      const skew = acq.clockSkewMs?.() ?? null;
+      if (skew !== null) {
+        const c = judgeClock(skew);
+        if (c.level === 'error') {
+          terminate(job, 'FAILED', 'E-CLOCK', c.message);
+          return job;
+        }
+        if (c.level === 'warn') record.warnings.push(`시계 오차: ${c.message}`);
       }
       move(job, 'VALIDATING_DATA');
       const snap = assembleSnapshot({
@@ -322,15 +342,34 @@ export function createEngine(opts: EngineOptions): Engine {
       save(job);
     },
 
-    recoverInterrupted(kill = killRecordedProcess) {
+    recoverInterrupted(kill = killRecordedProcess, hasReport = () => false) {
       const ids: string[] = [];
       for (const record of store.list()) {
         if (isTerminal(record.state)) continue;
+        if (record.state === 'SAVING' && record.finalDecision && hasReport(record.jobId)) {
+          record.pids = [];
+          move({ record, snapshot: null }, 'COMPLETED');
+          store.save(record);
+          continue;
+        }
         for (const pid of record.pids) {
           try { kill(pid); } catch { /* 이미 종료 */ }
         }
         record.pids = [];
         terminate({ record, snapshot: null }, 'INTERRUPTED', 'E-INTERRUPTED', `${record.state} 단계에서 서버 종료`);
+        ids.push(record.jobId);
+      }
+      return ids;
+    },
+
+    sweepAbandoned(exceptJobId) {
+      const ids: string[] = [];
+      for (const record of store.list()) {
+        if (isTerminal(record.state) || record.executionBackend !== 'single_session' || record.jobId === exceptJobId) continue;
+        const since = Date.parse(record.snapshot?.collectedAt ?? record.createdAt);
+        const limit = budgetFor(record.mode).maxDurationSeconds * 1000;
+        if (now().getTime() - since <= limit) continue;
+        terminate({ record, snapshot: null }, 'INTERRUPTED', 'E-INTERRUPTED', `${record.state} 단계에서 세션이 끝나 finalize되지 않음`);
         ids.push(record.jobId);
       }
       return ids;

@@ -1,6 +1,20 @@
 // 테스트용 가짜 claude CLI. 표준 입력의 "#MODE=<이름>"으로 동작을 고른다.
-import { readdirSync, writeFileSync } from 'node:fs';
+import { readdirSync, writeFileSync, writeSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+
+// 진단용 하위 명령: --version, auth status. 인증 상태는 --fake-auth=<claude.ai|none|apiKey|garbage> (P1-8-T4)
+const argv = process.argv.slice(2);
+const fakeAuth = /^--fake-auth=(\S+)$/.exec(argv.find((a) => a.startsWith('--fake-auth=')) ?? '')?.[1] ?? 'claude.ai';
+if (argv.includes('--version')) {
+  writeSync(1, '2.1.284 (Claude Code)\n');
+  process.exit(0);
+}
+if (argv[0] === 'auth' || argv[1] === 'auth') {
+  if (fakeAuth === 'garbage') { writeSync(1, '???'); process.exit(0); }
+  const loggedIn = fakeAuth !== 'none';
+  writeSync(1, JSON.stringify({ loggedIn, authMethod: loggedIn ? fakeAuth : 'none', apiProvider: 'firstParty', email: 'secret-user@example.com', orgName: "secret-user@example.com's Organization" }));
+  process.exit(loggedIn ? 0 : 1);
+}
 
 let input = '';
 process.stdin.setEncoding('utf8');

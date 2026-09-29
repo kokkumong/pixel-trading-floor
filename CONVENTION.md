@@ -90,7 +90,7 @@
 
 모든 검사가 통과해야 병합합니다. 혼자 하는 저장소라 팀원 Approve는 요구하지 않습니다 (GitHub에서 본인 PR은 승인할 수 없음).
 
-> CI는 실제 claude나 외부 API를 호출하지 않습니다. 실제 호출은 수동 스모크 테스트(`node scripts/run-job.ts`)에서만 합니다.
+> CI는 실제 claude나 외부 API를 호출하지 않습니다. 실제 호출은 수동 스모크 테스트(`node src/cli/floor.ts analyze <종목> <모드>`)에서만 합니다.
 
 ---
 

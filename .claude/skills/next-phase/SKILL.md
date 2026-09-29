@@ -50,7 +50,7 @@ description: PIXEL TRADING FLOOR의 다음 Phase 하나를 이 세션에서 끝�
   - `test/data-helpers.ts`: `replayAcquirer`, `replaySnapshot`
   - `test/job-helpers.ts`: `autoDriver`, `tempEngine`
 - 핵심 규칙은 결함 주입으로 확인한다. 한 줄을 망가뜨려 해당 테스트가 실패하는지 보고 되돌린다.
-- 실제 claude·외부 API는 Phase 마지막 수동 스모크 1회에서만 쓴다. 필요할 때만 `node scripts/run-job.ts <종목> <모드>`를 실행하고, 호출 수·시간·비용을 기록한다.
+- 실제 claude·외부 API는 Phase 마지막 수동 스모크 1회에서만 쓴다. 필요할 때만 `node src/cli/floor.ts analyze <종목> <모드>`를 실행하고, 호출 수·시간·비용을 기록한다.
 - 작업 단위마다 규칙에 맞는 커밋을 한다. 형식: `<feat|fix|design|refactor|docs|chore|test>: <한글 포함 요약>`, 끝에 `Co-Authored-By` 줄.
 
 ## 4. 다음 세션 인계 갱신 (PR에 포함)

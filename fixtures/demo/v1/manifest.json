@@ -1,0 +1,7 @@
+{
+  "fixtureVersion": "v1",
+  "scenarios": {
+    "algorithm": "btc-algorithm",
+    "scalp": "btc-scalp"
+  }
+}

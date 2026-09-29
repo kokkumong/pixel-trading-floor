@@ -12,6 +12,7 @@
     "test": "node --test \"test/**/*.test.ts\"",
     "verify": "npm run check && npm test",
     "floor": "node src/cli/floor.ts",
+    "doctor": "node src/cli/floor.ts doctor",
     "start": "node src/server/main.ts",
     "prepare": "node scripts/conventions.ts install-hooks"
   },

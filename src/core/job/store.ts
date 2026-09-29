@@ -77,6 +77,12 @@ export class JobStore {
     return p;
   }
 
+  writeText(jobId: string, rel: string, text: string): string {
+    const p = this.path(jobId, rel);
+    writeFileAtomic(p, text);
+    return p;
+  }
+
   readJson<T = unknown>(jobId: string, rel: string): T {
     return JSON.parse(readFileSync(this.path(jobId, rel), 'utf8')) as T;
   }

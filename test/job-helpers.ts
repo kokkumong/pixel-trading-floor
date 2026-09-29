@@ -85,3 +85,15 @@ export function autoDriver(overrides: Partial<Record<Role, Override>> = {}): Scr
     return overrides[req.role]?.(input, i, req) ?? { output: sampleOutput(req.role, input) };
   });
 }
+
+/** /floor 경로: CLI 명령마다 작업을 다시 열어 next → submit을 반복한다. finalize는 호출하지 않는다 */
+export function floorDrive(engine: Engine, jobId: string, outputFor: (role: Role, input: RoleInput) => unknown = sampleOutput): void {
+  for (;;) {
+    const n = engine.next(engine.openJob(jobId));
+    if (n.kind !== 'steps') return;
+    for (const st of n.steps) {
+      const r = engine.submit(engine.openJob(jobId), st.stepId, outputFor(st.role, st.input));
+      if (!r.ok) throw new Error(`${st.stepId} 제출 실패: ${r.kind === 'schema' ? r.summary : r.message}`);
+    }
+  }
+}
