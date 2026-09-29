@@ -3,35 +3,16 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createBlockedNet, type NetClient } from '../../src/core/data/net.ts';
 import { createEngine } from '../../src/core/job/engine.ts';
 import { JobStore } from '../../src/core/job/store.ts';
 import { createClaudeCliDriver } from '../../src/core/model/claude-cli.ts';
 import type { ModelDriver } from '../../src/core/model/driver.ts';
 import { ReportStore } from '../../src/core/report/store.ts';
-import type { Mode } from '../../src/core/schema/types.ts';
-import { JobManager, type JobEvent, type JobManagerOptions } from '../../src/server/jobs.ts';
+import type { JobEvent } from '../../src/server/jobs.ts';
+import { FAKE, FIXTURE, manager } from './server-helpers.ts';
 import { replayAcquirer } from '../data-helpers.ts';
 import { autoDriver, sampleOutput } from '../job-helpers.ts';
-
-const FIXTURE: Record<Mode, string> = { algorithm: 'btc-algorithm', scalp: 'btc-scalp', forced_direction: 'btc-scalp' };
-const FAKE = fileURLToPath(new URL('../fixtures/fake-claude.mjs', import.meta.url));
-
-export function manager(over: Partial<JobManagerOptions> & { root?: string } = {}) {
-  const root = over.root ?? mkdtempSync(join(tmpdir(), 'floor-srv-'));
-  const at = replayAcquirer('btc-scalp').at;
-  const m = new JobManager({
-    root, env: {}, now: () => at, tzOffsetMinutes: 540, maxConcurrentJobs: 1,
-    acquirer: (symbol, mode) => replayAcquirer(FIXTURE[mode], { symbol }).acquirer,
-    driver: () => autoDriver(),
-    checkClaude: async () => ({ ok: true }),
-    claudeVersion: async () => '2.1.284 (Claude Code)',
-    demoDelayMs: 0,
-    ...over,
-  });
-  return { m, root };
-}
 
 const key = (n = 0) => `test-key-${n}-${'x'.repeat(8)}`;
 

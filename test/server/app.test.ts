@@ -1,0 +1,456 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { request as httpRequest } from 'node:http';
+import { connect } from 'node:net';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { DiagResult } from '../../src/core/diag.ts';
+import { createApp, CSP, type AppOptions } from '../../src/server/app.ts';
+import { LAN_TOKEN_TTL_MS, LanAuth, lanIPv4Addresses } from '../../src/server/security.ts';
+import { autoDriver, sampleOutput } from '../job-helpers.ts';
+import { manager } from './server-helpers.ts';
+import { readZip } from './zip-reader.ts';
+
+const LAN_IP = '192.168.77.20';
+
+interface Res { status: number; headers: Record<string, string | string[] | undefined>; body: Buffer; text: string; json: any }
+
+type Harness = Awaited<ReturnType<typeof start>>;
+
+async function start(over: Partial<AppOptions> & { managerOpts?: Parameters<typeof manager>[0] } = {}) {
+  const { m, root } = manager(over.managerOpts ?? {});
+  const logs: string[] = [];
+  const app = createApp({
+    manager: m, mode: 'local', port: 0, auth: null, lanAddrs: [LAN_IP],
+    clientIp: (req) => (req.headers['x-test-ip'] as string | undefined) ?? req.socket.remoteAddress,
+    diagnostics: async (claudeTest): Promise<DiagResult> => ({
+      ok: true, clockSkewMs: 0,
+      checks: [
+        { id: 'port', label: '포트', status: 'ok', detail: '이 서버가 사용 중' },
+        { id: 'server-mode', label: '서버 모드', status: 'ok', detail: '로컬 전용 <b>' },
+        ...(claudeTest ? [{ id: 'claude-test', label: 'Claude 시험 호출', status: 'ok' as const, detail: '성공' }] : []),
+      ],
+    }),
+    log: (s) => logs.push(s),
+    ...over,
+  });
+  const port = await app.listen();
+  const host = `127.0.0.1:${port}`;
+  const origin = `http://${host}`;
+  const req = (path: string, o: { method?: string; host?: string; origin?: string | null; ip?: string; cookie?: string; body?: unknown; type?: string } = {}): Promise<Res> =>
+    new Promise((resolve, reject) => {
+      const method = o.method ?? (o.body !== undefined ? 'POST' : 'GET');
+      const headers: Record<string, string> = { Host: o.host ?? host };
+      if (o.ip) headers['x-test-ip'] = o.ip;
+      if (o.cookie) headers.Cookie = o.cookie;
+      const originHeader = o.origin === undefined ? (method === 'GET' ? null : origin) : o.origin;
+      if (originHeader) headers.Origin = originHeader;
+      let payload: string | undefined;
+      if (o.body !== undefined) {
+        payload = typeof o.body === 'string' ? o.body : JSON.stringify(o.body);
+        headers['Content-Type'] = o.type ?? 'application/json';
+      }
+      const r = httpRequest({ host: '127.0.0.1', port, path, method, headers }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          const body = Buffer.concat(chunks);
+          const text = body.toString('utf8');
+          let json: any = null;
+          try { json = JSON.parse(text); } catch { /* HTML */ }
+          resolve({ status: res.statusCode ?? 0, headers: res.headers, body, text, json });
+        });
+      });
+      r.on('error', reject);
+      r.end(payload);
+    });
+  return { app, m, root, port, host, origin, req, logs };
+}
+
+let n = 0;
+const analyzeBody = (over: Record<string, unknown> = {}) => ({ symbol: 'BTC', mode: 'scalp', idempotencyKey: `app-key-${++n}-xxxxxxxx`, ...over });
+
+/** SSE를 끝(end 이벤트)까지 읽는다 */
+function readSse(port: number, host: string, path: string, headers: Record<string, string> = {}): Promise<{ status: number; events: { event: string; data: any }[] }> {
+  return new Promise((resolve, reject) => {
+    const r = httpRequest({ host: '127.0.0.1', port, path, headers: { Host: host, ...headers } }, (res) => {
+      let buf = '';
+      const events: { event: string; data: any }[] = [];
+      res.setEncoding('utf8');
+      res.on('data', (d: string) => {
+        buf += d;
+        let i: number;
+        while ((i = buf.indexOf('\n\n')) >= 0) {
+          const block = buf.slice(0, i);
+          buf = buf.slice(i + 2);
+          const ev = /^event: (.+)$/m.exec(block)?.[1];
+          const data = /^data: (.+)$/m.exec(block)?.[1];
+          if (ev && data) events.push({ event: ev, data: JSON.parse(data) });
+        }
+      });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, events }));
+    });
+    r.on('error', reject);
+    r.end();
+  });
+}
+
+async function lan(over: Partial<AppOptions> = {}, clock = { t: Date.now() }) {
+  const auth = new LanAuth({ now: () => clock.t });
+  const h = await start({ mode: 'lan', auth, now: () => clock.t, ...over });
+  // LAN Host로 접속한 다른 기기 흉내
+  const lanHost = `${LAN_IP}:${h.port}`;
+  const remote = (path: string, o: Parameters<Harness['req']>[1] = {}) => h.req(path, { host: lanHost, ip: LAN_IP, origin: o.method === 'POST' || o.body !== undefined ? `http://${lanHost}` : null, ...o });
+  const login = async () => {
+    const r = await remote(`/?t=${auth.token}`);
+    assert.equal(r.status, 302);
+    return String(r.headers['set-cookie']).split(';')[0]!;
+  };
+  return { ...h, auth, clock, remote, login, lanHost };
+}
+
+test('P0-7-T1 기본 실행은 127.0.0.1에만 바인딩하고, 로컬이 아닌 접속은 거부한다', async () => {
+  const h = await start();
+  try {
+    assert.equal((h.app.server.address() as { address: string }).address, '127.0.0.1');
+    assert.equal((await h.req('/api/status')).status, 200);
+    assert.equal((await h.req('/api/status', { ip: LAN_IP })).status, 403); // 이중 방어
+    // 이 PC의 LAN 주소로는 연결 자체가 안 된다
+    for (const addr of lanIPv4Addresses().slice(0, 1)) {
+      const refused = await new Promise<boolean>((resolve) => {
+        const s = connect({ host: addr, port: h.port });
+        s.once('connect', () => { s.destroy(); resolve(false); });
+        s.once('error', () => resolve(true));
+      });
+      assert.equal(refused, true, addr);
+    }
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P0-7-T3 Host: evil.example 요청은 로컬·LAN 두 모드 모두 거부된다', async () => {
+  const h = await start();
+  const l = await lan();
+  try {
+    for (const x of [h, l]) {
+      assert.equal((await x.req('/', { host: 'evil.example' })).status, 403);
+      assert.equal((await x.req('/api/status', { host: `evil.example:${x.port}` })).status, 403);
+      assert.equal((await x.req('/api/status', { host: `localhost:${x.port}` })).status, 200);
+    }
+    assert.equal((await h.req('/api/status', { host: `${LAN_IP}:${h.port}` })).status, 403); // 로컬 모드는 LAN 주소 Host도 거부
+  } finally {
+    await h.app.close();
+    await l.app.close();
+  }
+});
+
+test('P0-7-T2, P0-7-R3 LAN: 토큰 없음·잘못된 토큰은 401, 토큰 → HttpOnly·SameSite=Strict 쿠키와 토큰 없는 주소로 이동, 만료되면 401', async () => {
+  const clock = { t: Date.now() };
+  const l = await lan({}, clock);
+  try {
+    assert.equal((await l.remote('/')).status, 401);
+    assert.equal((await l.remote('/api/status')).status, 401);
+    assert.equal((await l.remote('/?t=wrong-token-value')).status, 401);
+    const first = await l.remote(`/?t=${l.auth.token}&demo=1`);
+    assert.equal(first.status, 302);
+    assert.equal(first.headers.location, '/?demo=1');
+    const setCookie = String(first.headers['set-cookie']);
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Strict/);
+    const cookie = setCookie.split(';')[0]!;
+    assert.equal((await l.remote('/', { cookie })).status, 200);
+    const st = await l.remote('/api/status', { cookie });
+    assert.equal(st.json.client.readOnly, true);
+    assert.equal(st.json.lan.warning, 'LAN 공유 중 · 암호화되지 않음');
+    // P0-7-R4: 토큰은 응답·로그에 나오지 않는다
+    assert.equal(st.text.includes(l.auth.token), false);
+    assert.equal(l.logs.some((x) => x.includes(l.auth.token) || x.includes(cookie.split('=')[1]!)), false);
+    assert.ok(l.logs.some((x) => x.includes('?t=***')));
+    clock.t += LAN_TOKEN_TTL_MS + 1000;
+    assert.equal((await l.remote('/', { cookie })).status, 401);
+    assert.equal((await l.remote(`/?t=${l.auth.token}`)).status, 401);
+    // 서버 PC(로컬)는 토큰 없이 쓴다
+    assert.equal((await l.req('/api/status')).status, 200);
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-7-T6 토큰을 재발급하면 기존 쿠키로 보낸 요청이 401이 된다 (재발급은 서버 PC에서만)', async () => {
+  let rotated = 0;
+  const l = await lan({ onRotate: () => rotated++ });
+  try {
+    const cookie = await l.login();
+    assert.equal((await l.remote('/api/status', { cookie })).status, 200);
+    assert.equal((await l.remote('/api/lan/rotate', { cookie, method: 'POST' })).status, 403);
+    const r = await l.req('/api/lan/rotate', { method: 'POST' });
+    assert.equal(r.status, 200);
+    assert.equal(r.text.includes(l.auth.token), false);
+    assert.equal(rotated, 1);
+    assert.equal((await l.remote('/api/status', { cookie })).status, 401);
+    const again = await l.login();
+    assert.equal((await l.remote('/api/status', { cookie: again })).status, 200);
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-7-T4 LAN 기기에서 all.zip, project.zip, 분석 실행·취소, 진단이 차단되고 화면·리포트는 열린다', async () => {
+  const l = await lan({ enableProjectZip: true });
+  try {
+    const cookie = await l.login();
+    assert.equal((await l.remote('/api/analyze', { cookie, body: analyzeBody() })).status, 403);
+    assert.equal((await l.remote('/reports/all.zip', { cookie })).status, 403);
+    assert.equal((await l.remote('/project.zip', { cookie })).status, 403);
+    assert.equal((await l.remote('/api/project-zip/files', { cookie })).status, 403);
+    assert.equal((await l.remote('/diagnostics', { cookie })).status, 403);
+    assert.equal((await l.remote('/api/diagnostics', { cookie })).status, 403);
+    assert.equal((await l.remote('/reports', { cookie })).status, 200);
+    assert.equal((await l.remote('/api/reports', { cookie })).status, 200);
+    assert.equal((await l.remote('/web/app.js', { cookie })).status, 200);
+    // 서버 PC에서는 분석 실행 가능
+    const ok = await l.req('/api/analyze', { body: analyzeBody() });
+    assert.equal(ok.status, 202);
+    const id = ok.json.jobId;
+    assert.equal((await l.remote(`/api/jobs/${id}/cancel`, { cookie, method: 'POST' })).status, 403);
+    assert.equal((await l.remote(`/api/jobs/${id}`, { cookie })).status, 200);
+    await l.m.idle();
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-7-R9 --lan-allow-analyze를 켜면 LAN 기기도 분석을 실행할 수 있다 (로컬 전용 경로는 여전히 차단)', async () => {
+  const l = await lan({ lanAllowAnalyze: true });
+  try {
+    const cookie = await l.login();
+    const r = await l.remote('/api/analyze', { cookie, body: analyzeBody() });
+    assert.equal(r.status, 202);
+    assert.equal((await l.remote('/reports/all.zip', { cookie })).status, 403);
+    await l.m.idle();
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-7-T5 경로 이동 요청은 거부되고 파일 내용이 나가지 않는다', async () => {
+  const h = await start();
+  try {
+    for (const p of [
+      '/reports/..%2f..%2fpackage.json', '/reports/..%2F..%2Fpackage.json', '/reports/../../package.json', '/reports/%2e%2e/%2e%2e/package.json',
+      '/web/..%2f..%2f..%2fpackage.json', '/web/../../package.json', '/web/%2e%2e%2fserver%2fapp.ts', '/api/jobs/..%2f..%2fjobs', '/reports/x.json',
+    ]) {
+      const r = await h.req(p);
+      assert.ok(r.status === 404 || r.status === 400, `${p} → ${r.status}`);
+      assert.equal(r.text.includes('"devDependencies"'), false, p);
+    }
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P0-7-R6 상태를 바꾸는 요청은 Origin이 허용 출처일 때만, 본문은 JSON만', async () => {
+  const h = await start();
+  try {
+    assert.equal((await h.req('/api/analyze', { body: analyzeBody(), origin: null })).status, 403);
+    assert.equal((await h.req('/api/analyze', { body: analyzeBody(), origin: 'http://evil.example' })).status, 403);
+    assert.equal((await h.req('/api/analyze', { body: 'symbol=BTC', type: 'application/x-www-form-urlencoded' })).status, 415);
+    assert.equal((await h.req('/api/analyze', { body: '[1]' })).status, 400);
+    assert.equal((await h.req('/api/analyze', { body: { ...analyzeBody(), symbol: 'BTC; del /q *' } })).status, 400); // P1-7-T1
+    const ok = await h.req('/api/analyze', { body: analyzeBody(), origin: `http://localhost:${h.port}`, ip: '::1' }); // 위 세 요청이 분석 실행 횟수를 썼다
+    assert.equal(ok.status, 202);
+    await h.m.idle();
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P0-7-R7 분석 실행은 IP당 분당 3회까지, 넘으면 429', async () => {
+  const h = await start({ managerOpts: { driver: () => autoDriver({ TARO: (input) => ({ output: sampleOutput('TARO', input), delayMs: 100 }) }) } });
+  try {
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) codes.push((await h.req('/api/analyze', { body: analyzeBody() })).status);
+    assert.deepEqual(codes, [202, 409, 409, 429]);
+    const busy = await h.req('/api/analyze', { body: analyzeBody(), ip: '::ffff:127.0.0.1' }); // 다른 주소는 따로 센다
+    assert.equal(busy.status, 409);
+    assert.equal(busy.json.error, 'E-BUSY');
+    assert.equal(busy.json.message, '실행 중인 분석이 있습니다');
+    assert.ok(busy.json.running.jobId);
+    await h.m.idle();
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P1-7-R12 모든 응답에 콘텐츠 보안 정책, 표에 없는 경로는 404', async () => {
+  const h = await start();
+  try {
+    for (const p of ['/', '/api/status', '/reports', '/nope', '/diagnostics']) {
+      const r = await h.req(p);
+      assert.equal(r.headers['content-security-policy'], CSP, p);
+      assert.equal(r.headers['x-content-type-options'], 'nosniff');
+    }
+    assert.equal((await h.req('/nope')).status, 404);
+    assert.equal((await h.req('/api/status', { method: 'POST' })).status, 404);
+    assert.equal((await h.req('/api/analyze')).status, 404); // GET 없음
+    assert.equal(CSP, "default-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
+    const index = await h.req('/');
+    assert.equal(/<script>|<script [^>]*>[^<]/.test(index.text), false); // 인라인 스크립트 없음
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('SSE: 분석 진행 이벤트(작업 보기·역할 호출)를 끝까지 보내고 end로 닫는다. 끝난 작업은 바로 닫는다', async () => {
+  const h = await start({ managerOpts: { demoDelayMs: 20 } });
+  try {
+    const r = await h.req('/api/analyze', { body: analyzeBody({ mode: 'algorithm', demo: true, idempotencyKey: 'sse-demo-key-1' }) });
+    assert.equal(r.status, 202);
+    const id = r.json.jobId;
+    const s = await readSse(h.port, h.host, `/api/jobs/${id}/events`);
+    assert.equal(s.status, 200);
+    const states = s.events.filter((e) => e.event === 'job').map((e) => e.data.job.state);
+    assert.ok(states.includes('ANALYZING') && states.includes('DEBATING'), states.join(','));
+    assert.equal(states.at(-1), 'COMPLETED');
+    assert.ok(s.events.some((e) => e.event === 'call' && e.data.role === 'PM'));
+    assert.equal(s.events.at(-1)?.event, 'end');
+    const after = await readSse(h.port, h.host, `/api/jobs/${id}/events`);
+    assert.deepEqual(after.events.map((e) => e.event), ['job', 'end']);
+    assert.equal((await h.req('/api/jobs/00000000-0000-4000-8000-000000000000/events')).status, 404);
+    // 같은 키로 다시 보내면 새 작업 없이 기존 작업 (P0-8-R4)
+    const again = await h.req('/api/analyze', { body: analyzeBody({ mode: 'algorithm', demo: true, idempotencyKey: 'sse-demo-key-1' }) });
+    assert.equal(again.status, 200);
+    assert.equal(again.json.jobId, id);
+    assert.equal(again.json.existing, true);
+    const snap = await h.req(`/api/jobs/${id}/snapshot`);
+    assert.equal(snap.json.snapshotHash, r.json.job?.snapshot?.snapshotHash ?? snap.json.snapshotHash);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P1-7-T2 리포트 화면에서 모델 출력의 HTML·javascript: 링크가 실행되지 않는다 (이스케이프)', async () => {
+  const payload = '<img src=x onerror=alert(1)> [클릭](javascript:alert(1)) <script>alert(2)</script>';
+  const h = await start({
+    managerOpts: { driver: () => autoDriver({ TARO: (input) => ({ output: { ...(sampleOutput('TARO', input) as object), summary: payload, narrative: payload } }) }) },
+  });
+  try {
+    const r = await h.req('/api/analyze', { body: analyzeBody() });
+    await h.m.idle();
+    const id = r.json.jobId;
+    const v = await h.req(`/api/jobs/${id}`);
+    assert.equal(v.json.state, 'COMPLETED', JSON.stringify(v.json.error));
+    const page = await h.req(`/reports/${id}`);
+    assert.equal(page.status, 200);
+    assert.ok(page.text.includes('img src=x onerror=alert(1)')); // 글자로는 보인다
+    assert.equal(page.text.includes('<img'), false);
+    assert.equal(page.text.includes('<script>alert'), false);
+    assert.equal(/href="javascript:/i.test(page.text), false);
+    const md = await h.req(`/reports/${id}.md`);
+    assert.match(String(md.headers['content-disposition']), /attachment/);
+    assert.match(String(md.headers['content-type']), /text\/markdown/);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P1-7-R15 all.zip은 분석 탭 리포트만 담고, 상한을 넘으면 만들지 않는다. 목록 API에 파일 경로가 없다', async () => {
+  const h = await start();
+  try {
+    await h.req('/api/analyze', { body: analyzeBody() });
+    await h.m.idle();
+    await h.req('/api/analyze', { body: analyzeBody({ demo: true }) });
+    await h.m.idle();
+    const z = await h.req('/reports/all.zip');
+    assert.equal(z.status, 200);
+    const names = readZip(z.body).map((e) => e.name);
+    assert.equal(names.length, 2);
+    assert.ok(names.every((x) => x.startsWith('reports/') && !x.includes('_DEMO')), names.join(','));
+    const list = await h.req('/api/reports');
+    assert.equal(list.json.reports.length, 1);
+    assert.equal('file' in list.json.reports[0], false);
+    assert.equal(list.text.includes(h.root), false);
+    assert.equal((await h.req('/api/reports?tab=demo')).json.reports.length, 1);
+    assert.equal((await h.req('/api/reports?tab=../x')).status, 400);
+    const html = await h.req('/reports?tab=demo');
+    assert.ok(html.text.includes('DEMO · 실제 데이터 아님')); // P1-8-R4
+  } finally {
+    await h.app.close();
+  }
+  const small = await start({ allZipMaxBytes: 10 });
+  try {
+    await small.req('/api/analyze', { body: analyzeBody() });
+    await small.m.idle();
+    const r = await small.req('/reports/all.zip');
+    assert.equal(r.status, 413);
+  } finally {
+    await small.app.close();
+  }
+});
+
+test('P1-7-T5, P1-7-R14 project.zip: 기본 비활성, 켜면 목록 확인 뒤 같은 목록일 때만 만들고 인증 정보는 빠진다', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'floor-proj-'));
+  for (const [rel, text] of [['package.json', '{}'], ['src/a.ts', 'x'], ['.claude/settings.local.json', 'secret'], ['.credentials.json', 'secret'], ['.env', 'K=1']] as const) {
+    mkdirSync(join(projectRoot, rel, '..'), { recursive: true });
+    writeFileSync(join(projectRoot, rel), text);
+  }
+  const off = await start({ projectRoot });
+  try {
+    assert.equal((await off.req('/project.zip')).status, 404);
+    assert.equal((await off.req('/api/project-zip/files')).status, 404);
+  } finally {
+    await off.app.close();
+  }
+  const h = await start({ projectRoot, enableProjectZip: true });
+  try {
+    const preview = await h.req('/project.zip');
+    assert.equal(preview.status, 200);
+    assert.match(String(preview.headers['content-type']), /text\/html/);
+    assert.ok(preview.text.includes('src/a.ts'));
+    assert.equal(preview.text.includes('.credentials'), false);
+    const files = await h.req('/api/project-zip/files');
+    assert.equal((await h.req('/project.zip?confirm=0000000000000000')).status, 409);
+    const z = await h.req(`/project.zip?confirm=${files.json.listHash}`);
+    assert.equal(z.status, 200);
+    const names = readZip(z.body).map((e) => e.name);
+    assert.deepEqual(names.sort(), ['pixel-trading-floor/package.json', 'pixel-trading-floor/src/a.ts']);
+    assert.equal(names.some((x) => x.includes('.claude/') || x.includes('credentials') || x.includes('.env')), false);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('/diagnostics: 로컬에서만, 결과는 이스케이프, 시험 호출은 버튼(POST)으로만', async () => {
+  const h = await start();
+  try {
+    const d = await h.req('/diagnostics');
+    assert.equal(d.status, 200);
+    assert.ok(d.text.includes('포트'));
+    assert.ok(d.text.includes('로컬 전용 &lt;b&gt;'));
+    assert.ok(d.text.includes('action="/diagnostics/claude-test"'));
+    assert.equal(d.text.includes('Claude 시험 호출</td>'), false);
+    const t = await h.req('/diagnostics/claude-test', { method: 'POST' });
+    assert.equal(t.status, 200);
+    assert.ok(t.text.includes('Claude 시험 호출</td>'));
+    assert.equal((await h.req('/diagnostics/claude-test', { method: 'POST', origin: 'http://evil.example' })).status, 403);
+    assert.equal((await h.req('/api/diagnostics')).json.ok, true);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P1-8-R6, P1-7-R13 Claude 확인 실패 응답에 진단 링크, 오류 응답에 홈 경로·키가 없다', async () => {
+  const h = await start({ managerOpts: { checkClaude: async () => ({ ok: false, code: 'E-CLI-MISSING', detail: `not found in ${process.env.HOME}/.local/bin sk-ant-api03-SECRET` }) } });
+  try {
+    const r = await h.req('/api/analyze', { body: analyzeBody() });
+    assert.equal(r.status, 503);
+    assert.equal(r.json.error, 'E-CLI-MISSING');
+    assert.equal(r.json.hint, '/diagnostics');
+    assert.equal(r.text.includes('sk-ant-api03-SECRET'), false);
+    if (process.env.HOME) assert.equal(r.text.includes(process.env.HOME), false);
+  } finally {
+    await h.app.close();
+  }
+});
