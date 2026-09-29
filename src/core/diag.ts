@@ -11,6 +11,33 @@ import { createClaudeCliDriver, findClaudeExecutable, runClaudeCommand, type Cla
 import type { ErrorCode } from './model/errors.ts';
 
 export const MIN_NODE_VERSION = '22.18.0';
+/**
+ * 지원 LTS 계열별 알려진 최신 보안 릴리스와 지원 종료일 (nodejs.org/dist/index.json, nodejs/Release schedule.json 기준, 2026-09-29 확인).
+ * `node:http` 취약점은 Node 업데이트로만 막히므로 이보다 오래되면 경고한다. 앱은 실행 중에 nodejs.org를 조회하지 않는다 (P0-6-R1 목적지 목록 유지).
+ * 새 보안 릴리스가 나오면 이 표를 갱신한다
+ */
+export const NODE_SECURITY_BASELINE = {
+  checkedAt: '2026-09-29',
+  lines: {
+    22: { minPatch: '22.23.2', released: '2026-07-28', end: '2027-04-30' },
+    24: { minPatch: '24.18.1', released: '2026-07-28', end: '2028-04-30' },
+    26: { minPatch: '26.5.1', released: '2026-07-28', end: '2029-04-30' },
+  } as Record<number, { minPatch: string; released: string; end: string }>,
+} as const;
+
+/** Node 버전 검사: 최소 버전 미만은 오류, LTS가 아닌 계열·지원 종료·알려진 보안 릴리스 미만은 경고 */
+export function nodeCheck(version: string, now: Date): Check {
+  const base = { id: 'node', label: 'Node.js 버전' };
+  const hint = 'https://nodejs.org 에서 최신 LTS를 설치하세요 (보안 패치는 Node 업데이트로만 받습니다)';
+  if (compareVersions(version, MIN_NODE_VERSION) < 0) return { ...base, status: 'error', detail: `${version} (필요: ${MIN_NODE_VERSION} 이상)`, hint };
+  const line = NODE_SECURITY_BASELINE.lines[Number(version.split('.')[0])];
+  if (!line) return { ...base, status: 'warn', detail: `${version} (LTS 계열이 아니라 보안 패치 여부를 확인할 수 없음)`, hint };
+  if (now.toISOString().slice(0, 10) > line.end) return { ...base, status: 'warn', detail: `${version} (이 계열은 ${line.end}에 지원 종료)`, hint };
+  if (compareVersions(version, line.minPatch) < 0) {
+    return { ...base, status: 'warn', detail: `${version} (보안 릴리스 ${line.minPatch}(${line.released})보다 오래됨, ${NODE_SECURITY_BASELINE.checkedAt} 기준)`, hint };
+  }
+  return { ...base, status: 'ok', detail: version };
+}
 /** claude -p 호출 규약을 확인한 버전 (CLAUDE.md 스파이크: --safe-mode, --json-schema, structured_output) */
 export const MIN_CLAUDE_VERSION = '2.1.280';
 
@@ -102,9 +129,7 @@ export async function runDiagnostics(o: DiagOptions): Promise<DiagResult> {
 
   // Node.js
   const nodeV = o.nodeVersion ?? process.versions.node;
-  add(compareVersions(nodeV, MIN_NODE_VERSION) >= 0
-    ? { id: 'node', label: 'Node.js 버전', status: 'ok', detail: nodeV }
-    : { id: 'node', label: 'Node.js 버전', status: 'error', detail: `${nodeV} (필요: ${MIN_NODE_VERSION} 이상)`, hint: 'https://nodejs.org 에서 LTS를 설치하세요' });
+  add(nodeCheck(nodeV, now()));
 
   // Claude CLI: 존재·실행 방식 → 버전 → 인증
   const exe = o.executable === undefined ? findClaudeExecutable(env) : o.executable;

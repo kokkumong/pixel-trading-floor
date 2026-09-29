@@ -1,5 +1,6 @@
 // HTTP 서버의 보안 경계 (P0 명세 7장, P1 명세 7.5). 네트워크를 쓰지 않는 순수한 부품만 둔다.
-// 로컬 전용(기본): 127.0.0.1 바인딩, 토큰 없음. LAN 공유(--lan): 0.0.0.0 바인딩, 시작마다 새 토큰, 다른 기기는 읽기 전용.
+// 로컬 전용(기본): 127.0.0.1 바인딩, 시작마다 새 로컬 토큰(서버 실행 동안 유효). LAN 공유(--lan): 0.0.0.0 바인딩, 로컬 토큰 + 2시간 LAN 토큰, 다른 기기는 읽기 전용.
+// 루프백 접속도 로컬 토큰으로 받은 세션 쿠키가 있어야 한다: 같은 PC의 다른 프로세스·사용자와 다른 사이트를 막는다 (이슈 #11).
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 
@@ -8,6 +9,8 @@ export type ServerMode = 'local' | 'lan';
 /** P0-7-R2: 토큰과 세션 쿠키의 수명 */
 export const LAN_TOKEN_TTL_MS = 2 * 3600_000;
 export const SESSION_COOKIE = 'floor_lan';
+/** 로컬 토큰 세션 쿠키. LAN 세션과 따로 두어 LAN 토큰 재발급이 서버 PC 브라우저를 로그아웃시키지 않는다 */
+export const LOCAL_SESSION_COOKIE = 'floor_local';
 /** 세션 표 상한. 넘으면 가장 오래된 세션부터 버린다 */
 export const MAX_LAN_SESSIONS = 200;
 /** P0-7-R7: IP당 1분 요청 수 */
@@ -15,11 +18,12 @@ export const RATE_LIMITS = { analyzePerMinute: 3, otherPerMinute: 120, windowMs:
 
 /**
  * 경로별 접근 등급 (P0-7.4 표):
+ * public = 인증 없이 (화면의 정적 파일: 401 안내 페이지도 스타일을 읽게. 비밀이 없는 공개 코드)
  * read = LAN 토큰 인증 기기도 허용 (화면, 작업 진행, 리포트 목록·열람)
  * analyze = 분석 실행·취소. LAN 기기는 --lan-allow-analyze일 때만
  * local = 서버 PC에서만 (all.zip, project.zip, 진단, 토큰 재발급)
  */
-export type Access = 'read' | 'analyze' | 'local';
+export type Access = 'public' | 'read' | 'analyze' | 'local';
 
 export function isLoopback(addr: string | undefined): boolean {
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
@@ -82,8 +86,13 @@ export function checkOrigin(origin: string | undefined, allowed: Set<string>): b
   return allowed.has(origin.slice('http://'.length).toLowerCase());
 }
 
-export function decideAccess(o: { mode: ServerMode; isLocal: boolean; authed: boolean; access: Access; lanAllowAnalyze: boolean }): 'ok' | 401 | 403 {
-  if (o.isLocal) return 'ok';
+/**
+ * isLocal(루프백)은 로컬 토큰 세션(localAuthed), 다른 기기는 LAN 토큰 세션(authed)으로 본다.
+ * 루프백이라서 인증을 건너뛰지 않는다: 같은 PC의 다른 프로세스·사용자도 루프백으로 들어온다
+ */
+export function decideAccess(o: { mode: ServerMode; isLocal: boolean; authed: boolean; localAuthed: boolean; access: Access; lanAllowAnalyze: boolean }): 'ok' | 401 | 403 {
+  if (o.access === 'public') return 'ok';
+  if (o.isLocal) return o.localAuthed ? 'ok' : 401;
   if (o.mode === 'local') return 403; // 바인딩과 별도의 이중 방어 (P0-7-T1)
   if (!o.authed) return 401;
   if (o.access === 'read') return 'ok';
@@ -98,19 +107,20 @@ function sameSecret(a: string, b: string): boolean {
 }
 
 /**
- * LAN 토큰과 세션 (P0-7.3). 토큰은 서버 시작·재발급마다 새로 만들고(R1) 2시간 뒤 만료된다(R2).
- * 세션 쿠키는 토큰의 만료 시각을 따르고, 재발급하면 모든 세션이 무효가 된다.
+ * 접속 토큰과 세션 (P0-7.3). 토큰은 서버 시작·재발급마다 새로 만든다(R1). 재발급하면 모든 세션이 무효가 된다.
+ * LAN 토큰은 2시간 뒤 만료되고(R2) 세션 쿠키도 토큰의 만료 시각을 따른다. 로컬 토큰(ttlMs: null)은 서버 실행 동안 유효하고,
+ * 세션 쿠키는 브라우저 세션 쿠키(Max-Age 없음)다.
  */
-export class LanAuth {
+export class TokenAuth {
   private readonly now: () => number;
-  private readonly ttlMs: number;
+  private readonly ttlMs: number | null;
   private current = '';
   private expires = 0;
   private sessions = new Map<string, number>();
 
-  constructor(opts: { now?: () => number; ttlMs?: number } = {}) {
+  constructor(opts: { now?: () => number; ttlMs?: number | null } = {}) {
     this.now = opts.now ?? Date.now;
-    this.ttlMs = opts.ttlMs ?? LAN_TOKEN_TTL_MS;
+    this.ttlMs = opts.ttlMs === undefined ? LAN_TOKEN_TTL_MS : opts.ttlMs;
     this.rotate();
   }
 
@@ -124,7 +134,7 @@ export class LanAuth {
 
   rotate(): void {
     this.current = randomBytes(16).toString('base64url');
-    this.expires = this.now() + this.ttlMs;
+    this.expires = this.ttlMs === null ? Infinity : this.now() + this.ttlMs;
     this.sessions = new Map();
   }
 
@@ -132,12 +142,13 @@ export class LanAuth {
     return this.now() < this.expires && sameSecret(t, this.current);
   }
 
-  createSession(): { id: string; maxAgeSeconds: number } {
+  /** maxAgeSeconds가 null이면 만료 없는 토큰: 쿠키에 Max-Age를 붙이지 않는다 */
+  createSession(): { id: string; maxAgeSeconds: number | null } {
     const id = randomBytes(24).toString('base64url');
     // Map은 넣은 순서를 지킨다: 상한을 넘으면 가장 오래된 세션부터 버린다
     while (this.sessions.size >= MAX_LAN_SESSIONS) this.sessions.delete(this.sessions.keys().next().value!);
     this.sessions.set(id, this.expires);
-    return { id, maxAgeSeconds: Math.max(1, Math.floor((this.expires - this.now()) / 1000)) };
+    return { id, maxAgeSeconds: this.expires === Infinity ? null : Math.max(1, Math.floor((this.expires - this.now()) / 1000)) };
   }
 
   verifySession(id: string | undefined): boolean {
@@ -155,6 +166,13 @@ export class LanAuth {
   secrets(): string[] {
     return [this.current, ...this.sessions.keys()];
   }
+}
+
+export { TokenAuth as LanAuth };
+
+/** 세션 쿠키 헤더 (HttpOnly, SameSite=Strict: 다른 사이트에서 시작한 요청에는 쿠키가 실리지 않는다) */
+export function sessionCookie(name: string, s: { id: string; maxAgeSeconds: number | null }): string {
+  return `${name}=${s.id}; HttpOnly; SameSite=Strict; Path=/${s.maxAgeSeconds === null ? '' : `; Max-Age=${s.maxAgeSeconds}`}`;
 }
 
 /** 고정 창이 아니라 최근 1분 요청 시각으로 센다 */
@@ -208,13 +226,13 @@ function escapeRegExp(s: string): string {
 
 /**
  * P1-7-R13: sk-ant- 키, LAN 토큰·쿠키 값(secrets), 사용자 홈 경로의 사용자 이름을 가린다.
- * URL의 t= 값과 floor_lan= 쿠키 값은 목록에 없어도 가린다.
+ * URL의 t= 값과 floor_lan=·floor_local= 쿠키 값은 목록에 없어도 가린다.
  */
 export function redact(text: string, secrets: readonly string[] = [], home: string = ''): string {
   let out = text.replace(/sk-ant-[A-Za-z0-9_-]+/g, 'sk-ant-***');
   for (const s of secrets) if (s.length >= 8) out = out.replace(new RegExp(escapeRegExp(s), 'g'), '***');
   out = out.replace(/([?&]t=)[^&\s"'#]+/g, '$1***');
-  out = out.replace(new RegExp(`(${SESSION_COOKIE}=)[^;\\s"']+`, 'g'), '$1***');
+  out = out.replace(new RegExp(`((?:${SESSION_COOKIE}|${LOCAL_SESSION_COOKIE})=)[^;\\s"']+`, 'g'), '$1***');
   if (home.length > 1) out = out.replace(new RegExp(escapeRegExp(home), 'g'), '~');
   out = out.replace(/([/\\](?:Users|home)[/\\])[^/\\\s"']+/g, '$1***');
   return out;

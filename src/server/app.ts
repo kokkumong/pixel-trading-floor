@@ -1,5 +1,5 @@
 // HTTP 서버 (node:http, 의존성 없음). 요청마다 순서대로 검사한다:
-//   (연결: 들어온 인터페이스 검사) Host 허용 목록(P0-7-R5) → 교차 사이트 차단(R10) → 요청 횟수(R7) → LAN 첫 접속 토큰 → 경로 표(표에 없으면 404, 기본 차단) → 접근 등급(P0-7.4) → Origin(R6) → 분석 실행 횟수(R7)
+//   (연결: 들어온 인터페이스 검사) Host 허용 목록(P0-7-R5) → 교차 사이트 차단(R10) → 요청 횟수(R7) → 첫 접속 토큰(로컬·LAN) → 경로 표(표에 없으면 404, 기본 차단) → 접근 등급(P0-7.4, 루프백도 로컬 토큰 세션 필요) → Origin(R6) → 분석 실행 횟수(R7)
 // 모든 응답에 콘텐츠 보안 정책을 붙이고(P1-7-R12), 로그와 오류 응답의 비밀값을 가린다(P1-7-R13, P0-7-R4).
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -20,8 +20,8 @@ import { listBundleFiles } from './bundle.ts';
 import type { JobManager } from './jobs.ts';
 import { diagnosticsPage, messagePage, page, projectZipPage, reportPage, reportsPage, type Raw } from './pages.ts';
 import {
-  allowedHosts, allowedLocalAddress, checkFetchSite, checkHost, checkOrigin, decideAccess, isLoopback, parseCookies, RATE_LIMITS, RateLimiter,
-  redact, SESSION_COOKIE, type Access, type LanAuth, type ServerMode,
+  allowedHosts, allowedLocalAddress, checkFetchSite, checkHost, checkOrigin, decideAccess, isLoopback, LOCAL_SESSION_COOKIE, parseCookies, RATE_LIMITS, RateLimiter,
+  redact, SESSION_COOKIE, sessionCookie, type Access, type LanAuth, type ServerMode,
 } from './security.ts';
 import { ZipWriter } from './zip.ts';
 
@@ -44,8 +44,10 @@ export interface AppOptions {
   mode: ServerMode;
   /** 0이면 listen 때 정해진다 */
   port: number;
-  /** LAN 모드에서 서버를 켤 때 쓰는 인증 (로컬 모드는 null) */
+  /** LAN 모드에서 다른 기기용 인증 (로컬 모드는 null) */
   auth: LanAuth | null;
+  /** 이 PC(루프백) 접속용 로컬 토큰. 두 모드 모두 필수 (이슈 #11) */
+  localAuth: LanAuth;
   /** LAN 모드에서 접속을 받을 이 PC의 사설 주소 (main이 isPrivateIPv4로 고른다). Host 허용 목록과 연결 검사에 쓴다 */
   lanAddrs?: string[];
   enableProjectZip?: boolean;
@@ -116,7 +118,7 @@ export function createApp(o: AppOptions): App {
   const limiter = new RateLimiter(now);
   let port = o.port;
   let hosts = allowedHosts(port, o.mode, o.lanAddrs ?? []);
-  const secrets = () => o.auth?.secrets() ?? [];
+  const secrets = () => [...o.localAuth.secrets(), ...(o.auth?.secrets() ?? [])];
   const clean = (s: string) => redact(s, secrets(), home);
   const log = (s: string) => o.log?.(clean(s));
   const runDiag = o.diagnostics ?? ((claudeTest: boolean) => runDiagnostics({
@@ -135,7 +137,7 @@ export function createApp(o: AppOptions): App {
     'Content-Security-Policy': CSP,
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
-    'Referrer-Policy': 'no-referrer', // 토큰이 담긴 주소가 다른 곳으로 새지 않게
+    'Referrer-Policy': 'same-origin', // 토큰이 담긴 주소가 다른 사이트로 새지 않게. no-referrer면 폼 POST의 Origin이 null이 되어 R6에 막힌다
     'Cache-Control': 'no-store',
     // 다른 사이트가 응답을 <img>·<script> 등으로 끌어다 쓰거나 창 참조를 잡지 못하게
     'Cross-Origin-Resource-Policy': 'same-origin',
@@ -155,9 +157,7 @@ export function createApp(o: AppOptions): App {
     else htmlPage(c.res, e.status, e.code, messagePage(String(e.status), clean(e.message)));
   };
 
-  async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-    const type = String(req.headers['content-type'] ?? '');
-    if (!type.startsWith('application/json')) throw new HttpError(415, 'E-INPUT', 'Content-Type은 application/json이어야 합니다');
+  async function readBody(req: IncomingMessage): Promise<Buffer> {
     const chunks: Buffer[] = [];
     let size = 0;
     for await (const chunk of req) {
@@ -165,11 +165,24 @@ export function createApp(o: AppOptions): App {
       if (size > MAX_BODY_BYTES) throw new HttpError(413, 'E-INPUT', '요청 본문이 너무 큽니다');
       chunks.push(chunk as Buffer);
     }
+    return Buffer.concat(chunks);
+  }
+
+  async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+    const type = String(req.headers['content-type'] ?? '');
+    if (!type.startsWith('application/json')) throw new HttpError(415, 'E-INPUT', 'Content-Type은 application/json이어야 합니다');
     try {
-      const v = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const v = JSON.parse((await readBody(req)).toString('utf8'));
       if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
     } catch { /* 아래 */ }
     throw new HttpError(400, 'E-INPUT', '요청 본문은 JSON 객체여야 합니다');
+  }
+
+  /** HTML 폼(application/x-www-form-urlencoded) 본문 */
+  async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
+    const type = String(req.headers['content-type'] ?? '');
+    if (!type.startsWith('application/x-www-form-urlencoded')) throw new HttpError(415, 'E-INPUT', 'Content-Type은 application/x-www-form-urlencoded이어야 합니다');
+    return new URLSearchParams((await readBody(req)).toString('utf8'));
   }
 
   function serveStatic(c: Ctx, name: string) {
@@ -185,7 +198,7 @@ export function createApp(o: AppOptions): App {
   }
 
   function canAnalyze(isLocal: boolean): boolean {
-    return decideAccess({ mode: o.mode, isLocal, authed: true, access: 'analyze', lanAllowAnalyze: o.lanAllowAnalyze === true }) === 'ok';
+    return decideAccess({ mode: o.mode, isLocal, authed: true, localAuthed: true, access: 'analyze', lanAllowAnalyze: o.lanAllowAnalyze === true }) === 'ok';
   }
 
   const sseOpen = new Map<string, number>();
@@ -235,8 +248,8 @@ export function createApp(o: AppOptions): App {
 
   const routes: Route[] = [
     { method: 'GET', path: /^\/$/, access: 'read', handle: (c) => serveStatic(c, 'index.html') },
-    { method: 'GET', path: /^\/web\/([^/]+)$/, access: 'read', handle: (c) => serveStatic(c, c.params[0]!) },
-    { method: 'GET', path: /^\/favicon\.ico$/, access: 'read', handle: (c) => { c.res.writeHead(204, baseHeaders('image/x-icon')); c.res.end(); } },
+    { method: 'GET', path: /^\/web\/([^/]+)$/, access: 'public', handle: (c) => serveStatic(c, c.params[0]!) },
+    { method: 'GET', path: /^\/favicon\.ico$/, access: 'public', handle: (c) => { c.res.writeHead(204, baseHeaders('image/x-icon')); c.res.end(); } },
     {
       method: 'GET', path: /^\/api\/status$/, access: 'read',
       handle: (c) => json(c.res, 200, {
@@ -304,7 +317,8 @@ export function createApp(o: AppOptions): App {
         htmlPage(c.res, 200, '리포트', reportsPage(tab, m.reports.list(tab), c.isLocal), tab === 'demo');
       },
     },
-    { method: 'GET', path: /^\/reports\/all\.zip$/, access: 'local', handle: (c) => allZip(c) },
+    // 부작용(ZIP 생성·진단 실행)이 있는 경로는 POST만: Origin 검사(P0-7-R6)를 받는다. Sec-Fetch-Site를 보내지 않는 구형 브라우저 대비 (이슈 #11)
+    { method: 'POST', path: /^\/reports\/all\.zip$/, access: 'local', handle: (c) => allZip(c) },
     {
       method: 'GET', path: new RegExp(`^/reports/${UUID}(\\.md|\\.json)?$`), access: 'read',
       handle: (c) => {
@@ -321,15 +335,17 @@ export function createApp(o: AppOptions): App {
         htmlPage(c.res, 200, found.report.displayName, reportPage(found.report, md), found.report.demo);
       },
     },
+    // GET은 실행 버튼만 보이고 진단을 돌리지 않는다
+    { method: 'GET', path: /^\/diagnostics$/, access: 'local', handle: (c) => htmlPage(c.res, 200, '진단', diagnosticsPage(null, false)) },
     {
-      method: 'GET', path: /^\/diagnostics$/, access: 'local',
+      method: 'POST', path: /^\/diagnostics$/, access: 'local',
       handle: async (c) => htmlPage(c.res, 200, '진단', diagnosticsPage(await diagnostics(false), false)),
     },
     {
       method: 'POST', path: /^\/diagnostics\/claude-test$/, access: 'local',
       handle: async (c) => htmlPage(c.res, 200, '진단', diagnosticsPage(await diagnostics(true), true)),
     },
-    { method: 'GET', path: /^\/api\/diagnostics$/, access: 'local', handle: async (c) => json(c.res, 200, await diagnostics(false)) },
+    { method: 'POST', path: /^\/api\/diagnostics$/, access: 'local', handle: async (c) => json(c.res, 200, await diagnostics(false)) },
     {
       method: 'GET', path: /^\/api\/project-zip\/files$/, access: 'local',
       handle: (c) => {
@@ -338,13 +354,19 @@ export function createApp(o: AppOptions): App {
       },
     },
     {
+      // P1-7-R14: 포함 파일 목록을 먼저 보여주고(GET), 확인한 목록 해시를 담은 POST일 때만 만든다
       method: 'GET', path: /^\/project\.zip$/, access: 'local',
       handle: (c) => {
         projectZipEnabled();
+        htmlPage(c.res, 200, 'project.zip', projectZipPage(listBundleFiles(projectRoot)));
+      },
+    },
+    {
+      method: 'POST', path: /^\/project\.zip$/, access: 'local',
+      handle: async (c) => {
+        projectZipEnabled();
+        const confirm = (await readFormBody(c.req)).get('confirm');
         const list = listBundleFiles(projectRoot);
-        const confirm = c.url.searchParams.get('confirm');
-        // P1-7-R14: 포함 파일 목록을 먼저 보여주고, 확인한 목록 그대로일 때만 만든다
-        if (confirm === null) return htmlPage(c.res, 200, 'project.zip', projectZipPage(list));
         if (confirm !== list.listHash) throw new HttpError(409, 'E-CHANGED', '확인한 뒤 파일 목록이 바뀌었습니다. 목록을 다시 확인하세요');
         return streamZip(c, 'pixel-trading-floor.zip', list.files.map((f) => ({ name: `pixel-trading-floor/${f.path}`, path: join(projectRoot, f.path) })));
       },
@@ -428,27 +450,25 @@ export function createApp(o: AppOptions): App {
       // P0-7-R7: 모든 요청은 분당 120회. 분석 실행은 인증·출처 검사를 통과한 요청만 따로 분당 3회로 센다
       const tooMany = () => new HttpError(429, 'E-RATE', '요청이 너무 많습니다. 잠시 뒤 다시 시도하세요');
       if (!limiter.hit(`${ip}|other`, RATE_LIMITS.otherPerMinute)) throw tooMany();
-      // P0-7-R3: LAN 첫 접속 /?t=<토큰> → 쿠키 발급 뒤 토큰 없는 주소로
-      if (o.auth && url.searchParams.has('t')) {
+      // P0-7-R3: 첫 접속 /?t=<토큰> → 쿠키 발급 뒤 토큰 없는 주소로. 이 PC(루프백)는 로컬 토큰, 다른 기기는 LAN 토큰
+      const tokenAuth = isLocal ? o.localAuth : o.auth;
+      if (tokenAuth && url.searchParams.has('t')) {
         const t = url.searchParams.get('t') ?? '';
         url.searchParams.delete('t');
         const to = `${url.pathname}${url.search}`;
-        if (isLocal) {
-          res.writeHead(302, { ...baseHeaders('text/plain; charset=utf-8'), Location: to });
-          return void res.end();
-        }
-        if (!o.auth.verifyToken(t)) throw new HttpError(401, 'E-TOKEN', '접속 주소가 만료되었거나 잘못되었습니다. 서버 창에 표시된 새 주소로 접속하세요');
-        const s = o.auth.createSession();
+        if (!tokenAuth.verifyToken(t)) throw new HttpError(401, 'E-TOKEN', '접속 주소가 만료되었거나 잘못되었습니다. 서버 창에 표시된 새 주소로 다시 여세요');
         res.writeHead(302, {
           ...baseHeaders('text/plain; charset=utf-8'), Location: to,
-          'Set-Cookie': `${SESSION_COOKIE}=${s.id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${s.maxAgeSeconds}`,
+          'Set-Cookie': sessionCookie(isLocal ? LOCAL_SESSION_COOKIE : SESSION_COOKIE, tokenAuth.createSession()),
         });
         return void res.end();
       }
       if (!route) throw new HttpError(404, 'E-NOT-FOUND', '없는 경로입니다'); // 표에 없는 경로는 기본 차단
-      const authed = o.auth ? o.auth.verifySession(parseCookies(req.headers.cookie)[SESSION_COOKIE]) : false;
-      const access = decideAccess({ mode: o.mode, isLocal, authed, access: route.access, lanAllowAnalyze: o.lanAllowAnalyze === true });
-      if (access === 401) throw new HttpError(401, 'E-TOKEN', '인증이 필요합니다. 서버 창에 표시된 접속 주소로 다시 접속하세요');
+      const cookies = parseCookies(req.headers.cookie);
+      const authed = !isLocal && o.auth ? o.auth.verifySession(cookies[SESSION_COOKIE]) : false;
+      const localAuthed = isLocal && o.localAuth.verifySession(cookies[LOCAL_SESSION_COOKIE]);
+      const access = decideAccess({ mode: o.mode, isLocal, authed, localAuthed, access: route.access, lanAllowAnalyze: o.lanAllowAnalyze === true });
+      if (access === 401) throw new HttpError(401, 'E-TOKEN', '접속 인증이 없거나 만료되었습니다. 서버 창에 표시된 주소로 다시 여세요');
       if (access === 403) throw new HttpError(403, 'E-FORBIDDEN', route.access === 'read' ? '이 서버는 로컬 전용입니다' : 'LAN 기기에서는 보기만 할 수 있습니다. 이 기능은 서버 PC에서 쓰세요');
       // P0-7-R6
       if (method !== 'GET' && !checkOrigin(req.headers.origin, hosts)) throw new HttpError(403, 'E-ORIGIN', '허용되지 않은 출처의 요청입니다');

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   allowedHosts, allowedLocalAddress, checkFetchSite, checkHost, checkOrigin, decideAccess, isLoopback, isPrivateIPv4, LAN_TOKEN_TTL_MS, LanAuth,
-  MAX_LAN_SESSIONS, parseCookies, RateLimiter, redact,
+  LOCAL_SESSION_COOKIE, MAX_LAN_SESSIONS, parseCookies, RateLimiter, redact, sessionCookie,
 } from '../../src/server/security.ts';
 
 test('P0-7-R1 LAN 토큰은 128비트 이상 난수이고 시작(생성)마다 다르다', () => {
@@ -20,7 +20,7 @@ test('P0-7-T2 토큰은 2시간 뒤 만료되고, 세션 쿠키도 만료된다'
   assert.equal(auth.verifyToken(''), false);
   const s = auth.createSession();
   assert.equal(auth.verifySession(s.id), true);
-  assert.ok(s.maxAgeSeconds > 0 && s.maxAgeSeconds <= LAN_TOKEN_TTL_MS / 1000);
+  assert.ok(s.maxAgeSeconds !== null && s.maxAgeSeconds > 0 && s.maxAgeSeconds <= LAN_TOKEN_TTL_MS / 1000);
   clock.t += LAN_TOKEN_TTL_MS + 1;
   assert.equal(auth.verifyToken(auth.token), false);
   assert.equal(auth.verifySession(s.id), false);
@@ -74,8 +74,8 @@ test('P0-7-R7 요청 횟수 제한: 1분 창 안에서 한도를 넘으면 거�
 });
 
 test('P0-7 접근 표: LAN 기기는 읽기만, 분석은 --lan-allow-analyze일 때만, 로컬 전용 경로는 항상 차단', () => {
-  const base = { mode: 'lan' as const, lanAllowAnalyze: false };
-  assert.equal(decideAccess({ ...base, isLocal: true, authed: false, access: 'local' }), 'ok');
+  const base = { mode: 'lan' as const, lanAllowAnalyze: false, localAuthed: false };
+  assert.equal(decideAccess({ ...base, isLocal: true, localAuthed: true, authed: false, access: 'local' }), 'ok');
   assert.equal(decideAccess({ ...base, isLocal: false, authed: false, access: 'read' }), 401);
   assert.equal(decideAccess({ ...base, isLocal: false, authed: true, access: 'read' }), 'ok');
   assert.equal(decideAccess({ ...base, isLocal: false, authed: true, access: 'analyze' }), 403);
@@ -83,8 +83,32 @@ test('P0-7 접근 표: LAN 기기는 읽기만, 분석은 --lan-allow-analyze일
   assert.equal(decideAccess({ ...base, lanAllowAnalyze: true, isLocal: false, authed: true, access: 'analyze' }), 'ok');
   assert.equal(decideAccess({ ...base, lanAllowAnalyze: true, isLocal: false, authed: true, access: 'local' }), 403);
   // P0-7-T1 로컬 전용 모드에서 로컬이 아닌 접속은 무조건 거부 (바인딩과 별도의 이중 방어)
-  assert.equal(decideAccess({ mode: 'local', lanAllowAnalyze: false, isLocal: false, authed: true, access: 'read' }), 403);
-  assert.equal(decideAccess({ mode: 'local', lanAllowAnalyze: false, isLocal: true, authed: false, access: 'local' }), 'ok');
+  assert.equal(decideAccess({ mode: 'local', lanAllowAnalyze: false, isLocal: false, authed: true, localAuthed: true, access: 'read' }), 403);
+  assert.equal(decideAccess({ mode: 'local', lanAllowAnalyze: false, isLocal: true, authed: false, localAuthed: true, access: 'local' }), 'ok');
+});
+
+test('P0-7-R12 루프백도 로컬 토큰 세션이 있어야 한다 (같은 PC의 다른 프로세스 차단). 정적 파일만 인증 없이', () => {
+  for (const mode of ['local', 'lan'] as const) {
+    for (const access of ['read', 'analyze', 'local'] as const) {
+      assert.equal(decideAccess({ mode, lanAllowAnalyze: false, isLocal: true, authed: true, localAuthed: false, access }), 401, `${mode} ${access}`);
+      assert.equal(decideAccess({ mode, lanAllowAnalyze: false, isLocal: true, authed: false, localAuthed: true, access }), 'ok');
+    }
+    assert.equal(decideAccess({ mode, lanAllowAnalyze: false, isLocal: true, authed: false, localAuthed: false, access: 'public' }), 'ok');
+  }
+});
+
+test('P0-7-R12 로컬 토큰은 만료 없이 서버 실행 동안 유효하고, 쿠키에 Max-Age가 없으며, 재발급하면 기존 쿠키가 무효', () => {
+  const clock = { t: 1_000_000 };
+  const local = new LanAuth({ now: () => clock.t, ttlMs: null });
+  const s = local.createSession();
+  assert.equal(s.maxAgeSeconds, null);
+  assert.equal(sessionCookie(LOCAL_SESSION_COOKIE, s), `floor_local=${s.id}; HttpOnly; SameSite=Strict; Path=/`);
+  clock.t += 30 * 24 * 3600_000;
+  assert.equal(local.verifyToken(local.token), true);
+  assert.equal(local.verifySession(s.id), true);
+  local.rotate();
+  assert.equal(local.verifySession(s.id), false);
+  assert.match(redact(`Cookie: floor_local=${s.id}`), /floor_local=\*\*\*/);
 });
 
 test('isLoopback: IPv4·IPv6·매핑 주소', () => {

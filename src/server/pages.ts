@@ -79,7 +79,7 @@ export function reportsPage(tab: ReportTab, items: ReportSummary[], canZip: bool
 </tr>`);
   return html`<h1>리포트</h1>
 <p class="tabs">${tabs}</p>
-${tab === 'analysis' && canZip ? html`<p><a href="/reports/all.zip">전체 분석 리포트 ZIP 받기</a></p>` : raw('')}
+${tab === 'analysis' && canZip ? html`<form method="post" action="/reports/all.zip"><button type="submit">전체 분석 리포트 ZIP 받기</button></form>` : raw('')}
 ${items.length === 0 ? html`<p>리포트가 없습니다.</p>` : html`<table><thead><tr><th>완료 시각</th><th>종목</th><th>모드</th><th>결과</th><th>파일</th></tr></thead><tbody>${rows}</tbody></table>`}`;
 }
 
@@ -93,19 +93,27 @@ ${r.resultClass === 'simulation' ? html`<p class="badge sim">강제 방향 시�
 
 const MARK: Record<Check['status'], string> = { ok: '✓', warn: '!', error: '✗', skip: '-' };
 
-export function diagnosticsPage(d: DiagResult, claudeTested: boolean): Raw {
+/** d가 null이면(GET) 진단을 돌리지 않고 실행 버튼만 보인다. 진단은 외부 요청·claude 실행을 일으키므로 POST로만 */
+export function diagnosticsPage(d: DiagResult | null, claudeTested: boolean): Raw {
+  const claudeButton = html`<form method="post" action="/diagnostics/claude-test"><button type="submit">진단 + Claude 시험 호출 (호출 1회 소모)</button></form>`;
+  if (d === null) {
+    return html`<h1>진단</h1>
+<p>Node.js, Claude CLI·로그인, 데이터 공급자 연결, 시계, 달력, 쓰기 권한, 서버 모드를 검사합니다. 공급자에 가벼운 조회 요청을 보냅니다.</p>
+<form method="post" action="/diagnostics"><button type="submit">진단 실행</button></form>
+${claudeButton}`;
+  }
   const rows = d.checks.map((c) => html`<tr class="${c.status}"><td>${MARK[c.status]}</td><td>${c.label}</td><td>${c.detail}${c.code ? ` (${c.code})` : ''}</td><td>${c.status === 'ok' ? '' : c.hint ?? ''}</td></tr>`);
   return html`<h1>진단</h1>
 <p>${d.ok ? '필수 검사를 모두 통과했습니다.' : '오류가 있는 항목을 먼저 해결하세요.'}</p>
 <table><thead><tr><th></th><th>검사</th><th>결과</th><th>안내</th></tr></thead><tbody>${rows}</tbody></table>
-${claudeTested ? raw('') : html`<form method="post" action="/diagnostics/claude-test"><button type="submit">Claude 시험 호출 (호출 1회 소모)</button></form>`}`;
+${claudeTested ? raw('') : claudeButton}`;
 }
 
 export function projectZipPage(list: BundleList): Raw {
   const kb = (n: number) => `${(n / 1024).toFixed(1)}KB`;
   return html`<h1>프로젝트 번들 (project.zip)</h1>
 <p>아래 ${list.files.length}개 파일(${kb(list.totalBytes)})이 들어갑니다. 인증 정보(.claude/, credentials, .env, 키 파일)와 reports/·jobs/·logs/·node_modules/·.git은 항상 빠집니다.</p>
-<p><a href="/project.zip?confirm=${list.listHash}">이 목록으로 project.zip 받기</a></p>
+<form method="post" action="/project.zip"><input type="hidden" name="confirm" value="${list.listHash}"><button type="submit">이 목록으로 project.zip 받기</button></form>
 <ul class="files">${list.files.map((f) => html`<li>${f.path} <span>${kb(f.size)}</span></li>`)}</ul>`;
 }
 

@@ -23,8 +23,9 @@ type Harness = Awaited<ReturnType<typeof start>>;
 async function start(over: Partial<AppOptions> & { managerOpts?: Parameters<typeof manager>[0] } = {}) {
   const { m, root } = manager(over.managerOpts ?? {});
   const logs: string[] = [];
+  const localAuth = over.localAuth ?? new LanAuth({ ttlMs: null });
   const app = createApp({
-    manager: m, mode: 'local', port: 0, auth: null, lanAddrs: [LAN_IP],
+    manager: m, mode: 'local', port: 0, auth: null, localAuth, lanAddrs: [LAN_IP],
     clientIp: (req) => (req.headers['x-test-ip'] as string | undefined) ?? req.socket.remoteAddress,
     diagnostics: async (claudeTest): Promise<DiagResult> => ({
       ok: true, clockSkewMs: 0,
@@ -41,12 +42,15 @@ async function start(over: Partial<AppOptions> & { managerOpts?: Parameters<type
   const port = await app.listen();
   const host = `127.0.0.1:${port}`;
   const origin = `http://${host}`;
+  let localCookie = '';
+  /** cookie를 주지 않으면 이 PC의 로컬 토큰 세션 쿠키를 보낸다. ''이면 쿠키 없이 (같은 PC의 다른 프로세스 흉내) */
   const req = (path: string, o: { method?: string; host?: string; origin?: string | null; ip?: string; cookie?: string; body?: unknown; type?: string; headers?: Record<string, string> } = {}): Promise<Res> =>
     new Promise((resolve, reject) => {
       const method = o.method ?? (o.body !== undefined ? 'POST' : 'GET');
       const headers: Record<string, string> = { Host: o.host ?? host, ...o.headers };
       if (o.ip) headers['x-test-ip'] = o.ip;
-      if (o.cookie) headers.Cookie = o.cookie;
+      const cookie = o.cookie ?? localCookie;
+      if (cookie) headers.Cookie = cookie;
       const originHeader = o.origin === undefined ? (method === 'GET' ? null : origin) : o.origin;
       if (originHeader) headers.Origin = originHeader;
       let payload: string | undefined;
@@ -68,7 +72,10 @@ async function start(over: Partial<AppOptions> & { managerOpts?: Parameters<type
       r.on('error', reject);
       r.end(payload);
     });
-  return { app, m, root, port, host, origin, req, logs };
+  const first = await req(`/?t=${localAuth.token}`);
+  assert.equal(first.status, 302);
+  localCookie = String(first.headers['set-cookie']).split(';')[0]!;
+  return { app, m, root, port, host, origin, req, logs, localAuth, localCookie };
 }
 
 let n = 0;
@@ -205,11 +212,13 @@ test('P0-7-T4 LAN 기기에서 all.zip, project.zip, 분석 실행·취소, 진�
   try {
     const cookie = await l.login();
     assert.equal((await l.remote('/api/analyze', { cookie, body: analyzeBody() })).status, 403);
-    assert.equal((await l.remote('/reports/all.zip', { cookie })).status, 403);
+    assert.equal((await l.remote('/reports/all.zip', { cookie, method: 'POST' })).status, 403);
     assert.equal((await l.remote('/project.zip', { cookie })).status, 403);
+    assert.equal((await l.remote('/project.zip', { cookie, method: 'POST' })).status, 403);
     assert.equal((await l.remote('/api/project-zip/files', { cookie })).status, 403);
     assert.equal((await l.remote('/diagnostics', { cookie })).status, 403);
-    assert.equal((await l.remote('/api/diagnostics', { cookie })).status, 403);
+    assert.equal((await l.remote('/diagnostics', { cookie, method: 'POST' })).status, 403);
+    assert.equal((await l.remote('/api/diagnostics', { cookie, method: 'POST' })).status, 403);
     assert.equal((await l.remote('/reports', { cookie })).status, 200);
     assert.equal((await l.remote('/api/reports', { cookie })).status, 200);
     assert.equal((await l.remote('/web/floor.js', { cookie })).status, 200);
@@ -231,7 +240,7 @@ test('P0-7-R9 --lan-allow-analyze를 켜면 LAN 기기도 분석을 실행할 �
     const cookie = await l.login();
     const r = await l.remote('/api/analyze', { cookie, body: analyzeBody() });
     assert.equal(r.status, 202);
-    assert.equal((await l.remote('/reports/all.zip', { cookie })).status, 403);
+    assert.equal((await l.remote('/reports/all.zip', { cookie, method: 'POST' })).status, 403);
     await l.m.idle();
   } finally {
     await l.app.close();
@@ -312,14 +321,14 @@ test('SSE: 분석 진행 이벤트(작업 보기·역할 호출)를 끝까지 �
     const r = await h.req('/api/analyze', { body: analyzeBody({ mode: 'algorithm', demo: true, idempotencyKey: 'sse-demo-key-1' }) });
     assert.equal(r.status, 202);
     const id = r.json.jobId;
-    const s = await readSse(h.port, h.host, `/api/jobs/${id}/events`);
+    const s = await readSse(h.port, h.host, `/api/jobs/${id}/events`, { Cookie: h.localCookie });
     assert.equal(s.status, 200);
     const states = s.events.filter((e) => e.event === 'job').map((e) => e.data.job.state);
     assert.ok(states.includes('ANALYZING') && states.includes('DEBATING'), states.join(','));
     assert.equal(states.at(-1), 'COMPLETED');
     assert.ok(s.events.some((e) => e.event === 'call' && e.data.role === 'PM'));
     assert.equal(s.events.at(-1)?.event, 'end');
-    const after = await readSse(h.port, h.host, `/api/jobs/${id}/events`);
+    const after = await readSse(h.port, h.host, `/api/jobs/${id}/events`, { Cookie: h.localCookie });
     assert.deepEqual(after.events.map((e) => e.event), ['job', 'end']);
     assert.equal((await h.req('/api/jobs/00000000-0000-4000-8000-000000000000/events')).status, 404);
     // 같은 키로 다시 보내면 새 작업 없이 기존 작업 (P0-8-R4)
@@ -366,7 +375,10 @@ test('P1-7-R15 all.zip은 분석 탭 리포트만 담고, 상한을 넘으면 �
     await h.m.idle();
     await h.req('/api/analyze', { body: analyzeBody({ demo: true }) });
     await h.m.idle();
-    const z = await h.req('/reports/all.zip');
+    assert.equal((await h.req('/reports/all.zip')).status, 404, 'GET으로는 만들지 않는다');
+    const listPage = await h.req('/reports');
+    assert.ok(listPage.text.includes('<form method="post" action="/reports/all.zip">'));
+    const z = await h.req('/reports/all.zip', { method: 'POST' });
     assert.equal(z.status, 200);
     const names = readZip(z.body).map((e) => e.name);
     assert.equal(names.length, 2);
@@ -386,7 +398,7 @@ test('P1-7-R15 all.zip은 분석 탭 리포트만 담고, 상한을 넘으면 �
   try {
     await small.req('/api/analyze', { body: analyzeBody() });
     await small.m.idle();
-    const r = await small.req('/reports/all.zip');
+    const r = await small.req('/reports/all.zip', { method: 'POST' });
     assert.equal(r.status, 413);
   } finally {
     await small.app.close();
@@ -414,8 +426,12 @@ test('P1-7-T5, P1-7-R14 project.zip: 기본 비활성, 켜면 목록 확인 뒤 
     assert.ok(preview.text.includes('src/a.ts'));
     assert.equal(preview.text.includes('.credentials'), false);
     const files = await h.req('/api/project-zip/files');
-    assert.equal((await h.req('/project.zip?confirm=0000000000000000')).status, 409);
-    const z = await h.req(`/project.zip?confirm=${files.json.listHash}`);
+    assert.ok(preview.text.includes(`name="confirm" value="${files.json.listHash}"`));
+    const form = (confirm: string) => h.req('/project.zip', { body: `confirm=${confirm}`, type: 'application/x-www-form-urlencoded' });
+    assert.equal((await h.req(`/project.zip?confirm=${files.json.listHash}`)).headers['content-type']?.includes('text/html'), true, 'GET은 목록만');
+    assert.equal((await form('0000000000000000')).status, 409);
+    assert.equal((await h.req('/project.zip', { body: { confirm: files.json.listHash } })).status, 415);
+    const z = await form(files.json.listHash);
     assert.equal(z.status, 200);
     const names = readZip(z.body).map((e) => e.name);
     assert.deepEqual(names.sort(), ['pixel-trading-floor/package.json', 'pixel-trading-floor/src/a.ts']);
@@ -425,10 +441,18 @@ test('P1-7-T5, P1-7-R14 project.zip: 기본 비활성, 켜면 목록 확인 뒤 
   }
 });
 
-test('/diagnostics: 로컬에서만, 결과는 이스케이프, 시험 호출은 버튼(POST)으로만', async () => {
+test('/diagnostics: GET은 실행 버튼만, 실행은 POST로만, 결과는 이스케이프, 시험 호출은 버튼(POST)으로만', async () => {
+  let runs = 0;
   const h = await start();
+  const counted = await start({ diagnostics: async () => { runs++; return { ok: true, clockSkewMs: 0, checks: [] }; } });
   try {
-    const d = await h.req('/diagnostics');
+    const page = await counted.req('/diagnostics');
+    assert.equal(page.status, 200);
+    assert.ok(page.text.includes('<form method="post" action="/diagnostics">'));
+    assert.equal(runs, 0, 'GET으로는 진단을 돌리지 않는다');
+    assert.equal((await counted.req('/api/diagnostics')).status, 404);
+    assert.equal(runs, 0);
+    const d = await h.req('/diagnostics', { method: 'POST' });
     assert.equal(d.status, 200);
     assert.ok(d.text.includes('포트'));
     assert.ok(d.text.includes('로컬 전용 &lt;b&gt;'));
@@ -439,9 +463,11 @@ test('/diagnostics: 로컬에서만, 결과는 이스케이프, 시험 호출은
     assert.equal(t.status, 200);
     assert.ok(t.text.includes('Claude 시험 호출</td>'));
     assert.equal((await h.req('/diagnostics/claude-test', { method: 'POST', origin: 'http://evil.example' })).status, 403);
-    assert.equal((await h.req('/api/diagnostics')).json.ok, true);
+    assert.equal((await h.req('/api/diagnostics', { method: 'POST' })).json.ok, true);
+    assert.equal((await h.req('/diagnostics', { method: 'POST', origin: 'http://evil.example' })).status, 403);
   } finally {
     await h.app.close();
+    await counted.app.close();
   }
 });
 
@@ -506,7 +532,7 @@ test('P0-7-R11 SSE 연결 수 상한: 한 주소가 진행 연결을 무한히 �
     const r = await h.req('/api/analyze', { body: analyzeBody() });
     id = r.json.jobId;
     const connect = () => new Promise<number>((resolve, reject) => {
-      const q = httpRequest({ host: '127.0.0.1', port: h.port, path: `/api/jobs/${id}/events`, headers: { Host: h.host } }, (res) => resolve(res.statusCode ?? 0));
+      const q = httpRequest({ host: '127.0.0.1', port: h.port, path: `/api/jobs/${id}/events`, headers: { Host: h.host, Cookie: h.localCookie } }, (res) => resolve(res.statusCode ?? 0));
       q.on('error', reject);
       q.end();
       open.push(q);
@@ -575,5 +601,96 @@ test('P1-8-T1, P0-7.4 /api/board: 시세는 LAN 인증 기기도 보고(read), �
     assert.equal(bad.json.error, 'E-INPUT');
   } finally {
     await l.app.close();
+  }
+});
+
+test('P0-7-T9 로컬 토큰: 토큰 없는 루프백(같은 PC의 다른 프로세스)·잘못된 토큰은 401, 토큰 → 쿠키 → 200, 재발급하면 기존 쿠키 401', async () => {
+  const h = await start();
+  try {
+    // 쿠키 없는 루프백 요청: API·페이지·SSE·전광판 모두 401, 정적 파일만 열린다
+    for (const p of ['/', '/api/status', '/reports', '/api/board?symbol=BTC&demo=1', '/diagnostics']) {
+      const r = await h.req(p, { cookie: '' });
+      assert.equal(r.status, 401, p);
+      assert.equal(r.text.includes(h.localAuth.token), false);
+    }
+    const page = await h.req('/reports', { cookie: '' });
+    assert.match(page.text, /서버 창에 표시된 주소로 다시 여세요/);
+    assert.equal((await h.req('/api/analyze', { cookie: '', body: analyzeBody() })).status, 401);
+    assert.equal((await h.req('/web/floor.css', { cookie: '' })).status, 200);
+    // 잘못된 토큰 (다른 사이트가 /?t= 링크를 만들어도 토큰을 모르면 쿠키가 생기지 않는다)
+    const bad = await h.req('/?t=AAAAAAAAAAAAAAAAAAAAAA', { cookie: '', headers: CROSS_NAV });
+    assert.equal(bad.status, 401);
+    assert.equal(bad.headers['set-cookie'], undefined);
+    // 토큰 → HttpOnly·SameSite=Strict 세션 쿠키(Max-Age 없음) → 토큰 없는 주소로 이동
+    const ok = await h.req(`/?t=${h.localAuth.token}&demo=1`, { cookie: '' });
+    assert.equal(ok.status, 302);
+    assert.equal(ok.headers.location, '/?demo=1');
+    const set = String(ok.headers['set-cookie']);
+    assert.match(set, /^floor_local=[^;]+; HttpOnly; SameSite=Strict; Path=\/$/);
+    const cookie = set.split(';')[0]!;
+    assert.equal((await h.req('/api/status', { cookie })).status, 200);
+    // 재발급: 기존 쿠키 전부 무효
+    h.localAuth.rotate();
+    assert.equal((await h.req('/api/status', { cookie })).status, 401);
+    assert.equal((await h.req('/api/status')).status, 401);
+    // 로그에 토큰이 남지 않는다
+    assert.equal(h.logs.some((l) => l.includes(h.localAuth.token)), false);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P0-7-T9 LAN 모드: 서버 PC도 로컬 토큰이 필요하고, LAN 토큰 재발급이 서버 PC 브라우저를 로그아웃시키지 않는다', async () => {
+  const l = await lan();
+  try {
+    assert.equal((await l.req('/api/status', { cookie: '' })).status, 401, '루프백이라서 인증을 건너뛰지 않는다');
+    // LAN 토큰으로는 서버 PC 세션이 생기지 않는다 (루프백은 로컬 토큰만)
+    assert.equal((await l.req(`/?t=${l.auth.token}`, { cookie: '' })).status, 401);
+    const lanCookie = await l.login();
+    l.auth.rotate();
+    assert.equal((await l.remote('/api/status', { cookie: lanCookie })).status, 401);
+    assert.equal((await l.req('/api/status')).status, 200);
+    // 다른 기기가 로컬 쿠키를 들고 와도 통하지 않는다
+    assert.equal((await l.remote('/api/status', { cookie: l.localCookie })).status, 401);
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-7-T10 Sec-Fetch-Site를 보내지 않는 구형 브라우저의 다른 사이트발 요청으로도 진단 실행·ZIP 생성이 일어나지 않는다', async () => {
+  let diagRuns = 0;
+  const h = await start({ enableProjectZip: true, diagnostics: async () => { diagRuns++; return { ok: true, clockSkewMs: 0, checks: [] }; } });
+  try {
+    // <img>·링크(GET): 부작용 있는 GET 경로가 없다
+    for (const p of ['/reports/all.zip', '/api/diagnostics', '/diagnostics', '/project.zip?confirm=x']) {
+      const r = await h.req(p);
+      assert.ok(r.status === 404 || !/zip/.test(String(r.headers['content-type'])), p);
+    }
+    // 폼 POST(쿠키가 실렸다고 가정해도): Origin이 다른 사이트라 거부된다 (P0-7-R6)
+    const evil = 'http://evil.example';
+    for (const p of ['/reports/all.zip', '/diagnostics', '/diagnostics/claude-test', '/api/diagnostics']) {
+      assert.equal((await h.req(p, { method: 'POST', origin: evil })).status, 403, p);
+    }
+    assert.equal((await h.req('/project.zip', { body: 'confirm=x', type: 'application/x-www-form-urlencoded', origin: evil })).status, 403);
+    // Origin을 빼도 거부된다
+    assert.equal((await h.req('/diagnostics', { method: 'POST', origin: null })).status, 403);
+    // SameSite=Strict라 실제로는 쿠키도 실리지 않는다: 쿠키 없이 보내면 401
+    assert.equal((await h.req('/diagnostics', { method: 'POST', origin: evil, cookie: '' })).status, 401);
+    assert.equal(diagRuns, 0);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P0-7-R6 폼 POST가 실제 Origin을 싣도록 Referrer-Policy는 same-origin (no-referrer면 브라우저가 Origin: null을 보낸다)', async () => {
+  const h = await start();
+  try {
+    const r = await h.req('/diagnostics');
+    assert.equal(r.headers['referrer-policy'], 'same-origin');
+    // no-referrer 페이지의 폼 제출처럼 Origin: null이면 거부된다 (정책이 바뀌면 진단·ZIP 버튼이 모두 403이 됨)
+    assert.equal((await h.req('/diagnostics', { method: 'POST', origin: 'null' })).status, 403);
+    assert.equal((await h.req('/diagnostics', { method: 'POST' })).status, 200);
+  } finally {
+    await h.app.close();
   }
 });
