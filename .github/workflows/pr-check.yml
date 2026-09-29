@@ -1,0 +1,16 @@
+# PR 템플릿 검사: 변경 내용, Close #번호, 체크리스트 4개 (CONVENTION.md 4장)
+name: PR 템플릿 검사
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+permissions:
+  contents: read
+jobs:
+  template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/conventions.ts pr

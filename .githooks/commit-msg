@@ -1,0 +1,3 @@
+#!/bin/sh
+# 커밋 메시지 규칙 검사 (CONVENTION.md 1장). 설치: npm install (core.hooksPath = .githooks)
+exec node scripts/conventions.ts commit-msg "$1"

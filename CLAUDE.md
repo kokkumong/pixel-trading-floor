@@ -22,6 +22,12 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - 테스트 이름은 명세 검증 ID로 시작한다: `test('P0-3-T1 롱 손절가 역전 → NO_TRADE', ...)`
 - 테스트는 fixture·scripted 백엔드로만. 실제 claude·외부 API 호출은 수동 스모크 테스트에서만
 
+## 협업 규칙 (CONVENTION.md)
+- 저장소: https://github.com/kokkumong/pixel-trading-floor (Private). `main`에 직접 커밋하지 않는다
+- 흐름: `[FEAT]`·`[BUG]` 이슈 생성(템플릿의 빈 항목 없이) → `feature/<이슈번호>-<작업명>` 브랜치 → 커밋 → PR(`main` 대상, 템플릿 유지, `Close #번호`, 체크리스트 4개 `[x]`) → **병합은 사용자가 한다**
+- 커밋 첫 줄: `<feat|fix|design|refactor|docs|chore|test>: <한글 포함 요약>`. `commit-msg` 훅과 CI가 검사한다 (`scripts/conventions.ts`)
+- Phase 작업은 Phase마다 이슈 하나를 기본으로 한다
+
 ## 핵심 계약 요약 (자세한 내용은 명세 절 참조)
 - 모드: `algorithm` | `scalp` | `forced_direction` (화면명: 알고리즘 / 스캘핑 20x / 강제 방향 시뮬레이션)
 - 계획 호출 수: algorithm `4 + 2×rounds + 1 + 3 + 1` = 11~13 (최대 17), scalp·forced 5 (최대 7) — 명세 1.5, 8.3
