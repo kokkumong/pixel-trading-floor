@@ -78,6 +78,41 @@ export async function killTree(pid: number, exited: Promise<unknown>, platform: 
 
 const MAX_STDOUT_BYTES = 2 * 1024 * 1024;
 
+export interface CommandResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  spawnError: string | null;
+}
+
+/**
+ * 짧은 claude 하위 명령(--version, auth status) 실행. 셸 없이, 허용 목록 환경변수로, 표준 입력 없이 실행하고
+ * 시간 제한을 넘기면 프로세스 트리를 종료한다 (인증 실패 시 무기한 대기하는 경우 대비)
+ */
+export async function runClaudeCommand(exe: ClaudeExecutable, args: string[], opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}): Promise<CommandResult> {
+  const child = spawn(exe.command, [...exe.prefixArgs, ...args], {
+    cwd: tmpdir(), env: buildChildEnv(opts.env ?? process.env), shell: false, windowsHide: true,
+    detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', (d: string) => { if (stdout.length < 100_000) stdout += d; });
+  child.stderr.setEncoding('utf8').on('data', (d: string) => { if (stderr.length < 20_000) stderr += d; });
+  const exited = new Promise<{ code: number | null; spawnError: string | null }>((res) => {
+    child.on('exit', (code) => res({ code, spawnError: null }));
+    child.on('error', (e) => res({ code: null, spawnError: e.message }));
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (child.pid !== undefined) void killTree(child.pid, exited);
+  }, opts.timeoutMs ?? 15_000);
+  const { code, spawnError } = await exited;
+  clearTimeout(timer);
+  return { code, stdout, stderr, timedOut, spawnError };
+}
+
 export interface CliDriverOptions {
   executable?: ClaudeExecutable | null;
   env?: NodeJS.ProcessEnv;

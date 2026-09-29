@@ -3,6 +3,7 @@
 // 두 경로의 차이는 "역할 출력을 누가 만드는가"뿐이다. 모든 상태 변경은 작업 기록에 원자적으로 저장한다 (P1-1-R1).
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { judgeClock } from '../data/clock.ts';
 import { buildRoleInput, fitInput, InputBudgetError, type PriorOutputs, type RoleInput } from '../data/project.ts';
 import type { Instrument, Resolution } from '../data/registry.ts';
 import { assembleSnapshot, hashSnapshot, type AnalysisSnapshot } from '../data/snapshot.ts';
@@ -26,6 +27,8 @@ export interface Acquirer {
   registryVersion: string;
   resolve(): Promise<Resolution>;
   collect(instrument: Instrument, marketType: MarketType): Promise<SourceRecord[]>;
+  /** 수집 중 잰 PC 시계 오차 (ms). 60초를 넘으면 스냅샷을 만들기 전에 E-CLOCK으로 막는다 (P1-8.2, E13) */
+  clockSkewMs?(): number | null;
 }
 
 export interface Job {
@@ -159,6 +162,15 @@ export function createEngine(opts: EngineOptions): Engine {
         records = await acq.collect(res.instrument, res.marketType);
       } catch (e) {
         record.warnings.push(`수집 실패: ${(e as Error).message}`); // 모든 소스 실패로 취급 → 품질 판정에서 INSUFFICIENT_DATA
+      }
+      const skew = acq.clockSkewMs?.() ?? null;
+      if (skew !== null) {
+        const c = judgeClock(skew);
+        if (c.level === 'error') {
+          terminate(job, 'FAILED', 'E-CLOCK', c.message);
+          return job;
+        }
+        if (c.level === 'warn') record.warnings.push(`시계 오차: ${c.message}`);
       }
       move(job, 'VALIDATING_DATA');
       const snap = assembleSnapshot({
