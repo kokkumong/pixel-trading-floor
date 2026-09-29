@@ -18,8 +18,19 @@ const req = (input: string, over: Partial<ModelRequest> = {}): ModelRequest => (
 });
 const never = new AbortController().signal;
 
+/** 살아 있는 프로세스인지. Linux에서 부모를 잃고 아직 회수되지 않은 좀비는 kill(pid, 0)이 성공하므로 죽은 것으로 본다 */
 function alive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try { process.kill(pid, 0); } catch { return false; }
+  try { return readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]?.[0] !== 'Z'; } catch { return true; }
+}
+
+/** 시그널 전달과 종료는 비동기라, 기한까지 사라지기를 기다린다 (P0-8-T3 "5초 안에") */
+async function goneBy(pids: number[], deadline: number): Promise<boolean> {
+  while (pids.some(alive)) {
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return true;
 }
 
 test('정상 응답: structured_output, 실제 모델 ID, 사용량을 읽는다', async () => {
@@ -88,8 +99,7 @@ test('P0-8-T3 취소하면 5초 안에 하위·손자 프로세스가 모두 사
   const r = await pending;
   assert.ok(!r.ok && r.code === 'E-CANCELLED');
   assert.ok(Date.now() - t0 < 5000);
-  assert.equal(alive(child), false);
-  assert.equal(alive(grandchild), false);
+  assert.ok(await goneBy([child, grandchild], t0 + 5000), `남은 프로세스: ${[child, grandchild].filter(alive).join(', ')}`);
 });
 
 test('호출 시간 제한을 넘기면 프로세스를 끝내고 E-TIMEOUT', async () => {
@@ -98,7 +108,7 @@ test('호출 시간 제한을 넘기면 프로세스를 끝내고 E-TIMEOUT', as
   const r = await createClaudeCliDriver({ executable: fake }).call(req(`#MODE=hang #PIDFILE=${pidFile}`, { timeoutMs: 1500 }), never);
   assert.ok(!r.ok && r.code === 'E-TIMEOUT');
   const { grandchild } = JSON.parse(readFileSync(pidFile, 'utf8'));
-  assert.equal(alive(grandchild), false);
+  assert.ok(await goneBy([grandchild], Date.now() + 5000), `손자 프로세스 ${grandchild}가 남음`);
 });
 
 test('실행 파일이 없으면 E-CLI-MISSING (호출 시작 전)', async () => {
