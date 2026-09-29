@@ -94,6 +94,8 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 ## 진행 상황과 남은 단계
 범위: P0와 P1 전체 (보완안 14.2 릴리스 게이트). 각 단계는 명세 검증 ID를 통과 기준으로 하고, 끝나면 `npm run verify` 통과 후 커밋한다.
 
+**한 세션 = 한 Phase.** 새 세션은 `/next-phase`(`.claude/skills/next-phase/SKILL.md`)로 시작한다. 이 명령은 아래 순서로 진행한다: 이 표와 "Phase N 참고" 절 확인 → 이슈·브랜치 → TDD 구현 → 이 표와 인계 절 갱신 → PR·병합 → 사용량 보고 후 정지. Phase가 끝날 때마다 표와 "Phase N+1 참고" 절을 반드시 갱신한다.
+
 | Phase | 내용 | 상태 |
 |---|---|---|
 | 0 | 골격, claude -p 스파이크 | ✅ |
