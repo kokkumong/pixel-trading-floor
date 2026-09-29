@@ -63,4 +63,4 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - 녹화 fixture: `node scripts/record-fixtures.ts` → `fixtures/test/http/*.json`. 테스트는 `test/data-helpers.ts`의 `replaySnapshot`으로 재생 (네트워크 없음)
 - 지표 기대값: `python3 fixtures/indicators/gen_expected.py` (독립 구현, P1-3-R12)
 - 달력 `calendars.json`: KRX는 2026년까지만 (2027 휴장일은 KRX 12월 공고 뒤 추가), NYSE는 2027년까지
-- 명세와 다르게 구현한 곳 (명세 반영 대기): 주식 장중 TTL 25분(`STOCK_INTRADAY_TTL`), 외환 주말 규칙(`freshness.ts`)
+- 실데이터 검증으로 명세에 반영된 규칙 (P0 v0.6, P1 v0.2): 주식 장중 TTL 25분, 외환 주말 규칙, 스캘핑 뉴스 수집(VIBE 제목만), NYSE Arca 허용, 달력 만료 30일 전 진단 경고

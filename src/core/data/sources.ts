@@ -95,7 +95,10 @@ export function planSources(inst: Instrument, mode: Mode): SourceSpec[] {
     if (!kr) return base;
     return [...base, req('yahoo.fx.usdkrw'), opt('binance.perp.price'), ...others];
   }
-  const perp = [req('binance.perp.price'), req('binance.perp.candles.15m'), req('binance.perp.funding'), opt('feargreed.alternative'), opt('yahoo.fx.usdkrw')];
+  const perp = [
+    req('binance.perp.price'), req('binance.perp.candles.15m'), req('binance.perp.funding'),
+    opt('feargreed.alternative'), opt('news.google'), opt('yahoo.fx.usdkrw'), // 뉴스는 VIBE에 제목만 (P0 명세 v0.6 4.3)
+  ];
   return kr ? [...perp, opt('yahoo.spot.price'), ...others] : perp;
 }
 

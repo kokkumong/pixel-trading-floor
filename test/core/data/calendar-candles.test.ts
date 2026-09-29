@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isTradingDay, latestCompletedSession, marketStatus, zonedTime } from '../../../src/core/data/calendar.ts';
+import { calendarCoverageWarnings, isTradingDay, latestCompletedSession, marketStatus, zonedTime } from '../../../src/core/data/calendar.ts';
 import { checkCandles, type Candle } from '../../../src/core/data/candles.ts';
 
 test('P1-3-T2 한국 공휴일과 미국 조기 폐장일에 MARKET OPEN이 잘못 표시되지 않는다', () => {
@@ -80,4 +80,12 @@ test('주식 일봉 누락은 거래일 기준으로 센다 (휴장일은 누락
     intervalMs: 86_400_000, now: new Date('2026-10-01T00:00:00Z'), calendar: 'KRX', label: 'krx',
   });
   assert.equal(r.missingRatio, 0);
+});
+
+test('달력 포함 기간이 30일 안에 끝나면 진단 경고 (P1 명세 v0.2 8.2)', () => {
+  assert.deepEqual(calendarCoverageWarnings(new Date('2026-09-29T00:00:00Z')), []);
+  const w = calendarCoverageWarnings(new Date('2026-12-10T00:00:00Z'));
+  assert.equal(w.length, 1);
+  assert.match(w[0]!, /^KRX 달력 포함 기간이 21일 뒤/);
+  assert.match(calendarCoverageWarnings(new Date('2027-01-05T00:00:00Z'))[0]!, /KRX 달력 포함 기간\(2026-12-31\)이 지났습니다/);
 });

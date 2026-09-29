@@ -81,3 +81,13 @@ test('P0-8-R3 입력 상한을 넘으면 뉴스 → 최근 봉 순으로 줄이�
   assert.throws(() => fitInput(taro, 500, 0), InputBudgetError);
   assert.equal(fitInput(taro, 1_000_000, 0).reductions.length, 0);
 });
+
+test('P0 명세 v0.6 4.3: 스캘핑에서도 VIBE는 뉴스 제목을 받는다 (요약 없이)', async () => {
+  const { snap } = await replaySnapshot('btc-scalp');
+  const news = snap.sources.find((x) => x.id === 'news.google');
+  assert.equal(news?.required, false);
+  const vibe = buildRoleInput(snap, 'VIBE');
+  assert.ok((vibe.untrusted?.news?.length ?? 0) > 0);
+  assert.equal(vibe.untrusted?.news?.every((n) => !('summary' in n)), true);
+  for (const role of ['TARO', 'BLITZ', 'GUARD', 'ACE'] as Role[]) assert.equal(buildRoleInput(snap, role).untrusted, undefined, role);
+});

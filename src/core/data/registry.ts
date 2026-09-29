@@ -19,7 +19,7 @@ export interface Instrument {
   displayName: string;
   aliases: string[];
   assetClass: 'equity' | 'crypto';
-  primaryMarket: 'KRX' | 'NASDAQ' | 'NYSE' | 'NYSE American' | 'CRYPTO';
+  primaryMarket: 'KRX' | 'NASDAQ' | 'NYSE' | 'NYSE American' | 'NYSE Arca' | 'CRYPTO';
   timezone: string;
   calendarId: CalendarId;
   primaryCurrency: Currency;
@@ -74,9 +74,9 @@ export interface UsQuote {
 }
 export type UsLookup = (ticker: string) => Promise<UsQuote | null>;
 
-// P1-2-R5: NASDAQ·NYSE·NYSE American만. Yahoo 거래소 코드 → 시장 이름
+// P1-2-R5: NASDAQ·NYSE·NYSE American·NYSE Arca만. Yahoo 거래소 코드 → 시장 이름
 const US_EXCHANGES: Record<string, Instrument['primaryMarket']> = {
-  NMS: 'NASDAQ', NGM: 'NASDAQ', NCM: 'NASDAQ', NYQ: 'NYSE', ASE: 'NYSE American',
+  NMS: 'NASDAQ', NGM: 'NASDAQ', NCM: 'NASDAQ', NYQ: 'NYSE', ASE: 'NYSE American', PCX: 'NYSE Arca',
 };
 const US_TYPES = new Set(['EQUITY', 'ETF']);
 

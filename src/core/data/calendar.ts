@@ -151,6 +151,18 @@ export function latestCompletedSession(cal: 'KRX' | 'US', at: Date): { date: str
   throw new Error('최근 20일 안에 거래일이 없음');
 }
 
+/** 포함 기간이 days일 안에 끝나는 달력 (진단 경고용, P1 명세 v0.2 8.2) */
+export function calendarCoverageWarnings(now: Date, days = 30): string[] {
+  const out: string[] = [];
+  for (const [id, c] of Object.entries(DATA.calendars)) {
+    const end = Date.parse(c.coverage.to + 'T23:59:59Z');
+    const left = Math.floor((end - now.getTime()) / 86_400_000);
+    if (left < 0) out.push(`${id} 달력 포함 기간(${c.coverage.to})이 지났습니다. 휴장일 데이터를 추가하세요`);
+    else if (left <= days) out.push(`${id} 달력 포함 기간이 ${left}일 뒤(${c.coverage.to}) 끝납니다. 다음 해 휴장일 공고를 반영하세요`);
+  }
+  return out;
+}
+
 export function calendarTimezone(cal: CalendarId): string {
   return cal === 'CRYPTO_24_7' ? 'UTC' : DATA.calendars[cal].timezone;
 }

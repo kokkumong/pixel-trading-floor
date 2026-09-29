@@ -16,7 +16,7 @@ export interface FreshnessResult {
 }
 
 const MIN = 60;
-/** 주식 장중 가격 TTL: 공급자 지연 20분(Yahoo KRX·미국 무료 시세) + 폴링 여유 5분. 명세 4.4의 20분은 지연과 같아 항상 만료되므로 보정 (명세 반영 필요) */
+/** 주식 장중 가격 TTL: 공급자 지연 20분(Yahoo KRX·미국 무료 시세) + 폴링 여유 5분 (P0 명세 v0.6 4.4) */
 export const STOCK_INTRADAY_TTL = 25 * MIN;
 const HOUR = 3600;
 const DAY = 86_400;
@@ -75,7 +75,7 @@ export function evaluateFreshness(src: FreshnessInput, inst: Instrument, mode: M
     case 'funding':
       return res('NEAR_REALTIME', 15 * MIN, age !== null && age > 15 * MIN);
     case 'fx': {
-      // 외환시장 주말(금 22시 ~ 일 22시 UTC)에는 금요일 마감 시세를 유효로 본다 (명세 보완 필요 사항)
+      // 외환시장 주말(금 22시 ~ 일 22시 UTC)에는 금요일 20시 UTC 이후 관측 시세를 유효로 본다 (P0 명세 v0.6 4.4)
       if (inFxWeekend(now) && observed >= fxWeekendStart(now) - 2 * HOUR) {
         return res('PERIODIC', HOUR, false, '외환시장 주말: 금요일 마감 시세');
       }

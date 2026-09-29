@@ -34,13 +34,16 @@ test('P1-2-T3 TSLA + scalp는 E-UNSUPPORTED-SYMBOL', async () => {
   assert.ok(!r.ok && r.message.includes('알고리즘 모드만'));
 });
 
-test('P1-2-R5 미국 주식은 보통주·ETF이고 NASDAQ·NYSE·NYSE American일 때만 받는다', async () => {
+test('P1-2-R5 미국 주식은 보통주·ETF이고 NASDAQ·NYSE·NYSE American·NYSE Arca일 때만 받는다', async () => {
   const r = await new InstrumentRegistry().resolveWithLookup('TSLA', 'algorithm', fakeLookup({ TSLA: tsla }));
   assert.ok(r.ok);
   assert.equal(r.instrument.instrumentId, 'US:TSLA');
   assert.equal(r.description, 'Tesla, Inc. (TSLA) · NASDAQ 현물 · USD');
-  const arca = await new InstrumentRegistry().resolveWithLookup('SPY', 'algorithm', fakeLookup({ SPY: { symbol: 'SPY', quoteType: 'ETF', exchange: 'PCX', name: 'SPDR' } }));
-  assert.equal(arca.ok, false);
+  const arca = await new InstrumentRegistry().resolveWithLookup('SPY', 'algorithm', fakeLookup({ SPY: { symbol: 'SPY', quoteType: 'ETF', exchange: 'PCX', name: 'SPDR S&P 500' } }));
+  assert.ok(arca.ok);
+  assert.equal(arca.instrument.primaryMarket, 'NYSE Arca'); // P1 명세 v0.2
+  const otc = await new InstrumentRegistry().resolveWithLookup('ABCDE', 'algorithm', fakeLookup({ ABCDE: { symbol: 'ABCDE', quoteType: 'EQUITY', exchange: 'PNK', name: 'OTC' } }));
+  assert.equal(otc.ok, false);
   const fund = await new InstrumentRegistry().resolveWithLookup('ABCD', 'algorithm', fakeLookup({ ABCD: { symbol: 'ABCD', quoteType: 'MUTUALFUND', exchange: 'NAS', name: 'x' } }));
   assert.equal(fund.ok, false);
   // 형식이 다르면 조회하지 않는다

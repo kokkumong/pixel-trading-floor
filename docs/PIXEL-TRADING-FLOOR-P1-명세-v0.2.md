@@ -1,10 +1,10 @@
-# PIXEL TRADING FLOOR P1 명세 v0.1
+# PIXEL TRADING FLOOR P1 명세 v0.2
 
 - 작성일: 2026-09-29
-- 문서 버전: v0.1 (초안)
+- 문서 버전: v0.2 (초안)
 - 최근 개정: 2026-09-29
 - 상위 문서: `PIXEL-TRADING-FLOOR-구조-보완안-v1.2.md` 5장 P1
-- 선행 문서: `PIXEL-TRADING-FLOOR-P0-명세-v0.5.md` (이 문서는 P0 명세의 스키마·용어·요구사항 ID를 그대로 쓴다)
+- 선행 문서: `PIXEL-TRADING-FLOOR-P0-명세-v0.6.md` (이 문서는 P0 명세의 스키마·용어·요구사항 ID를 그대로 쓴다)
 - 참조 문서: `PIXEL-TRADING-FLOOR-가이드-v1.2.pdf`
 - 문서 성격: P0 계약 위에서 **첫 실전 분석 전에** 갖출 기능과 검증의 명세
 - 제외 범위: 실제 소스 코드 확인. 코드와 대조해야 하는 부분은 `[코드 확인 필요]`로 표시한다.
@@ -16,6 +16,7 @@
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
 | v0.1 | 2026-09-29 | 보완안 v1.2의 P1 11개 항목에 대한 최초 명세 |
+| v0.2 | 2026-09-29 | 미국 종목 허용 시장에 NYSE Arca 추가 (P1-2-R5, 주요 ETF 대부분이 Arca 상장), 진단에 달력 포함 기간 만료 경고 추가 (8.2절) |
 
 ## 0. P1 항목과 이 문서의 대응
 
@@ -130,7 +131,7 @@ instruments:
     displayName: SK하이닉스
     aliases: [하이닉스, SK하이닉스, SKHYNIX, "000660"]
     assetClass: equity | crypto
-    primaryMarket: KRX | NASDAQ | NYSE | CRYPTO
+    primaryMarket: KRX | NASDAQ | NYSE | NYSE American | NYSE Arca | CRYPTO
     timezone: Asia/Seoul
     calendarId: KRX | US | CRYPTO_24_7
     primaryCurrency: KRW
@@ -163,7 +164,7 @@ instruments:
 
 가이드는 "야후 파이낸스 지원 종목"이라 해서 목록이 열려 있다. 레지스트리에 모두 적을 수 없으므로 다음 규칙으로 받는다.
 
-- **P1-2-R5 (반드시)** 입력이 `^[A-Z]{1,5}(\.[A-Z])?$` 형식이면 공급자에 조회해, 종목 유형이 보통주·ETF이고 상장 시장이 NASDAQ·NYSE·NYSE American인 경우에만 `US:<티커>`로 받는다. 조회 결과는 레지스트리 캐시에 저장한다.
+- **P1-2-R5 (반드시)** 입력이 `^[A-Z]{1,5}(\.[A-Z])?$` 형식이면 공급자에 조회해, 종목 유형이 보통주·ETF이고 상장 시장이 NASDAQ·NYSE·NYSE American·NYSE Arca인 경우에만 `US:<티커>`로 받는다. 조회 결과는 레지스트리 캐시에 저장한다.
 - **P1-2-R6 (반드시)** 미국 주식의 `supportedModes`는 `[algorithm]`이다.
 
 ### 2.4 가격 값 태그
@@ -525,6 +526,7 @@ P0-7은 네트워크 경계(바인딩, 토큰, 접근 표)를 정했다. 이 장
 | 인증 방식 | 구독 로그인 또는 명시적 API 키 모드 | 로그인 안내, API 키 환경변수 감지 시 경고 (7.2절 R6) |
 | 데이터 공급자 연결 | 공급자별 가벼운 요청 성공 | 공급자별 실패 표시, 필수/선택 구분 |
 | 시계 오차 | 공급자 응답의 `Date` 헤더와 차이 5초 이내 | 30초 초과면 경고, 60초 초과면 실전 분석 차단 (`E-CLOCK`) |
+| 거래소 달력 포함 기간 | 모든 달력의 포함 기간 끝이 30일 넘게 남음 | 30일 이내면 경고 (예: KRX 다음 해 휴장일 공고 반영 필요, P1-3-R7) |
 | `reports/`, `jobs/` 쓰기 | 임시 파일 쓰기·삭제 성공 | 권한·경로 안내 |
 | 포트 | 사용 가능 | 다른 서버 창 종료 안내 |
 | 서버 모드 | 로컬 전용 / LAN | LAN이면 P0-7.2 경고 |
