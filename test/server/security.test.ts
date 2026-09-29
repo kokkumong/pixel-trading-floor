@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  allowedHosts, checkHost, checkOrigin, decideAccess, isLoopback, LAN_TOKEN_TTL_MS, LanAuth, parseCookies, RateLimiter, redact,
+  allowedHosts, allowedLocalAddress, checkFetchSite, checkHost, checkOrigin, decideAccess, isLoopback, isPrivateIPv4, LAN_TOKEN_TTL_MS, LanAuth,
+  MAX_LAN_SESSIONS, parseCookies, RateLimiter, redact,
 } from '../../src/server/security.ts';
 
 test('P0-7-R1 LAN 토큰은 128비트 이상 난수이고 시작(생성)마다 다르다', () => {
@@ -114,4 +115,42 @@ test('P1-7-R13, P0-7-R4 로그·오류에서 API 키, LAN 토큰, 쿠키 값, �
   assert.equal(out.includes('alice'), false);
   assert.ok(out.includes('sk-ant-***'));
   assert.ok(out.includes('~/Desktop/trading-agent/jobs'));
+});
+
+test('P0-7-R10 교차 사이트 요청은 / 로의 페이지 이동만 허용한다 (Sec-Fetch-Site)', () => {
+  // 브라우저가 아닌 클라이언트(헤더 없음)와 같은 출처, 주소창 직접 입력(none)은 허용
+  assert.equal(checkFetchSite({}, 'GET', '/reports/all.zip'), true);
+  assert.equal(checkFetchSite({ 'sec-fetch-site': 'same-origin' }, 'GET', '/reports/all.zip'), true);
+  assert.equal(checkFetchSite({ 'sec-fetch-site': 'none', 'sec-fetch-mode': 'navigate' }, 'GET', '/diagnostics'), true);
+  // 다른 사이트의 <img>, fetch, 페이지 이동은 거부 (같은 사이트의 다른 포트도)
+  for (const site of ['cross-site', 'same-site']) {
+    assert.equal(checkFetchSite({ 'sec-fetch-site': site, 'sec-fetch-dest': 'image', 'sec-fetch-mode': 'no-cors' }, 'GET', '/reports/all.zip'), false);
+    assert.equal(checkFetchSite({ 'sec-fetch-site': site, 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }, 'GET', '/diagnostics'), false);
+    assert.equal(checkFetchSite({ 'sec-fetch-site': site, 'sec-fetch-mode': 'cors' }, 'POST', '/api/analyze'), false);
+    // 링크로 첫 화면을 여는 것은 허용 (부작용 없음, LAN 접속 주소 포함)
+    assert.equal(checkFetchSite({ 'sec-fetch-site': site, 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }, 'GET', '/'), true);
+    assert.equal(checkFetchSite({ 'sec-fetch-site': site, 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'iframe' }, 'GET', '/'), false);
+  }
+});
+
+test('P0-7.1 LAN 모드는 사설 IPv4에서만: 공인 IP·CGNAT(VPN)·링크 로컬은 제외', () => {
+  for (const a of ['10.0.0.5', '172.16.0.1', '172.31.255.255', '192.168.0.12']) assert.ok(isPrivateIPv4(a), a);
+  for (const a of ['8.8.8.8', '172.32.0.1', '100.64.1.2', '169.254.1.1', '127.0.0.1', '192.169.0.1', 'x']) assert.equal(isPrivateIPv4(a), false, a);
+});
+
+test('P0-7.1 연결 수준 검사: 로컬 모드는 루프백으로 들어온 연결만, LAN 모드는 루프백과 고른 사설 주소로 들어온 연결만', () => {
+  assert.ok(allowedLocalAddress('127.0.0.1', 'local', []));
+  assert.ok(allowedLocalAddress('::ffff:127.0.0.1', 'lan', ['192.168.0.12']));
+  assert.ok(allowedLocalAddress('::ffff:192.168.0.12', 'lan', ['192.168.0.12']));
+  assert.equal(allowedLocalAddress('100.64.1.2', 'lan', ['192.168.0.12']), false); // VPN 인터페이스
+  assert.equal(allowedLocalAddress('192.168.0.12', 'local', ['192.168.0.12']), false);
+  assert.equal(allowedLocalAddress(undefined, 'lan', ['192.168.0.12']), false);
+});
+
+test('LAN 세션 수 상한: 첫 접속을 반복해도 세션 표가 무한히 커지지 않는다 (오래된 것부터 버림)', () => {
+  const auth = new LanAuth();
+  const first = auth.createSession();
+  for (let i = 0; i < MAX_LAN_SESSIONS; i++) auth.createSession();
+  assert.equal(auth.verifySession(first.id), false);
+  assert.ok(auth.secrets().length <= MAX_LAN_SESSIONS + 1);
 });

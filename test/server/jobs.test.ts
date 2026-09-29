@@ -200,3 +200,17 @@ test('P1-1-R5, P1-6-R7 서버 시작 정리: web 작업만 INTERRUPTED, 진행 �
   assert.equal(store.load(web.record.jobId).state, 'INTERRUPTED');
   assert.equal(store.load(floor.record.jobId).state, 'VALIDATING_DATA');
 });
+
+test('idempotency key 조회는 요청마다 작업 기록 전체를 다시 읽지 않는다', async () => {
+  const { m } = manager();
+  const first = await m.start({ symbol: 'BTC', mode: 'scalp', idempotencyKey: key(40) });
+  await m.idle();
+  let scans = 0;
+  const orig = m.jobs.list.bind(m.jobs);
+  m.jobs.list = () => { scans++; return orig(); };
+  for (let i = 0; i < 5; i++) {
+    const r = await m.start({ symbol: 'BTC', mode: 'scalp', idempotencyKey: key(40) });
+    assert.ok(r.kind === 'started' && first.kind === 'started' && r.jobId === first.jobId && r.existing);
+  }
+  assert.equal(scans, 0);
+});

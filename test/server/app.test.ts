@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiagResult } from '../../src/core/diag.ts';
-import { createApp, CSP, type AppOptions } from '../../src/server/app.ts';
+import { createApp, CSP, LIMITS, type AppOptions } from '../../src/server/app.ts';
 import { LAN_TOKEN_TTL_MS, LanAuth, lanIPv4Addresses } from '../../src/server/security.ts';
 import { autoDriver, sampleOutput } from '../job-helpers.ts';
 import { manager } from './server-helpers.ts';
@@ -39,10 +39,10 @@ async function start(over: Partial<AppOptions> & { managerOpts?: Parameters<type
   const port = await app.listen();
   const host = `127.0.0.1:${port}`;
   const origin = `http://${host}`;
-  const req = (path: string, o: { method?: string; host?: string; origin?: string | null; ip?: string; cookie?: string; body?: unknown; type?: string } = {}): Promise<Res> =>
+  const req = (path: string, o: { method?: string; host?: string; origin?: string | null; ip?: string; cookie?: string; body?: unknown; type?: string; headers?: Record<string, string> } = {}): Promise<Res> =>
     new Promise((resolve, reject) => {
       const method = o.method ?? (o.body !== undefined ? 'POST' : 'GET');
-      const headers: Record<string, string> = { Host: o.host ?? host };
+      const headers: Record<string, string> = { Host: o.host ?? host, ...o.headers };
       if (o.ip) headers['x-test-ip'] = o.ip;
       if (o.cookie) headers.Cookie = o.cookie;
       const originHeader = o.origin === undefined ? (method === 'GET' ? null : origin) : o.origin;
@@ -454,5 +454,88 @@ test('P1-8-R6, P1-7-R13 Claude 확인 실패 응답에 진단 링크, 오류 응
     if (process.env.HOME) assert.equal(r.text.includes(process.env.HOME), false);
   } finally {
     await h.app.close();
+  }
+});
+
+const CROSS_IMG = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'no-cors', 'Sec-Fetch-Dest': 'image' };
+const CROSS_NAV = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+
+test('P0-7-R10 다른 사이트가 사용자 브라우저로 보낸 요청은 부작용 전에 거부되고, 사용자의 요청 한도를 쓰지 못한다', async () => {
+  let diagRuns = 0;
+  const h = await start({ enableProjectZip: true, diagnostics: async () => { diagRuns++; return { ok: true, clockSkewMs: 0, checks: [] }; } });
+  try {
+    for (const p of ['/reports/all.zip', '/diagnostics', '/api/diagnostics', '/project.zip', '/api/reports', '/api/status']) {
+      const r = await h.req(p, { headers: CROSS_IMG });
+      assert.equal(r.status, 403, p);
+      assert.equal(r.json?.error ?? 'E-CROSS-SITE', 'E-CROSS-SITE');
+    }
+    assert.equal((await h.req('/diagnostics', { headers: CROSS_NAV })).status, 403); // 새 창으로 여는 것도
+    assert.equal((await h.req('/api/analyze', { body: analyzeBody(), headers: { 'Sec-Fetch-Site': 'same-site', 'Sec-Fetch-Mode': 'cors' } })).status, 403); // 다른 포트의 로컬 페이지
+    assert.equal(diagRuns, 0);
+    // 링크로 첫 화면을 여는 것은 된다
+    assert.equal((await h.req('/', { headers: CROSS_NAV })).status, 200);
+    // 교차 사이트 요청을 한도 이상 보내도 사용자의 요청은 막히지 않는다
+    for (let i = 0; i < 130; i++) await h.req('/favicon.ico', { headers: CROSS_IMG });
+    assert.equal((await h.req('/api/status', { headers: { 'Sec-Fetch-Site': 'same-origin' } })).status, 200);
+    assert.equal((await h.req('/api/status')).status, 200);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('응답을 다른 사이트가 끌어다 쓰지 못하게 CORP·COOP same-origin을 붙인다', async () => {
+  const h = await start();
+  try {
+    for (const p of ['/', '/api/status', '/reports', '/web/app.js']) {
+      const r = await h.req(p);
+      assert.equal(r.headers['cross-origin-resource-policy'], 'same-origin', p);
+      assert.equal(r.headers['cross-origin-opener-policy'], 'same-origin', p);
+    }
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('SSE 연결 수 상한: 한 주소가 진행 연결을 무한히 열 수 없다', async () => {
+  const h = await start({ managerOpts: { driver: () => autoDriver({ TARO: () => ({ hang: true }) }) } });
+  const open: import('node:http').ClientRequest[] = [];
+  let id = '';
+  try {
+    const r = await h.req('/api/analyze', { body: analyzeBody() });
+    id = r.json.jobId;
+    const connect = () => new Promise<number>((resolve, reject) => {
+      const q = httpRequest({ host: '127.0.0.1', port: h.port, path: `/api/jobs/${id}/events`, headers: { Host: h.host } }, (res) => resolve(res.statusCode ?? 0));
+      q.on('error', reject);
+      q.end();
+      open.push(q);
+    });
+    for (let i = 0; i < LIMITS.ssePerIp; i++) assert.equal(await connect(), 200);
+    assert.equal(await connect(), 429);
+    // 연결을 닫으면 다시 열 수 있다
+    open.shift()!.destroy();
+    await new Promise((res) => setTimeout(res, 50));
+    assert.equal(await connect(), 200);
+  } finally {
+    for (const q of open) q.destroy();
+    h.m.cancel(id); // 실패해도 멈춘 작업을 끝낸다
+    await h.m.idle();
+    await h.app.close();
+  }
+});
+
+test('P0-7.1 LAN 모드는 0.0.0.0에 바인딩해도 고른 사설 주소·루프백이 아닌 인터페이스로 들어온 연결을 끊는다', async () => {
+  const l = await lan(); // lanAddrs = [LAN_IP(가짜)] → 이 PC의 실제 주소는 목록 밖
+  try {
+    assert.equal((await l.req('/api/status')).status, 200); // 루프백
+    for (const addr of lanIPv4Addresses().slice(0, 1)) {
+      const outcome = await new Promise<string>((resolve) => {
+        const q = httpRequest({ host: addr, port: l.port, path: '/api/status', headers: { Host: `${addr}:${l.port}` } }, (res) => resolve(`HTTP ${res.statusCode}`));
+        q.on('error', (e) => resolve((e as NodeJS.ErrnoException).code ?? 'error'));
+        q.end();
+      });
+      assert.match(outcome, /ECONNRESET|EPIPE|socket hang up|ECONNREFUSED/, addr);
+    }
+  } finally {
+    await l.app.close();
   }
 });

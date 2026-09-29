@@ -94,6 +94,13 @@ export class JobManager {
   private readonly inflight = new Map<string, Promise<StartResult>>();
   private readonly listeners = new Map<string, Set<(e: JobEvent) => void>>();
   private version: Promise<string> | null = null;
+  /** idempotency key → jobId. 처음 한 번만 작업 기록을 훑고, 이후 이 서버가 만든 작업을 더한다 (요청마다 전체를 읽지 않게) */
+  private keys: Map<string, string> | null = null;
+
+  private keyIndex(): Map<string, string> {
+    if (!this.keys) this.keys = new Map(this.jobs.list().map((r) => [r.idempotencyKey, r.jobId]));
+    return this.keys;
+  }
 
   constructor(o: JobManagerOptions) {
     this.o = o;
@@ -129,8 +136,8 @@ export class JobManager {
 
     const pending = this.inflight.get(key);
     if (pending) return pending.then((r) => (r.kind === 'started' ? { ...r, existing: true } : r));
-    const found = this.jobs.list().find((r) => r.idempotencyKey === key);
-    if (found) return { kind: 'started', jobId: found.jobId, existing: true };
+    const found = this.keyIndex().get(key);
+    if (found) return { kind: 'started', jobId: found, existing: true };
     if (this.active.size + this.reserved >= this.max) return { kind: 'busy', runningJobId: this.running()[0] ?? null };
 
     this.reserved++;
@@ -178,6 +185,7 @@ export class JobManager {
       const ac = new AbortController();
       // createJob은 첫 await 전에 작업 기록을 만든다: 여기서 돌려주는 jobId는 바로 조회할 수 있다
       const created = engine.createJob({ jobId, idempotencyKey: key, mode, symbolInput, interface: 'web', demo }, acq);
+      this.keyIndex().set(key, jobId);
       const done = this.run(engine, created, ac, driverFor, version, clock).finally(() => {
         this.active.delete(jobId);
         this.emit(jobId, () => ({ type: 'end', state: this.record(jobId)?.state ?? 'FAILED' }));

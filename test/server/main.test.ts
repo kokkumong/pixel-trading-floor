@@ -42,12 +42,16 @@ test('서버 시작: 진행 중 web 작업을 INTERRUPTED로 정리하고 로컬
 test('P0-7-R1, R4 LAN 시작: 경고와 토큰 주소를 서버 창에 한 번 표시하고, 재발급하면 새 토큰을 표시한다', async () => {
   const home = mkdtempSync(join(tmpdir(), 'floor-home-'));
   const lines: string[] = [];
-  const s = await startServer(['--lan', '--port', '0'], { FLOOR_HOME: home }, (x) => lines.push(x));
+  const s = await startServer(['--lan', '--port', '0'], { FLOOR_HOME: home }, (x) => lines.push(x), { interfaces: () => ['192.168.0.12', '100.101.102.103', '203.0.113.9'] });
   assert.ok(!('error' in s));
   try {
     assert.equal((s.app.server.address() as { address: string }).address, '0.0.0.0');
     const text = lines.join('\n');
     assert.match(text, /LAN 공유 중 · 암호화되지 않음/);
+    // 사설 주소만 접속 주소로 안내하고, VPN(CGNAT)·공인 주소는 받지 않는다고 알린다
+    assert.match(text, /http:\/\/192\.168\.0\.12:\d+\/\?t=/);
+    assert.equal(/http:\/\/(100\.101|203\.0)/.test(text), false);
+    assert.match(text, /접속을 받지 않습니다: 100\.101\.102\.103, 203\.0\.113\.9/);
     const old = s.auth!.token;
     // 토큰은 접속 주소 줄에만 나온다 (주소마다 한 번)
     assert.ok(lines.filter((l) => l.includes(old)).every((l) => l.trim().endsWith(`/?t=${old}`)));
@@ -82,4 +86,10 @@ test('npm start 진입점: 별도 프로세스로 뜨고 Ctrl+C(SIGINT)로 정�
     child.kill('SIGINT');
   });
   assert.equal(code, 0);
+});
+
+test('P0-7.1 사설 네트워크 주소가 없으면 LAN 모드를 시작하지 않는다', async () => {
+  const r = await startServer(['--lan', '--port', '0'], {}, () => {}, { interfaces: () => ['100.64.0.5', '8.8.8.8'] });
+  assert.ok('error' in r);
+  assert.match(r.error, /사설 네트워크 주소.*찾지 못해/);
 });

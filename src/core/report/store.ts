@@ -114,6 +114,7 @@ export class ReportStore {
   list(tab: ReportTab = 'analysis'): ReportSummary[] {
     const out: ReportSummary[] = [];
     for (const file of this.jsonFiles()) {
+      if (!this.inside(file)) continue; // P0-7-R8: 링크로 reports/ 밖을 가리키는 파일은 목록에도 넣지 않는다
       const r = this.read(file);
       if (!r || reportTab(r) !== tab) continue;
       out.push({

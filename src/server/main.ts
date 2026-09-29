@@ -8,7 +8,7 @@ import { LAN_WARNING } from '../core/diag.ts';
 import { createApp, PROJECT_ROOT, type App } from './app.ts';
 import { JobManager } from './jobs.ts';
 import { parseServerOptions } from './options.ts';
-import { LanAuth, lanIPv4Addresses, redact } from './security.ts';
+import { isPrivateIPv4, LanAuth, lanIPv4Addresses, redact } from './security.ts';
 
 export interface StartedServer {
   app: App;
@@ -20,9 +20,21 @@ export interface StartedServer {
   shutdown(): Promise<void>;
 }
 
-export async function startServer(argv: string[], env: NodeJS.ProcessEnv, out: (s: string) => void): Promise<StartedServer | { error: string; code: number }> {
+export interface StartDeps {
+  /** 이 PC의 IPv4 주소 (테스트용, 기본: 네트워크 인터페이스) */
+  interfaces?: () => string[];
+}
+
+export async function startServer(argv: string[], env: NodeJS.ProcessEnv, out: (s: string) => void, deps: StartDeps = {}): Promise<StartedServer | { error: string; code: number }> {
   const opts = parseServerOptions(argv, env);
   if ('error' in opts) return { error: opts.error, code: 2 };
+  // P0-7.1: LAN 공유는 사설 네트워크 주소로만. 공인 IP·VPN(CGNAT 100.64/10 등)으로는 접속을 받지 않는다
+  const all = opts.mode === 'lan' ? (deps.interfaces ?? lanIPv4Addresses)() : [];
+  const lanAddrs = all.filter(isPrivateIPv4);
+  const ignored = all.filter((a) => !isPrivateIPv4(a));
+  if (opts.mode === 'lan' && lanAddrs.length === 0) {
+    return { error: `사설 네트워크 주소(192.168.x.x, 10.x.x.x, 172.16~31.x.x)를 찾지 못해 LAN 모드를 시작하지 않습니다${ignored.length ? ` (사설이 아닌 주소: ${ignored.join(', ')})` : ''}`, code: 1 };
+  }
   const root = env.FLOOR_HOME ? resolve(env.FLOOR_HOME) : PROJECT_ROOT;
   const auth = opts.mode === 'lan' ? new LanAuth() : null;
   const log = (s: string) => out(redact(s, auth?.secrets() ?? []));
@@ -33,14 +45,13 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv, out: (
   if (r.repaired.length) log(`Markdown이 없던 리포트 ${r.repaired.length}건을 다시 만들었습니다`);
   if (r.cleaned.length) log(`오래된 임시 파일 ${r.cleaned.length}개를 지웠습니다`);
 
-  const lanAddrs = opts.mode === 'lan' ? lanIPv4Addresses() : [];
   let port = opts.port;
   const printLan = () => {
     if (!auth) return;
     // P0-7-R4: 토큰은 시작(재발급) 때 서버 창에 한 번만 표시한다
     out(`  다른 기기 접속 주소 (${auth.expiresAt.toLocaleTimeString()}까지 유효):`);
     for (const a of lanAddrs) out(`    http://${a}:${port}/?t=${auth.token}`);
-    if (lanAddrs.length === 0) out('    (LAN IPv4 주소를 찾지 못함: 네트워크 연결을 확인하세요)');
+    if (ignored.length) out(`  사설 네트워크가 아닌 주소로는 접속을 받지 않습니다: ${ignored.join(', ')}`);
     out('  r + Enter: 접속 주소 재발급 (기존 주소·쿠키 모두 무효)');
   };
   const app = createApp({

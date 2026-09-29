@@ -319,11 +319,12 @@ test('P0-7-R8 리포트 파일 조회는 ID로만, 실제 경로가 reports/ 밖
   const dir = join(mkdtempSync(join(tmpdir(), 'floor-rep-')), 'reports');
   mkdirSync(dir);
   const id = '33333333-3333-4333-8333-333333333333';
-  const fake = { reportSchemaVersion: 1, jobId: id, finalDecision: { status: 'NO_TRADE' } };
+  const fake = { reportSchemaVersion: 1, jobId: id, mode: 'scalp', resultClass: 'analysis', demo: false, completedAt: '2026-09-29T00:00:00Z', finalDecision: { status: 'NO_TRADE' } };
   writeFileSync(join(outside, 'x.json'), JSON.stringify(fake));
   symlinkSync(join(outside, 'x.json'), join(dir, `2026-09-29T00-00-00+09-00_CRYPTO-BTC_scalp_${id.slice(0, 8)}.json`));
   const store = new ReportStore(dir);
   assert.equal(store.locate(id), null);
   assert.equal(store.locate('../../package.json'), null);
   assert.equal(store.get(id), null);
+  assert.deepEqual(store.list('analysis'), []);
 });

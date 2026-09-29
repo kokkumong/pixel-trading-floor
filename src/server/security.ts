@@ -8,6 +8,8 @@ export type ServerMode = 'local' | 'lan';
 /** P0-7-R2: 토큰과 세션 쿠키의 수명 */
 export const LAN_TOKEN_TTL_MS = 2 * 3600_000;
 export const SESSION_COOKIE = 'floor_lan';
+/** 세션 표 상한. 넘으면 가장 오래된 세션부터 버린다 */
+export const MAX_LAN_SESSIONS = 200;
 /** P0-7-R7: IP당 1분 요청 수 */
 export const RATE_LIMITS = { analyzePerMinute: 3, otherPerMinute: 120, windowMs: 60_000 } as const;
 
@@ -23,13 +25,44 @@ export function isLoopback(addr: string | undefined): boolean {
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
 }
 
-/** 이 PC의 LAN IPv4 주소 (LAN 모드 Host 허용 목록용) */
+/** 사설 대역 (10/8, 172.16/12, 192.168/16). CGNAT(100.64/10, Tailscale 등 VPN)·공인·링크 로컬은 아니다 */
+export function isPrivateIPv4(addr: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(addr);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+/** 이 PC의 비루프백 IPv4 주소 전체 (사설 여부는 isPrivateIPv4로 고른다) */
 export function lanIPv4Addresses(): string[] {
   const out: string[] = [];
   for (const list of Object.values(networkInterfaces())) {
     for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal) out.push(a.address);
   }
   return out;
+}
+
+/**
+ * 연결 수준 검사: 소켓이 들어온 이 PC의 주소(localAddress). LAN 모드는 0.0.0.0에 바인딩하므로
+ * VPN·공인 인터페이스로 들어온 연결을 여기서 끊는다 (고른 사설 주소와 루프백만)
+ */
+export function allowedLocalAddress(localAddress: string | undefined, mode: ServerMode, lanAddrs: readonly string[]): boolean {
+  if (!localAddress) return false;
+  if (isLoopback(localAddress)) return true;
+  if (mode !== 'lan') return false;
+  const v4 = localAddress.startsWith('::ffff:') ? localAddress.slice('::ffff:'.length) : localAddress;
+  return lanAddrs.includes(v4);
+}
+
+/**
+ * P0-7-R10: 다른 사이트가 사용자 브라우저를 통해 보내는 요청 차단 (Sec-Fetch-Site).
+ * Host는 정상 값(localhost:8000)으로 오므로 Host 검사로는 막히지 않는다. GET이라도 ZIP 생성·진단(외부 요청, claude 실행)·요청 한도 소진 같은 부작용이 있다.
+ * 헤더가 없으면(브라우저가 아닌 클라이언트) 허용. 교차·같은 사이트(다른 포트 포함)는 / 로의 최상위 페이지 이동만 허용한다
+ */
+export function checkFetchSite(headers: Record<string, string | string[] | undefined>, method: string, pathname: string): boolean {
+  const site = headers['sec-fetch-site'];
+  if (site === undefined || site === 'same-origin' || site === 'none') return true;
+  return method === 'GET' && pathname === '/' && headers['sec-fetch-mode'] === 'navigate' && headers['sec-fetch-dest'] === 'document';
 }
 
 /** P0-7-R5: DNS 리바인딩 방지용 Host 허용 목록 */
@@ -101,6 +134,8 @@ export class LanAuth {
 
   createSession(): { id: string; maxAgeSeconds: number } {
     const id = randomBytes(24).toString('base64url');
+    // Map은 넣은 순서를 지킨다: 상한을 넘으면 가장 오래된 세션부터 버린다
+    while (this.sessions.size >= MAX_LAN_SESSIONS) this.sessions.delete(this.sessions.keys().next().value!);
     this.sessions.set(id, this.expires);
     return { id, maxAgeSeconds: Math.max(1, Math.floor((this.expires - this.now()) / 1000)) };
   }
