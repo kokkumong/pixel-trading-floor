@@ -51,7 +51,7 @@
 3. `git checkout -b feature/3-report-writer`
 4. 코딩 → 규칙에 맞게 커밋 → `git push -u origin feature/3-report-writer`
 5. GitHub에서 `feature/3-…` → `main`으로 **Pull Request** (템플릿 준수)
-6. 검사가 모두 통과하면 **사람이 직접 병합**합니다 (Squash가 아니라 Merge commit 또는 Rebase — 커밋 메시지 규칙이 그대로 남도록)
+6. 검사가 모두 통과하면 **바로 병합**합니다. 1인 개발이라 리뷰 대기 없이 Claude가 병합해도 됩니다. 방식은 Merge commit입니다 (Squash는 커밋 메시지 규칙이 PR 제목으로 덮이므로 쓰지 않음). 검사가 하나라도 실패하면 병합하지 않고 고칩니다.
 7. 병합 뒤 로컬 정리: `git checkout main && git pull && git branch -d feature/3-report-writer`
 
 > ⚠️ 무료 플랜의 Private 저장소는 GitHub 브랜치 보호 규칙을 쓸 수 없어 `main` 직접 푸시를 서버가 막지 못합니다. 규칙으로 지킵니다.

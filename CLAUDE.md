@@ -24,7 +24,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 
 ## 협업 규칙 (CONVENTION.md)
 - 저장소: https://github.com/kokkumong/pixel-trading-floor (Private). `main`에 직접 커밋하지 않는다
-- 흐름: `[FEAT]`·`[BUG]` 이슈 생성(템플릿의 빈 항목 없이) → `feature/<이슈번호>-<작업명>` 브랜치 → 커밋 → PR(`main` 대상, 템플릿 유지, `Close #번호`, 체크리스트 4개 `[x]`) → **병합은 사용자가 한다**
+- 흐름: `[FEAT]`·`[BUG]` 이슈 생성(템플릿의 빈 항목 없이) → `feature/<이슈번호>-<작업명>` 브랜치 → 커밋 → PR(`main` 대상, 템플릿 유지, `Close #번호`, 체크리스트 4개 `[x]`) → **CI·PR 템플릿 검사가 모두 통과하면 Claude가 바로 병합한다** (1인 개발, 사용자 승인 2026-09-29). 병합 방식은 merge commit(`gh pr merge --merge --delete-branch`), 실패한 검사가 있으면 병합하지 않고 고친다
 - 커밋 첫 줄: `<feat|fix|design|refactor|docs|chore|test>: <한글 포함 요약>`. `commit-msg` 훅과 CI가 검사한다 (`scripts/conventions.ts`)
 - Phase 작업은 Phase마다 이슈 하나를 기본으로 한다
 
