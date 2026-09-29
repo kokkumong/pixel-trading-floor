@@ -71,3 +71,31 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - 역할별 모델·사고 수준: `config/floor.config.json`의 `models` → `modelFor(role)`
 - 실측(haiku, TARO 1회): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰. **출력 길이(narrative)가 비용 대부분** → Phase 4에서 스키마 길이 축소
 - 실측: 모델이 근거 참조를 `derived:macd/hist`, `snap:<snapshotId>#/sources/...`처럼 틀리게 씀 → Phase 4 프롬프트에 정확한 예시 필수 (`derived:macd.hist`, `snap:binance.perp.price#/last`)
+
+## 진행 상황과 남은 단계
+범위: P0와 P1 전체 (보완안 14.2 릴리스 게이트). 각 단계는 명세 검증 ID를 통과 기준으로 하고, 끝나면 `npm run verify` 통과 후 커밋한다.
+
+| Phase | 내용 | 상태 |
+|---|---|---|
+| 0 | 골격, claude -p 스파이크 | ✅ |
+| 1 | 스키마 DSL, 규칙 엔진, 표시 규칙 (`src/core/schema`, `src/core/rules`) | ✅ |
+| 2 | 레지스트리, 달력, 지표, 공급자 어댑터, 스냅샷, 역할별 입력 (`src/core/data`) | ✅ |
+| 3 | claude 드라이버, 오류 코드, 예산, 재시도 (`src/core/model`, `src/core/job/budget.ts`, `retry.ts`) | ✅ |
+| **4** | **작업 엔진과 역할 프롬프트** | 다음 |
+| 5 | 리포트(JSON 원본 + MD), CLI 6개 명령(analyze·snapshot·next·submit·finalize·doctor), 데모 fixture → M1 | |
+| 6 | HTTP 서버와 보안 경계 (P0-7, P1-7, SSE, zip, /diagnostics) | |
+| 7 | 픽셀 UI (가이드 PDF 화면 구성) | |
+| 8 | `/floor` 명령, 시작 스크립트, 가이드 v1.3, P1-11 실측 | |
+
+### Phase 4 범위 (다음 세션이 할 일)
+- `src/core/job/state.ts`: P1-1 상태 머신 (모드별 경로, 종료 상태 불변)
+- `src/core/job/store.ts`: `jobs/<jobId>/job.json` 원자적 기록, 하위 프로세스 PID 기록, 시작 시 진행 중 작업 → `INTERRUPTED` (P1-1-R5)
+- `src/core/job/engine.ts`: 단계 엔진 `createJob → next → submit → finalize`. 브라우저(SubprocessDriver 루프, 애널리스트 병렬)·`/floor`(세션이 CLI로 호출)·데모가 모두 이것을 쓴다 (P1-5-R1)
+  - algorithm: 애널리스트 4 병렬 → 토론(최대 2라운드, 조기 종료 P0-1.4) → ACE → RISKY→SAFE→NEUTRAL → PM(APPROVE/MODIFY/REJECT, `diffProposalFields`)
+  - scalp·forced: TARO·VIBE → BLITZ → GUARD → ACE (forced는 `unforcedAction` 필수)
+  - `INSUFFICIENT_DATA`는 모델 호출 전에 종료 (P0-4-R4). 규칙 엔진 → `FinalDecision` 조립 (`RuleContext`는 스냅샷에서 만든다)
+  - 과거 판정 회고는 끔 (P1-9)
+- `src/core/prompts/roles/*.md` 13개 + 내용 해시 (P1-6-R3). 포함할 것: 불신 데이터 블록 지시(P0-4-R7), NO_TRADE 선택 가능(P0-3-R4), forced 지시(P0-5-R6), 근거 참조 정확한 예시, 한국어 출력
+- **Phase 3 실측 반영**: 출력 길이가 비용 대부분 → 브리핑 `narrative`·`summary` 등 스키마 길이 축소 검토, 기본 `--effort low`
+- 통과 기준: P0-1-T1~T5, P0-2-T2·T3, P0-5-T5, P0-8-T1, P0-4-T1, P1-1-T1·T2·T4, P1-5-T1·T2 (scripted 드라이버로. 실제 claude는 마지막 스모크 1회만)
+- 확인용: `node scripts/inspect.ts <종목> <모드>` (모델 호출 없이 코어 전체 출력)
