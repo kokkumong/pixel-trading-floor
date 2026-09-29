@@ -12,6 +12,10 @@ import { LAN_WARNING, runDiagnostics, type DiagResult } from '../core/diag.ts';
 import { createRealNet } from '../core/data/net.ts';
 import { renderMarkdown } from '../core/report/markdown.ts';
 import type { ReportTab } from '../core/report/report.ts';
+import { budgetFor } from '../core/job/budget.ts';
+import { PLANNED_CALLS } from '../core/job/state.ts';
+import { MODES } from '../core/schema/types.ts';
+import { BoardService } from './board.ts';
 import { listBundleFiles } from './bundle.ts';
 import type { JobManager } from './jobs.ts';
 import { diagnosticsPage, messagePage, page, projectZipPage, reportPage, reportsPage, type Raw } from './pages.ts';
@@ -35,6 +39,8 @@ export const LIMITS = { maxConnections: 256, ssePerIp: 8, sseTotal: 64, headersT
 
 export interface AppOptions {
   manager: JobManager;
+  /** 전광판 시세 (기본: 실제 공급자 조회) */
+  board?: BoardService;
   mode: ServerMode;
   /** 0이면 listen 때 정해진다 */
   port: number;
@@ -100,6 +106,9 @@ export interface App {
 
 export function createApp(o: AppOptions): App {
   const m = o.manager;
+  const board = o.board ?? new BoardService();
+  /** P0-1-R6: 실행 전 화면에 보일 계획 호출 수 범위와 최악 호출 수 */
+  const plans = Object.fromEntries(MODES.map((x) => [x, { ...PLANNED_CALLS[x], maxModelCalls: budgetFor(x).maxModelCalls }]));
   const webDir = o.webDir ?? WEB_DIR;
   const projectRoot = o.projectRoot ?? PROJECT_ROOT;
   const home = homedir();
@@ -237,7 +246,16 @@ export function createApp(o: AppOptions): App {
         running: m.running(),
         demoModes: safeDemoModes(),
         projectZip: o.enableProjectZip === true && c.isLocal,
+        plans,
       }),
+    },
+    {
+      method: 'GET', path: /^\/api\/board$/, access: 'read',
+      handle: async (c) => {
+        const r = await board.get(c.url.searchParams.get('symbol') ?? '', c.url.searchParams.get('demo') === '1');
+        if (r.ok) return json(c.res, 200, r.board);
+        json(c.res, r.status, { error: r.code, message: r.message, ...(r.candidates ? { candidates: r.candidates } : {}) });
+      },
     },
     {
       method: 'POST', path: /^\/api\/analyze$/, access: 'analyze', rate: 'analyze',

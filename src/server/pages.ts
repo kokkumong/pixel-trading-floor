@@ -1,10 +1,11 @@
 // 서버가 그리는 HTML 페이지: 리포트 목록·열람, 진단, project.zip 확인. 스크립트 없이 동작한다.
-// 모델 출력과 외부 텍스트는 모두 이스케이프하고 원시 HTML을 허용하지 않는다 (P1-7-R11). 링크는 서버가 만든 경로만 쓴다.
+// 모델 출력과 외부 텍스트는 모두 이스케이프하고 원시 HTML을 허용하지 않는다 (P1-7-R11). 리포트 본문은 markdown.ts(원시 HTML 차단, http·https 링크만)로 그린다.
 import type { Check, DiagResult } from '../core/diag.ts';
 import type { Report, ReportTab } from '../core/report/report.ts';
 import type { ReportSummary } from '../core/report/store.ts';
 import { actionBiasLabel, statusLabel } from '../core/rules/display.ts';
 import type { BundleList } from './bundle.ts';
+import { markdownToHtml } from './markdown.ts';
 
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -87,7 +88,7 @@ export function reportPage(r: Report, markdown: string): Raw {
 ${r.demo ? html`<p class="badge demo">DEMO · 실제 데이터 아님</p>` : raw('')}
 ${r.resultClass === 'simulation' ? html`<p class="badge sim">강제 방향 시뮬레이션 · 판정 아님</p>` : raw('')}
 <p><a href="/reports/${r.jobId}.md">Markdown 받기</a> · <a href="/reports/${r.jobId}.json">JSON 받기</a> · <a href="/reports">목록</a></p>
-<pre class="report">${markdown}</pre>`;
+<article class="report">${raw(markdownToHtml(markdown))}</article>`;
 }
 
 const MARK: Record<Check['status'], string> = { ok: '✓', warn: '!', error: '✗', skip: '-' };

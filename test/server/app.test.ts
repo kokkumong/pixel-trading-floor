@@ -7,7 +7,9 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiagResult } from '../../src/core/diag.ts';
 import { createApp, CSP, LIMITS, type AppOptions } from '../../src/server/app.ts';
+import { BoardService } from '../../src/server/board.ts';
 import { LAN_TOKEN_TTL_MS, LanAuth, lanIPv4Addresses } from '../../src/server/security.ts';
+import { replayNet } from '../data-helpers.ts';
 import { autoDriver, sampleOutput } from '../job-helpers.ts';
 import { manager } from './server-helpers.ts';
 import { readZip } from './zip-reader.ts';
@@ -535,6 +537,42 @@ test('P0-7-T8 LAN 모드는 0.0.0.0에 바인딩해도 고른 사설 주소·루
       });
       assert.match(outcome, /ECONNRESET|EPIPE|socket hang up|ECONNREFUSED/, addr);
     }
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-1-R6 /api/status는 모드별 계획 호출 수 범위와 최악 호출 수를 준다', async () => {
+  const h = await start();
+  try {
+    const s = (await h.req('/api/status')).json;
+    assert.deepEqual(Object.keys(s.plans).sort(), ['algorithm', 'forced_direction', 'scalp']);
+    assert.equal(s.plans.algorithm.min, 11);
+    assert.equal(s.plans.algorithm.max, 13);
+    assert.ok(s.plans.algorithm.maxModelCalls >= 13);
+    assert.ok(s.plans.scalp.maxModelCalls >= 5);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P1-8-T1, P0-7.4 /api/board: 시세는 LAN 인증 기기도 보고(read), 데모 전광판은 외부 요청 0건', async () => {
+  const { net } = replayNet('btc-algorithm');
+  const l = await lan({ board: new BoardService({ net }) });
+  try {
+    const cookie = await l.login();
+    assert.equal((await l.remote('/api/board?symbol=BTC')).status, 401);
+    const demo = await l.remote('/api/board?symbol=BTC&demo=1', { cookie });
+    assert.equal(demo.status, 200);
+    assert.equal(demo.json.demo, true);
+    assert.equal(net.requests.length, 0);
+    const live = await l.remote('/api/board?symbol=BTC', { cookie });
+    assert.equal(live.status, 200);
+    assert.equal(live.json.instrumentId, 'CRYPTO:BTC');
+    assert.ok(net.requests.length > 0);
+    const bad = await l.req('/api/board?symbol=%3Cscript%3E');
+    assert.equal(bad.status, 400);
+    assert.equal(bad.json.error, 'E-INPUT');
   } finally {
     await l.app.close();
   }
