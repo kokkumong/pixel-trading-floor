@@ -11,6 +11,8 @@
     "check": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.web.json",
     "test": "node --test \"test/**/*.test.ts\"",
     "verify": "npm run check && npm test",
+    "test:quiet": "node --test --test-reporter=dot \"test/**/*.test.ts\"",
+    "verify:quiet": "npm run -s check && npm run -s test:quiet",
     "floor": "node src/cli/floor.ts",
     "doctor": "node src/cli/floor.ts doctor",
     "start": "node src/server/main.ts",

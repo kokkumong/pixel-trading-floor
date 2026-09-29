@@ -38,7 +38,7 @@ export function nodeCheck(version: string, now: Date): Check {
   }
   return { ...base, status: 'ok', detail: version };
 }
-/** claude -p 호출 규약을 확인한 버전 (CLAUDE.md 스파이크: --safe-mode, --json-schema, structured_output) */
+/** claude -p 호출 규약을 확인한 버전 (docs/ARCHITECTURE.md claude -p 호출 규약: --safe-mode, --json-schema, structured_output) */
 export const MIN_CLAUDE_VERSION = '2.1.280';
 
 export type CheckStatus = 'ok' | 'warn' | 'error' | 'skip';
