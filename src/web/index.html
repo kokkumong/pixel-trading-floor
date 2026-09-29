@@ -4,33 +4,116 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PIXEL TRADING FLOOR</title>
-<link rel="stylesheet" href="/web/app.css">
-<script type="module" src="/web/app.js"></script>
+<link rel="stylesheet" href="/web/floor.css">
+<script type="module" src="/web/floor.js"></script>
 </head>
 <body>
-<!-- Phase 6 임시 화면: 서버 API와 SSE 확인용. 픽셀 UI는 Phase 7에서 이 자리를 바꾼다 -->
 <div id="lan" class="banner warn" hidden></div>
+<div id="reauth" class="banner err" hidden>접속 인증이 만료되었거나 없습니다. 서버 창에 표시된 주소로 다시 여세요.</div>
 <div id="watermark" class="watermark" aria-hidden="true" hidden>DEMO · 실제 데이터 아님</div>
-<nav class="top"><a href="/">FLOOR</a> <a href="/reports">리포트</a> <a href="/diagnostics" id="diag-link">진단</a></nav>
-<main>
-  <h1>PIXEL TRADING FLOOR</h1>
-  <p class="note">분석 시뮬레이션입니다. 실제 주문 기능은 없습니다.</p>
-  <form id="analyze">
-    <label>종목 <input id="symbol" name="symbol" maxlength="32" value="BTC" required></label>
-    <label>모드
-      <select id="mode" name="mode">
-        <option value="algorithm">알고리즘</option>
-        <option value="scalp">스캘핑 20x</option>
-        <option value="forced_direction">강제 방향 시뮬레이션</option>
-      </select>
-    </label>
-    <button type="submit" id="go">▶ ANALYZE</button>
-    <button type="button" id="cancel" disabled>취소</button>
+
+<header class="bar">
+  <div class="logo">◆ PIXEL TRADING FLOOR ◆</div>
+  <form id="analyze" class="controls" autocomplete="off">
+    <input id="symbol" name="symbol" maxlength="32" placeholder="BTC, 하이닉스, 삼성전자…" aria-label="종목">
+    <div class="modes" role="radiogroup" aria-label="모드">
+      <button type="button" class="mode" data-mode="algorithm" role="radio">알고리즘</button>
+      <button type="button" class="mode" data-mode="scalp" role="radio">⚡스캘핑 20x</button>
+      <button type="button" class="mode forced" data-mode="forced_direction" role="radio">⚔강제 방향</button>
+    </div>
+    <button type="submit" id="go" class="go">▶ ANALYZE</button>
+    <button type="button" id="cancel" class="cancel" hidden>■ 취소</button>
   </form>
-  <p id="readonly" class="note" hidden>LAN 기기에서는 보기만 할 수 있습니다. 분석은 서버 PC에서 실행하세요.</p>
-  <p id="status"></p>
-  <p id="report" hidden><a id="report-link" href="/reports">리포트 저장됨 — 열기</a></p>
-  <pre id="log" class="log"></pre>
+  <nav class="links">
+    <button type="button" id="open-data-flow" class="link">데이터가 오가는 곳</button>
+    <a href="/reports">리포트</a>
+    <a href="/diagnostics" id="diag-link" hidden>진단</a>
+  </nav>
+  <div class="clocks" id="clocks"></div>
+</header>
+
+<div class="subbar">
+  <span id="resolved" class="resolved"></span>
+  <span id="plan" class="muted"></span>
+  <span id="readonly" class="warn-text" hidden>LAN 기기에서는 보기만 할 수 있습니다. 분석은 서버 PC에서 실행하세요.</span>
+  <span id="status" class="status"></span>
+</div>
+
+<section class="board" aria-label="전광판">
+  <div class="quote">
+    <div id="q-name" class="q-name">—</div>
+    <div id="q-price" class="led">—</div>
+    <div id="q-change" class="q-change"></div>
+    <div id="q-market" class="market"></div>
+    <div id="q-time" class="muted small"></div>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="chart" class="chart"></canvas>
+    <div class="legend"><span class="ma20">▬MA20</span> <span class="ma50">▬MA50</span> <span class="muted">┄ 20봉 고·저</span></div>
+  </div>
+</section>
+
+<section id="multi" class="multi" hidden aria-label="멀티 거래소 전광판">
+  <header><span class="gold">◆ 멀티 거래소 전광판 ◆</span> <span id="multi-basis" class="muted"></span><span class="grow"></span><span id="multi-time" class="muted small"></span> <button type="button" id="multi-toggle" class="small-btn">접기</button></header>
+  <div id="multi-body" class="multi-body"></div>
+</section>
+
+<main class="floor">
+  <div class="rooms">
+    <section class="room analysts" id="room-analysts"><h2 class="room-title"></h2><div class="seats"></div></section>
+    <section class="room research" id="room-research"><h2 class="room-title"></h2><div class="seats"></div></section>
+    <section class="room risk" id="room-risk"><h2 class="room-title"></h2><div class="seats"></div></section>
+    <section class="room trading" id="room-trading">
+      <h2 class="room-title"></h2>
+      <div class="trading-body">
+        <div class="seats"></div>
+        <div id="panel" class="panel" hidden>
+          <div id="panel-badges" class="badges"></div>
+          <div id="panel-title" class="panel-title"></div>
+          <div id="panel-notes" class="panel-notes"></div>
+          <div id="panel-headline" class="panel-headline"></div>
+          <div id="panel-conf" class="panel-conf"></div>
+          <dl id="panel-rows" class="panel-rows"></dl>
+          <div id="panel-risk" class="panel-risk"></div>
+          <div id="panel-violations" class="panel-violations"></div>
+          <p id="panel-rationale" class="panel-rationale"></p>
+          <a id="panel-report" class="panel-report" hidden>리포트 열기</a>
+        </div>
+      </div>
+    </section>
+  </div>
+  <aside class="console" aria-label="에이전트 콘솔">
+    <header class="gold">◆ AGENT CONSOLE ◆</header>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" data-tab="all" role="tab">전체</button>
+      <button type="button" class="tab" data-tab="agent" role="tab">에이전트</button>
+      <button type="button" class="tab" data-tab="debate" role="tab">토론</button>
+    </div>
+    <div id="log" class="log" aria-live="polite"></div>
+    <footer><span id="console-state"></span><span id="console-count"></span></footer>
+  </aside>
 </main>
+
+<footer class="foot">AI 시뮬레이션 — 투자 조언이 아님 · 실제 주문·자금 이동 기능 없음</footer>
+<a id="toast" class="toast" hidden>리포트 저장됨 (클릭해서 열기)</a>
+
+<dialog id="forced-dialog" class="dialog">
+  <h3 id="forced-title"></h3>
+  <div id="forced-body"></div>
+  <div class="dialog-actions">
+    <button type="button" id="forced-cancel" class="small-btn"></button>
+    <button type="button" id="forced-accept" class="go forced"></button>
+  </div>
+</dialog>
+<dialog id="flow-dialog" class="dialog">
+  <h3 id="flow-title"></h3>
+  <ul id="flow-body"></ul>
+  <div class="dialog-actions"><button type="button" class="small-btn" data-close>닫기</button></div>
+</dialog>
+<dialog id="brief-dialog" class="dialog wide">
+  <h3 id="brief-title"></h3>
+  <div id="brief-body" class="brief-body"></div>
+  <div class="dialog-actions"><button type="button" class="small-btn" data-close>닫기</button></div>
+</dialog>
 </body>
 </html>
