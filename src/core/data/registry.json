@@ -1,0 +1,1498 @@
+{
+  "_note": "코인·무기한 선물 상장 여부는 2026-09-29 Binance exchangeInfo, CoinGecko, Bybit/Bitget/Gate tickers로 확인함. 별칭은 정규화(NFC, 영문 대문자) 전 원문으로 적고 로드할 때 정규화한다.",
+  "registryVersion": "reg/2026-09-29",
+  "instruments": [
+    {
+      "instrumentId": "KR:000660",
+      "displayName": "SK하이닉스",
+      "aliases": [
+        "하이닉스",
+        "SK하이닉스",
+        "SKHYNIX",
+        "000660",
+        "SKHYNIX-USDT"
+      ],
+      "assetClass": "equity",
+      "primaryMarket": "KRX",
+      "timezone": "Asia/Seoul",
+      "calendarId": "KRX",
+      "primaryCurrency": "KRW",
+      "spot": {
+        "yahoo": "000660.KS"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "SKHYNIXUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        },
+        {
+          "exchange": "bybit",
+          "symbol": "SKHYNIXUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": null,
+          "tickSize": null,
+          "primary": false
+        },
+        {
+          "exchange": "bitget",
+          "symbol": "SKHYNIXUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": null,
+          "tickSize": null,
+          "primary": false
+        },
+        {
+          "exchange": "gate",
+          "symbol": "SKHYNIX_USDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": null,
+          "tickSize": null,
+          "primary": false
+        }
+      ],
+      "news": {
+        "query": "SK하이닉스",
+        "lang": "ko"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "KR:005930",
+      "displayName": "삼성전자",
+      "aliases": [
+        "삼성전자",
+        "삼성",
+        "SAMSUNG",
+        "005930",
+        "SAMSUNG-USDT"
+      ],
+      "assetClass": "equity",
+      "primaryMarket": "KRX",
+      "timezone": "Asia/Seoul",
+      "calendarId": "KRX",
+      "primaryCurrency": "KRW",
+      "spot": {
+        "yahoo": "005930.KS"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "SAMSUNGUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        },
+        {
+          "exchange": "bybit",
+          "symbol": "SAMSUNGUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": null,
+          "tickSize": null,
+          "primary": false
+        },
+        {
+          "exchange": "bitget",
+          "symbol": "SAMSUNGUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": null,
+          "tickSize": null,
+          "primary": false
+        },
+        {
+          "exchange": "gate",
+          "symbol": "SAMSUNG_USDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": null,
+          "tickSize": null,
+          "primary": false
+        }
+      ],
+      "news": {
+        "query": "삼성전자",
+        "lang": "ko"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:BTC",
+      "displayName": "비트코인 (BTC)",
+      "aliases": [
+        "BTC",
+        "비트코인",
+        "BTCUSDT",
+        "BTC-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "BTCUSDT",
+        "coingecko": "bitcoin"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "BTCUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.1,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "bitcoin crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ETH",
+      "displayName": "이더리움 (ETH)",
+      "aliases": [
+        "ETH",
+        "이더리움",
+        "ETHUSDT",
+        "ETH-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ETHUSDT",
+        "coingecko": "ethereum"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ETHUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "ethereum crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:BNB",
+      "displayName": "바이낸스코인 (BNB)",
+      "aliases": [
+        "BNB",
+        "바이낸스코인",
+        "BNBUSDT",
+        "BNB-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "BNBUSDT",
+        "coingecko": "binancecoin"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "BNBUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "binancecoin crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:SOL",
+      "displayName": "솔라나 (SOL)",
+      "aliases": [
+        "SOL",
+        "솔라나",
+        "SOLUSDT",
+        "SOL-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "SOLUSDT",
+        "coingecko": "solana"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "SOLUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "solana crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:XRP",
+      "displayName": "리플 (XRP)",
+      "aliases": [
+        "XRP",
+        "리플",
+        "XRPUSDT",
+        "XRP-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "XRPUSDT",
+        "coingecko": "ripple"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "XRPUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "ripple crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:DOGE",
+      "displayName": "도지코인 (DOGE)",
+      "aliases": [
+        "DOGE",
+        "도지코인",
+        "DOGEUSDT",
+        "DOGE-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "DOGEUSDT",
+        "coingecko": "dogecoin"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "DOGEUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "dogecoin crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ADA",
+      "displayName": "에이다 (ADA)",
+      "aliases": [
+        "ADA",
+        "에이다",
+        "ADAUSDT",
+        "ADA-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ADAUSDT",
+        "coingecko": "cardano"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ADAUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "cardano crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:TRX",
+      "displayName": "트론 (TRX)",
+      "aliases": [
+        "TRX",
+        "트론",
+        "TRXUSDT",
+        "TRX-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "TRXUSDT",
+        "coingecko": "tron"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "TRXUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "tron crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:AVAX",
+      "displayName": "아발란체 (AVAX)",
+      "aliases": [
+        "AVAX",
+        "아발란체",
+        "AVAXUSDT",
+        "AVAX-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "AVAXUSDT",
+        "coingecko": "avalanche-2"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "AVAXUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "avalanche 2 crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:LINK",
+      "displayName": "체인링크 (LINK)",
+      "aliases": [
+        "LINK",
+        "체인링크",
+        "LINKUSDT",
+        "LINK-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "LINKUSDT",
+        "coingecko": "chainlink"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "LINKUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "chainlink crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:DOT",
+      "displayName": "폴카닷 (DOT)",
+      "aliases": [
+        "DOT",
+        "폴카닷",
+        "DOTUSDT",
+        "DOT-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "DOTUSDT",
+        "coingecko": "polkadot"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "DOTUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "polkadot crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:CRV",
+      "displayName": "커브 (CRV)",
+      "aliases": [
+        "CRV",
+        "커브",
+        "CRVUSDT",
+        "CRV-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "CRVUSDT",
+        "coingecko": "curve-dao-token"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "CRVUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "curve dao token crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:BCH",
+      "displayName": "비트코인캐시 (BCH)",
+      "aliases": [
+        "BCH",
+        "비트코인캐시",
+        "BCHUSDT",
+        "BCH-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "BCHUSDT",
+        "coingecko": "bitcoin-cash"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "BCHUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "bitcoin cash crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:LTC",
+      "displayName": "라이트코인 (LTC)",
+      "aliases": [
+        "LTC",
+        "라이트코인",
+        "LTCUSDT",
+        "LTC-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "LTCUSDT",
+        "coingecko": "litecoin"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "LTCUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "litecoin crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:NEAR",
+      "displayName": "니어프로토콜 (NEAR)",
+      "aliases": [
+        "NEAR",
+        "니어프로토콜",
+        "NEARUSDT",
+        "NEAR-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "NEARUSDT",
+        "coingecko": "near"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "NEARUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "near crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:APT",
+      "displayName": "앱토스 (APT)",
+      "aliases": [
+        "APT",
+        "앱토스",
+        "APTUSDT",
+        "APT-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "APTUSDT",
+        "coingecko": "aptos"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "APTUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "aptos crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:SUI",
+      "displayName": "수이 (SUI)",
+      "aliases": [
+        "SUI",
+        "수이",
+        "SUIUSDT",
+        "SUI-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "SUIUSDT",
+        "coingecko": "sui"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "SUIUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "sui crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ARB",
+      "displayName": "아비트럼 (ARB)",
+      "aliases": [
+        "ARB",
+        "아비트럼",
+        "ARBUSDT",
+        "ARB-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ARBUSDT",
+        "coingecko": "arbitrum"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ARBUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "arbitrum crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:OP",
+      "displayName": "옵티미즘 (OP)",
+      "aliases": [
+        "OP",
+        "옵티미즘",
+        "OPUSDT",
+        "OP-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "OPUSDT",
+        "coingecko": "optimism"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "OPUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "optimism crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ATOM",
+      "displayName": "코스모스 (ATOM)",
+      "aliases": [
+        "ATOM",
+        "코스모스",
+        "ATOMUSDT",
+        "ATOM-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ATOMUSDT",
+        "coingecko": "cosmos"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ATOMUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "cosmos crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ETC",
+      "displayName": "이더리움클래식 (ETC)",
+      "aliases": [
+        "ETC",
+        "이더리움클래식",
+        "ETCUSDT",
+        "ETC-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ETCUSDT",
+        "coingecko": "ethereum-classic"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ETCUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "ethereum classic crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:FIL",
+      "displayName": "파일코인 (FIL)",
+      "aliases": [
+        "FIL",
+        "파일코인",
+        "FILUSDT",
+        "FIL-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "FILUSDT",
+        "coingecko": "filecoin"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "FILUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "filecoin crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ICP",
+      "displayName": "인터넷컴퓨터 (ICP)",
+      "aliases": [
+        "ICP",
+        "인터넷컴퓨터",
+        "ICPUSDT",
+        "ICP-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ICPUSDT",
+        "coingecko": "internet-computer"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ICPUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "internet computer crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:UNI",
+      "displayName": "유니스왑 (UNI)",
+      "aliases": [
+        "UNI",
+        "유니스왑",
+        "UNIUSDT",
+        "UNI-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "UNIUSDT",
+        "coingecko": "uniswap"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "UNIUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "uniswap crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:AAVE",
+      "displayName": "에이브 (AAVE)",
+      "aliases": [
+        "AAVE",
+        "에이브",
+        "AAVEUSDT",
+        "AAVE-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "AAVEUSDT",
+        "coingecko": "aave"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "AAVEUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "aave crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:HBAR",
+      "displayName": "헤데라 (HBAR)",
+      "aliases": [
+        "HBAR",
+        "헤데라",
+        "HBARUSDT",
+        "HBAR-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "HBARUSDT",
+        "coingecko": "hedera-hashgraph"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "HBARUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "hedera hashgraph crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:XLM",
+      "displayName": "스텔라루멘 (XLM)",
+      "aliases": [
+        "XLM",
+        "스텔라루멘",
+        "XLMUSDT",
+        "XLM-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "XLMUSDT",
+        "coingecko": "stellar"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "XLMUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "stellar crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:INJ",
+      "displayName": "인젝티브 (INJ)",
+      "aliases": [
+        "INJ",
+        "인젝티브",
+        "INJUSDT",
+        "INJ-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "INJUSDT",
+        "coingecko": "injective-protocol"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "INJUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "injective protocol crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:SEI",
+      "displayName": "세이 (SEI)",
+      "aliases": [
+        "SEI",
+        "세이",
+        "SEIUSDT",
+        "SEI-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "SEIUSDT",
+        "coingecko": "sei-network"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "SEIUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "sei network crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:TIA",
+      "displayName": "셀레스티아 (TIA)",
+      "aliases": [
+        "TIA",
+        "셀레스티아",
+        "TIAUSDT",
+        "TIA-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "TIAUSDT",
+        "coingecko": "celestia"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "TIAUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "celestia crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:WLD",
+      "displayName": "월드코인 (WLD)",
+      "aliases": [
+        "WLD",
+        "월드코인",
+        "WLDUSDT",
+        "WLD-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "WLDUSDT",
+        "coingecko": "worldcoin-wld"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "WLDUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "worldcoin wld crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:RENDER",
+      "displayName": "렌더 (RENDER)",
+      "aliases": [
+        "RENDER",
+        "렌더",
+        "RENDERUSDT",
+        "RENDER-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "RENDERUSDT",
+        "coingecko": "render-token"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "RENDERUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "render token crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:TAO",
+      "displayName": "비트텐서 (TAO)",
+      "aliases": [
+        "TAO",
+        "비트텐서",
+        "TAOUSDT",
+        "TAO-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "TAOUSDT",
+        "coingecko": "bittensor"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "TAOUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.01,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "bittensor crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ENA",
+      "displayName": "에테나 (ENA)",
+      "aliases": [
+        "ENA",
+        "에테나",
+        "ENAUSDT",
+        "ENA-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ENAUSDT",
+        "coingecko": "ethena"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ENAUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "ethena crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:POL",
+      "displayName": "폴리곤 (POL)",
+      "aliases": [
+        "POL",
+        "폴리곤",
+        "POLUSDT",
+        "POL-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "POLUSDT",
+        "coingecko": "polygon-ecosystem-token"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "POLUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.00001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "polygon ecosystem token crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    },
+    {
+      "instrumentId": "CRYPTO:ONDO",
+      "displayName": "온도파이낸스 (ONDO)",
+      "aliases": [
+        "ONDO",
+        "온도파이낸스",
+        "ONDOUSDT",
+        "ONDO-USDT"
+      ],
+      "assetClass": "crypto",
+      "primaryMarket": "CRYPTO",
+      "timezone": "UTC",
+      "calendarId": "CRYPTO_24_7",
+      "primaryCurrency": "USDT",
+      "spot": {
+        "binance": "ONDOUSDT",
+        "coingecko": "ondo-finance"
+      },
+      "perpetuals": [
+        {
+          "exchange": "binance",
+          "symbol": "ONDOUSDT",
+          "quoteCurrency": "USDT",
+          "contractMultiplier": 1,
+          "tickSize": 0.0001,
+          "primary": true
+        }
+      ],
+      "news": {
+        "query": "ondo finance crypto",
+        "lang": "en"
+      },
+      "supportedModes": [
+        "algorithm",
+        "scalp",
+        "forced_direction"
+      ]
+    }
+  ]
+}

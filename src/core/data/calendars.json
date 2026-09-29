@@ -1,0 +1,68 @@
+{
+  "_note": "KRX 2026: 한국거래소 공고 기준 휴장일 17일 (jangjeon.kr 정리본으로 교차 확인, 2026-09-29). 2027 KRX 휴장일은 거래소 공고(통상 12월) 후 추가한다. 수능일(2026-11-19)은 10:00 개장·16:30 마감 관행. NYSE 2026~2027: nyse.com/markets/hours-calendars (2026-09-29 확인).",
+  "calendarVersion": "cal/2026-09-29",
+  "calendars": {
+    "KRX": {
+      "timezone": "Asia/Seoul",
+      "open": "09:00",
+      "close": "15:30",
+      "coverage": { "from": "2026-01-01", "to": "2026-12-31" },
+      "holidays": {
+        "2026-01-01": "신정",
+        "2026-02-16": "설날 연휴",
+        "2026-02-17": "설날",
+        "2026-02-18": "설날 연휴",
+        "2026-03-02": "삼일절 대체공휴일",
+        "2026-05-01": "근로자의 날",
+        "2026-05-05": "어린이날",
+        "2026-05-25": "부처님오신날 대체공휴일",
+        "2026-06-03": "전국동시지방선거",
+        "2026-07-17": "제헌절",
+        "2026-08-17": "광복절 대체공휴일",
+        "2026-09-24": "추석 연휴",
+        "2026-09-25": "추석",
+        "2026-10-05": "개천절 대체공휴일",
+        "2026-10-09": "한글날",
+        "2026-12-25": "성탄절",
+        "2026-12-31": "연말 휴장일"
+      },
+      "specialSessions": {
+        "2026-01-02": { "open": "10:00", "close": "15:30", "reason": "연초 개장일" },
+        "2026-11-19": { "open": "10:00", "close": "16:30", "reason": "대학수학능력시험일" }
+      }
+    },
+    "US": {
+      "timezone": "America/New_York",
+      "open": "09:30",
+      "close": "16:00",
+      "coverage": { "from": "2026-01-01", "to": "2027-12-31" },
+      "holidays": {
+        "2026-01-01": "New Year's Day",
+        "2026-01-19": "Martin Luther King, Jr. Day",
+        "2026-02-16": "Washington's Birthday",
+        "2026-04-03": "Good Friday",
+        "2026-05-25": "Memorial Day",
+        "2026-06-19": "Juneteenth",
+        "2026-07-03": "Independence Day (observed)",
+        "2026-09-07": "Labor Day",
+        "2026-11-26": "Thanksgiving Day",
+        "2026-12-25": "Christmas Day",
+        "2027-01-01": "New Year's Day",
+        "2027-01-18": "Martin Luther King, Jr. Day",
+        "2027-02-15": "Washington's Birthday",
+        "2027-03-26": "Good Friday",
+        "2027-05-31": "Memorial Day",
+        "2027-06-18": "Juneteenth (observed)",
+        "2027-07-05": "Independence Day (observed)",
+        "2027-09-06": "Labor Day",
+        "2027-11-25": "Thanksgiving Day",
+        "2027-12-24": "Christmas Day (observed)"
+      },
+      "specialSessions": {
+        "2026-11-27": { "open": "09:30", "close": "13:00", "reason": "Day after Thanksgiving" },
+        "2026-12-24": { "open": "09:30", "close": "13:00", "reason": "Christmas Eve" },
+        "2027-11-26": { "open": "09:30", "close": "13:00", "reason": "Day after Thanksgiving" }
+      }
+    }
+  }
+}

@@ -56,3 +56,11 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - env는 허용 목록으로 구성하고 `ANTHROPIC_API_KEY`는 기본 제외한다. `FLOOR_USE_API_KEY=1`일 때만 넘긴다 (P1-7-R6)
 - 취소: macOS/Linux는 `spawn({detached:true})` + `process.kill(-pid)`로 약 1초 안에 그룹 전체가 종료됨 (확인함). Windows는 `taskkill /pid <pid> /T /F` (Windows에서 미검증)
 - **인증 실패(설정 없음 + 잘못된 키)일 때 오류를 내지 않고 무기한 대기했다.** 호출 시간 제한은 필수이고, 분석 전에 `diag`로 로그인 상태를 확인한다
+
+## 데이터 계층 (src/core/data)
+- 흐름: `registry.resolve*` → `collectSources`(네트워크) → `assembleSnapshot`(순수 함수: 무결성·신선도·품질·지표·해시) → `buildRoleInput`/`fitInput`
+- 공급자: Binance(현물·무기한·펀딩), Bybit/Bitget/Gate(비교·추정), Yahoo(주식·환율·미국 종목 조회), CoinGecko, alternative.me, Google 뉴스 RSS. 도메인 목록은 `net.ts`의 `ALLOWED_HOSTS`
+- 녹화 fixture: `node scripts/record-fixtures.ts` → `fixtures/test/http/*.json`. 테스트는 `test/data-helpers.ts`의 `replaySnapshot`으로 재생 (네트워크 없음)
+- 지표 기대값: `python3 fixtures/indicators/gen_expected.py` (독립 구현, P1-3-R12)
+- 달력 `calendars.json`: KRX는 2026년까지만 (2027 휴장일은 KRX 12월 공고 뒤 추가), NYSE는 2027년까지
+- 명세와 다르게 구현한 곳 (명세 반영 대기): 주식 장중 TTL 25분(`STOCK_INTRADAY_TTL`), 외환 주말 규칙(`freshness.ts`)
