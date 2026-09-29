@@ -75,8 +75,16 @@ export interface Engine {
   finalize(job: Job, opts?: FinalizeOptions): FinalDecision | null;
   trackPid(job: Job, pid: number): void;
   untrackPid(job: Job, pid: number): void;
-  /** 서버 시작 시: 진행 중 작업을 INTERRUPTED로 바꾸고 기록된 하위 프로세스를 종료한다 (P1-1-R5) */
-  recoverInterrupted(kill?: (pid: number) => void): string[];
+  /**
+   * 서버 시작 시: 진행 중 작업을 INTERRUPTED로 바꾸고 기록된 하위 프로세스를 종료한다 (P1-1-R5).
+   * SAVING에서 멈췄는데 리포트 JSON이 온전히 저장돼 있으면(hasReport) COMPLETED로 확정한다 (P1-6-T2)
+   */
+  recoverInterrupted(kill?: (pid: number) => void, hasReport?: (jobId: string) => boolean): string[];
+  /**
+   * P1-5-T3: finalize 없이 세션이 끝난 /floor 작업 정리. 코어 명령마다 부른다.
+   * 스냅샷 뒤 maxDurationSeconds가 지난 진행 중 single_session 작업을 INTERRUPTED로 바꾼다 (지금 명령의 작업은 제외)
+   */
+  sweepAbandoned(exceptJobId?: string): string[];
 }
 
 export function createEngine(opts: EngineOptions): Engine {
@@ -322,15 +330,34 @@ export function createEngine(opts: EngineOptions): Engine {
       save(job);
     },
 
-    recoverInterrupted(kill = killRecordedProcess) {
+    recoverInterrupted(kill = killRecordedProcess, hasReport = () => false) {
       const ids: string[] = [];
       for (const record of store.list()) {
         if (isTerminal(record.state)) continue;
+        if (record.state === 'SAVING' && record.finalDecision && hasReport(record.jobId)) {
+          record.pids = [];
+          move({ record, snapshot: null }, 'COMPLETED');
+          store.save(record);
+          continue;
+        }
         for (const pid of record.pids) {
           try { kill(pid); } catch { /* 이미 종료 */ }
         }
         record.pids = [];
         terminate({ record, snapshot: null }, 'INTERRUPTED', 'E-INTERRUPTED', `${record.state} 단계에서 서버 종료`);
+        ids.push(record.jobId);
+      }
+      return ids;
+    },
+
+    sweepAbandoned(exceptJobId) {
+      const ids: string[] = [];
+      for (const record of store.list()) {
+        if (isTerminal(record.state) || record.executionBackend !== 'single_session' || record.jobId === exceptJobId) continue;
+        const since = Date.parse(record.snapshot?.collectedAt ?? record.createdAt);
+        const limit = budgetFor(record.mode).maxDurationSeconds * 1000;
+        if (now().getTime() - since <= limit) continue;
+        terminate({ record, snapshot: null }, 'INTERRUPTED', 'E-INTERRUPTED', `${record.state} 단계에서 세션이 끝나 finalize되지 않음`);
         ids.push(record.jobId);
       }
       return ids;

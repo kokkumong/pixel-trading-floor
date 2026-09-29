@@ -55,6 +55,8 @@ export interface JobRecord {
   promptHashes: Partial<Record<Role, string>>;
   warnings: string[];
   finalDecision: FinalDecision | null;
+  /** 저장된 리포트 경로 (COMPLETED만, P1-6) */
+  report: { json: string; md: string } | null;
   /** 실행 중인 claude 하위 프로세스 (재시작 정리용, P1-1-R5) */
   pids: number[];
 }
@@ -96,6 +98,7 @@ export function newJobRecord(req: JobRequest, now: Date): JobRecord {
     promptHashes: {},
     warnings: [],
     finalDecision: null,
+    report: null,
     pids: [],
   };
 }
