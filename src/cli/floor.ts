@@ -26,6 +26,7 @@ import { ERROR_CODES } from '../core/model/errors.ts';
 import { ReportStore, reportSaver } from '../core/report/store.ts';
 import { actionBiasLabel, CONFIDENCE_NOTE, panelView } from '../core/rules/display.ts';
 import { MODES, type Mode } from '../core/schema/types.ts';
+import { DEFAULT_PORT, parsePort } from '../server/options.ts';
 
 /** 종료 코드 (P1-5.1 표). analyze는 같은 번호를 쓴다 */
 export const EXIT = { OK: 0, OTHER: 1, UNSUPPORTED_SYMBOL: 2, INSUFFICIENT_DATA: 3, SCHEMA_ERROR: 4, BUDGET_EXCEEDED: 5, NO_MORE_STEPS: 10 } as const;
@@ -259,6 +260,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
         dirs: [{ label: 'reports/', path: join(deps.root, 'reports') }, { label: 'jobs/', path: join(deps.root, 'jobs') }],
         ...(deps.executable !== undefined ? { executable: deps.executable } : {}),
         claudeTest: v['claude-test'] === true,
+        server: { port: parsePort(deps.env.PORT) ?? DEFAULT_PORT, mode: deps.env.FLOOR_LAN === '1' ? 'lan' : 'local', running: false },
       });
       if (v.json) json(r);
       else deps.out(formatChecks(r.checks));

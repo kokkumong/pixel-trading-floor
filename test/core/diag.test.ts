@@ -151,3 +151,26 @@ test('Claude 시험 호출은 요청했을 때만 1회 실행한다', async () =
   assert.equal(c.status, 'ok', c.detail);
   assert.match(c.detail, /호출 1회/);
 });
+
+test('P1-8 진단 표: 포트 사용 가능 여부와 서버 모드(LAN이면 평문 경고)', async () => {
+  const { createServer } = await import('node:net');
+  const busy = createServer();
+  await new Promise<void>((r) => busy.listen(0, '127.0.0.1', r));
+  const port = (busy.address() as { port: number }).port;
+  try {
+    const inUse = await runDiagnostics(opts({ server: { port, mode: 'local', running: false } }));
+    assert.equal(check(inUse, 'port').status, 'warn');
+    assert.match(check(inUse, 'port').hint ?? '', /서버 창/);
+    assert.equal(check(inUse, 'server-mode').status, 'ok');
+    const self = await runDiagnostics(opts({ server: { port, mode: 'lan', running: true } }));
+    assert.equal(check(self, 'port').status, 'ok');
+    assert.equal(check(self, 'server-mode').status, 'warn');
+    assert.match(check(self, 'server-mode').detail, /암호화되지 않음/);
+  } finally {
+    busy.close();
+  }
+  const free = await runDiagnostics(opts({ server: { port, mode: 'local', running: false } }));
+  assert.equal(check(free, 'port').status, 'ok');
+  const none = await runDiagnostics(opts());
+  assert.equal(none.checks.some((c) => c.id === 'port'), false);
+});
