@@ -119,7 +119,7 @@ export function renderMarkdown(r: Report): string {
 
   const others = r.proposals.filter((p) => p !== d.proposal && !(d.proposal && p.author === d.proposal.author));
   if (others.length) {
-    L.push('## 다른 제안', '');
+    L.push('## 채택되지 않은 제안', '');
     for (const p of others) L.push(`### ${p.author}`, '', ...proposalLines(p), '');
   }
 

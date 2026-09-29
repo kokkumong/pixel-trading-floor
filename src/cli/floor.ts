@@ -382,7 +382,7 @@ function formatSummary(job: Job, seconds: string): string {
   const d = r.finalDecision;
   if (d && d.action && d.bias) {
     const pv = panelView(d);
-    L.push('', `[${pv.badges.join('] [')}] ${pv.title}`.replace('[] ', ''), `  ${pv.headline} (${actionBiasLabel(d.action, d.bias)})${d.confidence ? ` · 확신도 ${d.confidence.band} (${CONFIDENCE_NOTE})` : ''}`);
+    L.push('', `[${pv.badges.join('] [')}] ${pv.title}`.replace('[] ', ''), `  ${pv.headline}${pv.headline === actionBiasLabel(d.action, d.bias) ? '' : ` (${actionBiasLabel(d.action, d.bias)})`}${d.confidence ? ` · 확신도 ${d.confidence.band} (${CONFIDENCE_NOTE})` : ''}`);
     for (const n of pv.notes) L.push(`  · ${n}`);
     if (d.proposal) L.push(`  진입 ${d.proposal.entry.type} ${d.proposal.entry.min ?? '-'}~${d.proposal.entry.max ?? '-'} · 손절 ${d.proposal.stopLoss ?? '-'} · 목표 ${d.proposal.targets.join(', ') || '-'}`);
     for (const x of d.ruleEngine.violations) L.push(`  ✗ ${x.code}: ${x.message}`);

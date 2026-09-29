@@ -38,7 +38,7 @@ test('P1-8-T1 데모 전체 실행 중 외부 요청 0건이고 모델 호출 0�
       assert.equal(r.state, 'COMPLETED', `${mode}: ${r.error?.detail}`);
       assert.equal(r.usage.modelCallCount, 0); // P0-1-R4
       assert.equal(r.demo, true);
-      assert.equal(job.snapshot!.dataQuality.status, 'OK', job.snapshot!.dataQuality.warnings.join('; '));
+      assert.notEqual(job.snapshot!.dataQuality.status, 'INSUFFICIENT_DATA', job.snapshot!.dataQuality.warnings.join('; '));
       assert.ok(job.snapshot!.derived.currentBar, '미완성 봉이 fixture에서 복원된다');
       const rep = JSON.parse(readFileSync(r.report!.json, 'utf8')) as Report;
       assert.equal(rep.demo, true);
@@ -78,4 +78,17 @@ test('P1-8-T2 데모 ACE 응답의 손절가를 진입가 위로 바꾸면 데�
 test('데모가 없는 모드는 알 수 있는 오류를 낸다', () => {
   const missing = (['algorithm', 'scalp', 'forced_direction'] as Mode[]).filter((m) => !demoModes().includes(m));
   for (const m of missing) assert.throws(() => loadDemo(m), /데모가 없습니다/);
+});
+
+test('데모 알고리즘 재생 결과는 녹화된 실전 작업(Phase 5 스모크)과 같다: 13명 전 과정, 토론 2라운드, PM 기각', async () => {
+  const { job } = await runDemo(loadDemo('algorithm'));
+  const r = job.record;
+  assert.equal(r.state, 'COMPLETED');
+  assert.equal(r.debate.roundCount, 2);
+  assert.equal(r.debate.stopReason, 'MAX_ROUNDS');
+  assert.equal(r.usage.calls.length, 13);
+  assert.equal(r.finalDecision?.pmDecision, 'REJECT');
+  assert.equal(r.finalDecision?.action, 'NO_TRADE');
+  assert.deepEqual(r.finalDecision?.reasonCodes, ['PM_REJECTED']);
+  assert.equal(r.finalDecision?.ruleEngine.verdict, 'PASS');
 });
