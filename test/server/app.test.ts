@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiagResult } from '../../src/core/diag.ts';
 import { createApp, CSP, type AppOptions } from '../../src/server/app.ts';
@@ -29,6 +29,7 @@ async function start(over: Partial<AppOptions> & { managerOpts?: Parameters<type
       checks: [
         { id: 'port', label: '포트', status: 'ok', detail: '이 서버가 사용 중' },
         { id: 'server-mode', label: '서버 모드', status: 'ok', detail: '로컬 전용 <b>' },
+        { id: 'dir:reports/', label: 'reports/ 쓰기', status: 'ok', detail: `${homedir()}/x/reports` },
         ...(claudeTest ? [{ id: 'claude-test', label: 'Claude 시험 호출', status: 'ok' as const, detail: '성공' }] : []),
       ],
     }),
@@ -429,6 +430,7 @@ test('/diagnostics: 로컬에서만, 결과는 이스케이프, 시험 호출은
     assert.equal(d.status, 200);
     assert.ok(d.text.includes('포트'));
     assert.ok(d.text.includes('로컬 전용 &lt;b&gt;'));
+    assert.ok(d.text.includes('~/x/reports')); // 홈 경로의 사용자 이름을 가린다
     assert.ok(d.text.includes('action="/diagnostics/claude-test"'));
     assert.equal(d.text.includes('Claude 시험 호출</td>'), false);
     const t = await h.req('/diagnostics/claude-test', { method: 'POST' });

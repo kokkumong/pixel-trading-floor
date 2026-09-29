@@ -96,7 +96,7 @@ function watch(id) {
     }
     status(`${job.state} · 호출 ${job.usage.modelCallCount}회 (계획 ${job.plannedModelCallRange.min}~${job.plannedModelCallRange.max})`);
     if (job.error) log(`오류 ${job.error.code}: ${job.error.message}${job.error.hint ? ` → ${job.error.hint}` : ''}`);
-    if (job.panel) log(`판정: ${job.panel.title} · ${job.panel.headline}${job.panel.badges.length ? ` [${job.panel.badges.join('] [')}]` : ''}`);
+    if (job.panel && job.terminal) log(`판정: ${job.panel.title} · ${job.panel.headline}${job.panel.badges.length ? ` [${job.panel.badges.join('] [')}]` : ''}`);
     if (job.reportUrl) {
       $('report').hidden = false;
       /** @type {HTMLAnchorElement} */ ($('report-link')).href = job.reportUrl;

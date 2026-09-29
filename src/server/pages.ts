@@ -57,6 +57,11 @@ ${body.html}
 const TAB_LABEL: Record<ReportTab, string> = { analysis: '분석', simulation: '시뮬레이션', lightweight: '간이', demo: '데모' };
 const MODE_LABEL = { algorithm: '알고리즘', scalp: '스캘핑 20x', forced_direction: '강제 방향 시뮬레이션' } as const;
 
+/** 서버 PC 시간대로 표시 (리포트 파일명과 같은 기준) */
+function localTime(iso: string): string {
+  return new Date(iso).toLocaleString('sv-SE');
+}
+
 function verdictLabel(s: Pick<ReportSummary, 'action' | 'bias' | 'status'>): string {
   return s.action && s.bias ? actionBiasLabel(s.action, s.bias) : statusLabel(s.status);
 }
@@ -65,7 +70,7 @@ export function reportsPage(tab: ReportTab, items: ReportSummary[], canZip: bool
   const tabs = (Object.keys(TAB_LABEL) as ReportTab[]).map((t) =>
     t === tab ? html`<strong>${TAB_LABEL[t]}</strong>` : html`<a href="/reports?tab=${t}">${TAB_LABEL[t]}</a>`);
   const rows = items.map((r) => html`<tr>
-<td>${r.completedAt.replace('T', ' ').slice(0, 19)}</td>
+<td>${localTime(r.completedAt)}</td>
 <td><a href="/reports/${r.jobId}">${r.displayName}</a></td>
 <td>${MODE_LABEL[r.mode]}${r.demo ? ' · DEMO' : ''}</td>
 <td>${verdictLabel(r)}</td>

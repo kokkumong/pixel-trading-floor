@@ -106,11 +106,16 @@ export function createApp(o: AppOptions): App {
   const secrets = () => o.auth?.secrets() ?? [];
   const clean = (s: string) => redact(s, secrets(), home);
   const log = (s: string) => o.log?.(clean(s));
-  const diagnostics = o.diagnostics ?? ((claudeTest: boolean) => runDiagnostics({
+  const runDiag = o.diagnostics ?? ((claudeTest: boolean) => runDiagnostics({
     net: createRealNet(), env: process.env, claudeTest,
     dirs: [{ label: 'reports/', path: m.reports.dir }, { label: 'jobs/', path: m.jobs.root }],
     server: { port, mode: o.mode, running: true },
   }));
+  /** 진단 결과의 경로에서 사용자 이름을 가린다 (P1-7-R13) */
+  const diagnostics = async (claudeTest: boolean): Promise<DiagResult> => {
+    const d = await runDiag(claudeTest);
+    return { ...d, checks: d.checks.map((c) => ({ ...c, detail: clean(c.detail), ...(c.hint ? { hint: clean(c.hint) } : {}) })) };
+  };
 
   const baseHeaders = (type: string): Record<string, string> => ({
     'Content-Type': type,
