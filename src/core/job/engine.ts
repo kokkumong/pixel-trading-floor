@@ -80,9 +80,10 @@ export interface Engine {
   untrackPid(job: Job, pid: number): void;
   /**
    * 서버 시작 시: 진행 중 작업을 INTERRUPTED로 바꾸고 기록된 하위 프로세스를 종료한다 (P1-1-R5).
-   * SAVING에서 멈췄는데 리포트 JSON이 온전히 저장돼 있으면(hasReport) COMPLETED로 확정한다 (P1-6-T2)
+   * SAVING에서 멈췄는데 리포트 JSON이 온전히 저장돼 있으면(hasReport) COMPLETED로 확정한다 (P1-6-T2).
+   * only로 대상을 고른다: 서버는 자기 경로의 작업(subprocess_per_role)만 정리하고 /floor 작업은 sweepAbandoned에 맡긴다
    */
-  recoverInterrupted(kill?: (pid: number) => void, hasReport?: (jobId: string) => boolean): string[];
+  recoverInterrupted(kill?: (pid: number) => void, hasReport?: (jobId: string) => boolean, only?: (r: JobRecord) => boolean): string[];
   /**
    * P1-5-T3: finalize 없이 세션이 끝난 /floor 작업 정리. 코어 명령마다 부른다.
    * 스냅샷 뒤 maxDurationSeconds가 지난 진행 중 single_session 작업을 INTERRUPTED로 바꾼다 (지금 명령의 작업은 제외)
@@ -342,10 +343,10 @@ export function createEngine(opts: EngineOptions): Engine {
       save(job);
     },
 
-    recoverInterrupted(kill = killRecordedProcess, hasReport = () => false) {
+    recoverInterrupted(kill = killRecordedProcess, hasReport = () => false, only = () => true) {
       const ids: string[] = [];
       for (const record of store.list()) {
-        if (isTerminal(record.state)) continue;
+        if (isTerminal(record.state) || !only(record)) continue;
         if (record.state === 'SAVING' && record.finalDecision && hasReport(record.jobId)) {
           record.pids = [];
           move({ record, snapshot: null }, 'COMPLETED');

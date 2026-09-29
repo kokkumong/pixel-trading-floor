@@ -11,21 +11,18 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { yahooUsLookup } from '../core/data/adapters.ts';
-import { createClockProbe } from '../core/data/clock.ts';
 import { createRealNet, type NetClient } from '../core/data/net.ts';
-import { InstrumentRegistry } from '../core/data/registry.ts';
-import { collectSources } from '../core/data/snapshot.ts';
 import { demoAcquirer, demoClock, demoDriver, DemoUnavailableError, loadDemo, type DemoScenario } from '../core/demo.ts';
-import { authMethodLabel, runDiagnostics, type Check } from '../core/diag.ts';
+import { runDiagnostics, type Check } from '../core/diag.ts';
 import { EngineError, createEngine, type Acquirer, type Engine, type Job } from '../core/job/engine.ts';
 import { runJob } from '../core/job/runner.ts';
 import { isTerminal, type JobState } from '../core/job/state.ts';
 import { ANALYSTS, pendingSteps } from '../core/job/steps.ts';
 import { isJobId, JobStore } from '../core/job/store.ts';
-import { createClaudeCliDriver, findClaudeExecutable, runClaudeCommand, type ClaudeExecutable } from '../core/model/claude-cli.ts';
+import { createClaudeCliDriver, type ClaudeExecutable } from '../core/model/claude-cli.ts';
+import { needsDiagnostics, realAcquirer, realClaudeCheck, realClaudeVersion, type ClaudeCheck } from '../core/live.ts';
 import type { ModelDriver } from '../core/model/driver.ts';
-import { ERROR_CODES, type ErrorCode } from '../core/model/errors.ts';
+import { ERROR_CODES } from '../core/model/errors.ts';
 import { ReportStore, reportSaver } from '../core/report/store.ts';
 import { actionBiasLabel, CONFIDENCE_NOTE, panelView } from '../core/rules/display.ts';
 import { MODES, type Mode } from '../core/schema/types.ts';
@@ -56,7 +53,7 @@ export interface CliDeps {
   /** 실전 역할 드라이버 (기본: claude -p) */
   driver?: (engine: Engine, job: Job) => ModelDriver;
   /** 실전 분석 전 Claude 확인 (기본: 실행 파일과 auth status) */
-  checkClaude?: () => Promise<{ ok: true } | { ok: false; code: ErrorCode; detail: string }>;
+  checkClaude?: () => Promise<ClaudeCheck>;
   claudeVersion?: () => Promise<string>;
   /** doctor용 */
   net?: NetClient;
@@ -70,33 +67,6 @@ export interface CliDeps {
 export const PROJECT_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const DIAG_HINT = '진단: node src/cli/floor.ts doctor';
-
-function realAcquirer(symbol: string, mode: Mode): Acquirer {
-  const probe = createClockProbe(createRealNet());
-  const registry = new InstrumentRegistry();
-  return {
-    registryVersion: registry.version,
-    resolve: () => registry.resolveWithLookup(symbol, mode, yahooUsLookup(probe.net)),
-    collect: (inst) => collectSources(probe.net, inst, mode),
-    clockSkewMs: probe.skewMs,
-  };
-}
-
-async function realClaudeCheck(env: NodeJS.ProcessEnv): Promise<{ ok: true } | { ok: false; code: ErrorCode; detail: string }> {
-  const exe = findClaudeExecutable(env);
-  if (!exe) return { ok: false, code: 'E-CLI-MISSING', detail: 'claude 실행 파일을 찾지 못함' };
-  // 인증이 없으면 claude -p가 무기한 대기하므로 먼저 확인한다 (스파이크 결과)
-  const a = await runClaudeCommand(exe, ['auth', 'status', '--json'], { env, timeoutMs: 15_000 });
-  if (authMethodLabel(a.stdout).loggedIn === false) return { ok: false, code: 'E-AUTH', detail: 'claude auth status: 로그인되어 있지 않음' };
-  return { ok: true };
-}
-
-async function realClaudeVersion(env: NodeJS.ProcessEnv): Promise<string> {
-  const exe = findClaudeExecutable(env);
-  if (!exe) return 'unknown';
-  const v = await runClaudeCommand(exe, ['--version'], { env, timeoutMs: 15_000 });
-  return v.stdout.trim().split('\n')[0]?.slice(0, 80) || 'unknown';
-}
 
 function exitForState(state: JobState): number {
   switch (state) {
@@ -124,8 +94,7 @@ export function plannedSteps(mode: Mode): { stepId: string; optional: boolean }[
 function errorJson(job: Job) {
   const e = job.record.error;
   if (!e) return null;
-  const diag = e.code === 'E-CLI-MISSING' || e.code === 'E-AUTH' || e.code === 'E-CLOCK';
-  return { ...e, ...(diag ? { hint: DIAG_HINT } : {}) }; // P1-8-R6
+  return { ...e, ...(needsDiagnostics(e.code) ? { hint: DIAG_HINT } : {}) }; // P1-8-R6
 }
 
 function decisionJson(job: Job) {
