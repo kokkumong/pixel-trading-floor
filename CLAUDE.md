@@ -73,10 +73,12 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 
 ## 모델 호출 계층 (src/core/model, src/core/job/budget.ts·retry.ts)
 - `createClaudeCliDriver` → `callRole`(예산 검사·재시도·호출 기록) → 역할 검증 함수. 드라이버: claude-cli(실전), fixture(데모, 호출 수 0), scripted(테스트)
-- 테스트용 가짜 CLI: `test/fixtures/fake-claude.mjs` (표준 입력의 `#MODE=ok|env|auth|quota|garbage|long|hang`)
+- 테스트용 가짜 CLI: `test/fixtures/fake-claude.mjs` (표준 입력의 `#MODE=ok|env|auth|quota|garbage|long|hang`, 진단용 `--version`·`auth status`와 `--fake-auth=claude.ai|none|apiKey|garbage`)
+- `runClaudeCommand(exe, args)`: `--version`·`auth status --json` 같은 짧은 하위 명령 (셸 없음, 허용 목록 env, 시간 제한)
 - 역할별 모델·사고 수준: `config/floor.config.json`의 `models` → `modelFor(role)`
 - 실측(haiku, TARO 1회, Phase 3): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰 → Phase 4에서 스키마 길이 축소 (narrative 1000자, claims 최대 6개)
 - 실측(sonnet, BTC scalp 5회, Phase 4 스모크): 43초, 출력 합계 6,401토큰, 보고 비용 $0.18, 재시도 0, 근거 참조 오류 0
+- 실측(sonnet, BTC algorithm 13회, Phase 5 스모크 = M1): 86초, 출력 합계 약 14,300토큰, 보고 비용 $0.458, 재시도 0, 토론 2라운드, PM 기각
 
 ## 작업 엔진 (src/core/job, src/core/prompts)
 - `state.ts` 상태 머신(P1-1), `record.ts` job.json 형식, `store.ts` 원자적 저장(디스크가 종료 상태면 저장 거부), `steps.ts` 다음 단계 계산·토론 조기 종료·역할 출력 검증(순수), `decide.ts` RuleContext·FinalDecision 조립, `engine.ts` 단계 엔진, `runner.ts` 드라이버 루프
@@ -85,11 +87,25 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - `/floor`(single_session)는 CLI 명령마다 `openJob(jobId)`(스냅샷 해시 검증)로 이어간다. submit 실패는 재시도로 세고 두 번째 실패면 SCHEMA_ERROR. finalize에서 P0-F-R5 예산 검사
   - `runJob(engine, job, driver, signal)`: 병렬 단계 중 하나가 실패하면 나머지를 취소하고 첫 실패 코드로 끝낸다
   - PM MODIFY의 `modifiedFields`는 코드가 계산한다(비면 스키마 오류). REJECT → `proposal: null` + `PM_REJECTED`, ACE 제안은 `outputs.proposal`에 보존
-  - COMPLETED·INSUFFICIENT_DATA만 `finalDecision`을 가진다. 시작 시 `recoverInterrupted()`: 진행 중 작업 → INTERRUPTED, 기록된 PID는 명령줄에 claude가 있을 때만 그룹째 종료
+  - COMPLETED·INSUFFICIENT_DATA만 `finalDecision`을 가진다. 시작 시 `recoverInterrupted(kill, hasReport)`: 진행 중 작업 → INTERRUPTED, 기록된 PID는 명령줄에 claude가 있을 때만 그룹째 종료. SAVING에서 멈췄는데 리포트 JSON이 있으면 COMPLETED로 확정
+  - `sweepAbandoned(exceptJobId)`: 스냅샷 뒤 `maxDurationSeconds`가 지난 진행 중 single_session 작업 → INTERRUPTED (P1-5-T3). CLI가 명령마다 부른다
+  - `Acquirer.clockSkewMs()`: 수집 중 Date 헤더로 잰 시계 오차. 60초 초과면 스냅샷 전에 FAILED(E-CLOCK), 30초 초과면 경고 (`data/clock.ts`)
 - 프롬프트 = `shared/common` + (`shared/briefing` | `shared/proposal` + `no-trade` 또는 `forced`) + `roles/<역할>`. 해시는 조합된 전문의 sha256 앞 12자 (`prompts.hash(role, mode)`), 작업 기록 `promptHashes`에 남는다
 - 강제 방향 ACE·BLITZ의 CLI 스키마는 action에서 NO_TRADE를 뺀다 (`jsonSchemaFor`). 검증 코드 V-ACTION은 그대로
 - 테스트 도구: `test/job-helpers.ts`의 `autoDriver(overrides)`(입력을 읽어 정상 출력 생성), `test/data-helpers.ts`의 `replayAcquirer(fixture)`
 - 실전 1건 실행: `node src/cli/floor.ts analyze <종목> <모드>` (실제 데이터·claude, 기록은 `jobs/`, 리포트는 `reports/`)
+
+## 리포트·데모·진단·CLI (src/core/report, demo.ts, diag.ts, src/cli)
+- 리포트: `buildReport(job, meta, completedAt)`(순수, P1-6.2 메타데이터 + 스냅샷 전체 포함) → `renderMarkdown(report)`(JSON만 입력) → `ReportStore.save`. 엔진에는 `reportSaver(store, {claudeCliVersion}, now)`를 `finalize`/`runJob`의 `save`로 넘긴다. 저장 경로는 job.json `report`
+  - 파일명: 로컬 시간대, `:`→`-` (`2026-09-29T17-25-59+09-00_CRYPTO-BTC_algorithm_b7bca590[_SIM|_LITE][_DEMO]`). 강제 방향 데모는 `_SIM_DEMO`
+  - 같은 프로세스에서 MD 단계가 실패하면 JSON도 지우고 E-DISK. 프로세스가 죽으면 JSON만 남을 수 있고 `repair()`가 MD를 다시 만든다. `cleanupTmp(now)`는 1시간 지난 `.tmp-*` 삭제
+  - `list(tab)`: `analysis`(기본, 데모 제외) · `simulation` · `lightweight` · `demo`. `get(jobId)`: 파일명의 jobId 앞 8자로 찾고 내용으로 확인
+- 데모: `fixtures/demo/v1/manifest.json`(모드 → 시나리오), `<이름>.snapshot.json`(수집 직후 SourceRecord + 시각), `<이름>.responses.json`(역할별 원래 모델 출력, 스냅샷 ID는 `{{snapshotId}}`). `demoAcquirer`(BlockedNet 연결) + `demoDriver` + `demoClock`(녹화 시각 + 실제 경과). 재조립한 스냅샷 해시가 원본과 같다
+  - 새 데모: 실전 작업 뒤 `node scripts/make-demo.ts <jobId> <이름>` → manifest에 추가. 지금은 algorithm(PM 기각), scalp(ACE 관망)만 있고 forced_direction 데모는 없다
+- 진단: `runDiagnostics({net, dirs, env, executable, claudeTest})` → Node·Claude CLI(존재, 버전 ≥ 2.1.280, `auth status`의 loggedIn·authMethod)·API 키 환경변수·공급자 9곳·시계 오차·달력·쓰기 권한·선택 시험 호출(haiku 1회). 이메일·키 값은 결과에 넣지 않는다
+- CLI `node src/cli/floor.ts <analyze|snapshot|next|submit|finalize|doctor>`: `main(argv, deps)`로 테스트한다(의존성 주입). 루트는 `FLOOR_HOME` 또는 프로젝트 폴더. 종료 코드 `EXIT`(P1-5.1: 0, 1 기타, 2 종목, 3 데이터, 4 스키마, 5 예산, 10 단계 없음)
+  - `next`는 `inputs/<단계>.json`, `prompts/<단계>.md`, `schemas/<단계>.json`, 출력 자리 `outputs/<단계>.json`을 준다. `submit --file`은 작업 디렉터리 안 파일만
+  - `analyze`는 interface `web`·subprocess_per_role로 기록한다. 실전 전 `auth status`로 로그인 확인(미로그인 시 작업을 만들지 않음). `--demo`는 fixture 재생
 
 ## 진행 상황과 남은 단계
 범위: P0와 P1 전체 (보완안 14.2 릴리스 게이트). 각 단계는 명세 검증 ID를 통과 기준으로 하고, 끝나면 `npm run verify` 통과 후 커밋한다.
@@ -103,15 +119,17 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 | 2 | 레지스트리, 달력, 지표, 공급자 어댑터, 스냅샷, 역할별 입력 (`src/core/data`) | ✅ |
 | 3 | claude 드라이버, 오류 코드, 예산, 재시도 (`src/core/model`, `src/core/job/budget.ts`, `retry.ts`) | ✅ |
 | 4 | 작업 엔진과 역할 프롬프트 (`src/core/job`, `src/core/prompts`) | ✅ |
-| **5** | **리포트(JSON 원본 + MD), CLI 6개 명령(analyze·snapshot·next·submit·finalize·doctor), 데모 fixture → M1** | 다음 |
-| 6 | HTTP 서버와 보안 경계 (P0-7, P1-7, SSE, zip, /diagnostics) | |
+| 5 | 리포트(JSON 원본 + MD), CLI 6개 명령(analyze·snapshot·next·submit·finalize·doctor), 데모 fixture → M1 | ✅ |
+| **6** | **HTTP 서버와 보안 경계 (P0-7, P1-7, SSE, zip, /diagnostics)** | 다음 |
 | 7 | 픽셀 UI (가이드 PDF 화면 구성) | |
 | 8 | `/floor` 명령, 시작 스크립트, 가이드 v1.3, P1-11 실측 | |
 
-### Phase 5 참고 (다음 세션)
-- 리포트는 `engine.finalize(job, { save })`의 `save`에서 쓴다 (SAVING 단계, 실패 시 E-DISK). P1-6 파일명 규칙, `.tmp-` → JSON → MD 이름 변경, 대상이 있으면 E-DISK
-- 메타데이터 원자료는 job.json에 있다: `usage`, `promptHashes`, `usage.calls[].modelId`(CLI 보고 모델), `outputs`(proposals = blitzPlan·ACE·PM 수정안, briefings), `snapshot.snapshotHash`
-- CLI `snapshot`·`next`·`submit`·`finalize`는 엔진 함수를 그대로 감싼다 (종료 코드는 P1-5.1 표). `analyze`는 `runJob` + claude 드라이버 (`scripts/run-job.ts` 참고)
-- 데모: 녹화 스냅샷 + 역할 응답을 `createFixtureDriver`로 재생 (응답의 snapshotId·instrumentId가 스냅샷과 맞아야 검증 통과)
-- 남은 일: 브리핑·토론 근거 참조의 존재 검사 경고 (지금은 제안서 참조만 규칙 엔진이 검사, P1-10-R1), P1-10-R3 수치 불일치 경고, idempotency key 중복 요청 처리 (P0-8-R4, Phase 6)
-- 확인용: `node scripts/inspect.ts <종목> <모드>` (모델 호출 없이 코어 전체 출력)
+### Phase 6 참고 (다음 세션)
+- 서버가 쓸 API: `createEngine`·`runJob`(드라이버: `createClaudeCliDriver`, 데모 `demoDriver`), `ReportStore.list(tab)`/`get(jobId)`(P1-6-R8, R9), `runDiagnostics`(/diagnostics, 포트·서버 모드 검사는 여기서 추가), `loadDemo`·`demoAcquirer`·`demoClock`(`?demo=1`), `panelView`
+- 서버 시작 순서: `engine.recoverInterrupted(kill, (id) => reports.get(id) !== null)` → `reports.repair()` → `reports.cleanupTmp(new Date())` (P1-1-R5, P1-6-R7)
+  - 주의: `recoverInterrupted`는 진행 중 작업을 모두 INTERRUPTED로 바꾼다. 서버 시작 순간 진행 중인 `/floor`(single_session) 작업까지 끊지 않으려면 web 작업만 대상으로 하고 `/floor`는 `sweepAbandoned`에 맡기는 쪽을 검토한다
+- 시계 오차: 실전 분석 획득기는 `createClockProbe(createRealNet())`로 감싸고 `clockSkewMs`를 넘긴다 (`src/cli/floor.ts`의 `realAcquirer` 참고)
+- 이번 결정: 리포트 JSON에 스냅샷 전체 포함(P1-6-R2 첫 번째 방식, 알고리즘 리포트 약 83KB), 파일명은 PC 시간대, 데모 시계는 녹화 시각 기준, `/floor` 방치 판정은 "스냅샷 뒤 시간 상한 초과"
+- 실데이터에서 본 것: 스모크 수집 때 CoinGecko가 HTTP 403(진단 ping은 통과) → 알고리즘 BTC가 PARTIAL_DATA. 요청 빈도·헤더 문제인지 확인 필요
+- 남은 일: 브리핑·토론 근거 참조의 존재 검사 경고 (P1-10-R1, 지금은 제안서만), P1-10-R3 수치 불일치 경고, idempotency key 중복 요청 처리 (P0-8-R4), 강제 방향 데모 fixture, P0-F-T4(/floor 도구 제한, Phase 8)
+- 확인용: `node scripts/inspect.ts <종목> <모드>` (모델 호출 없이 코어 전체 출력), `npm run doctor`, `node src/cli/floor.ts analyze BTC algorithm --demo`
