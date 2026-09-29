@@ -98,6 +98,14 @@ test('강제 방향 모드: 방향 위반은 강등하지 않고 BLOCKED 표시�
   assert.ok(vcodes(o).includes('V-DIR-LONG'));
 });
 
+test('P0-3-T9 강제 방향 모드: V-LEVERAGE-CAP 위반도 BLOCKED, 행동은 유지', () => {
+  const o = applyRules(proposal({ leverage: 25, unforcedAction: 'ENTER_LONG' }), ruleCtx('forced_direction'));
+  assert.equal(o.verdict, 'BLOCKED');
+  assert.equal(o.action, 'ENTER_LONG');
+  assert.ok(vcodes(o).includes('V-LEVERAGE-CAP'));
+  assert.equal(o.reasonCodes.includes('RULE_DOWNGRADED'), false);
+});
+
 test('모델이 NO_TRADE를 고르면 NO_EDGE', () => {
   const o = applyRules(proposal({ action: 'NO_TRADE', bias: 'NEUTRAL', stopLoss: null, targets: [], leverage: null }), ruleCtx());
   assert.equal(o.status, 'NO_TRADE');

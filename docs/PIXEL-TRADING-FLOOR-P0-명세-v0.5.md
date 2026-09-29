@@ -1,7 +1,7 @@
-# PIXEL TRADING FLOOR P0 명세 v0.4
+# PIXEL TRADING FLOOR P0 명세 v0.5
 
 - 작성일: 2026-09-29
-- 문서 버전: v0.4 (초안)
+- 문서 버전: v0.5 (초안)
 - 최근 개정: 2026-09-29
 - 상위 문서: `PIXEL-TRADING-FLOOR-구조-보완안-v1.2.md` 5장 P0
 - 후속 문서: `PIXEL-TRADING-FLOOR-P1-명세-v0.1.md`
@@ -19,6 +19,7 @@
 | v0.2 | 2026-09-29 | 확인 필요 사항 비판적 검토 반영: 토론 조기 종료(11~13회), 판정에 `bias`·`unforcedDecision` 추가, 확신도 숫자 경계 폐지와 3단계 표시, 상한값 산식화 및 임시값 조정, 에이전트 입력 축소, LAN 토큰 만료 단축과 평문 HTTP 한계 명시, `/floor` 공통 코어 사용 의무화(9장 신설) |
 | v0.3 | 2026-09-29 | 보완안 v1.2 우선순위 개정 반영: 9장을 P0 과도기 분류(P0-F-R7~R9)와 P1 구현 계약(P0-F-R1~R6)으로 분리, 추정 시세 조건부 사용 경로 폐기, 과거 판정 회고 비활성화와의 관계 명시, 상한 실측과 리포트 버전 추적을 P1 명세로 연결, `FinalDecision.status`에 `UNSUPPORTED_SYMBOL`·`INTERRUPTED` 추가 (P0-4-R5 및 P1 상태 머신과 정합) |
 | v0.4 | 2026-09-29 | 3.6절 검증 규칙에 `V-ACTION` 추가 (2.2절 모드별 허용 행동을 스키마 검증으로 강제), 검증 항목 P0-3-T7 추가 |
+| v0.5 | 2026-09-29 | `V-INSTRUMENT`에 `marketType` 일치 검사 추가 (3.2절 시장 임의 전환 금지를 코드로 강제). `forced_direction` 예외를 강등 대상 규칙 위반 전체로 확대 (`NO_TRADE`를 허용하지 않는 모드에서 강등하면 허용 행동과 모순됨). 검증 항목 P0-3-T8, T9 추가 |
 
 ## 0. P0 항목과 이 문서의 대응
 
@@ -323,7 +324,7 @@ executionBackend: subprocess_per_role | single_session
 | 코드 | 규칙 | 위반 시 |
 |---|---|---|
 | `V-PARSE` | JSON 파싱 가능, 필수 필드 존재, 타입 일치 | 1회 재시도 후에도 실패하면 `SCHEMA_ERROR` |
-| `V-INSTRUMENT` | `instrumentId`, `snapshotId`가 작업 값과 같음 | `SCHEMA_ERROR` |
+| `V-INSTRUMENT` | `instrumentId`, `snapshotId`, `marketType`이 작업 값과 같음 | `SCHEMA_ERROR` |
 | `V-POSITIVE` | 모든 가격 > 0, 유한수 | `SCHEMA_ERROR` |
 | `V-CONF` | `confidence`가 0~100 정수 | `SCHEMA_ERROR` |
 | `V-ENTRY` | `entry.type = market`이면 min·max null 허용, `limit`이면 min = max, `zone`이면 min < max | `SCHEMA_ERROR` |
@@ -341,7 +342,9 @@ executionBackend: subprocess_per_role | single_session
 
 `market` 진입의 방향 검증에는 스냅샷의 기준 가격(`priceBasis.sourceRef`)을 진입가로 쓴다. 강등(`DOWNGRADED`)되어도 `bias`는 모델 값을 유지한다.
 
-`forced_direction` 예외: `V-DIR-*`, `V-STOP-REQUIRED` 위반은 `NO_TRADE`로 강등하지 않고 `ruleEngine.verdict = BLOCKED`로 표시만 한다. 이때 결과 패널은 방향 대신 `규칙 위반 — 시뮬레이션 무효`를 보여준다. `V-DATA-QUALITY` 위반은 모든 모드에서 작업을 중단시킨다 (근거가 없는 데이터로는 강제 방향도 만들지 않는다).
+`marketType`을 `V-INSTRUMENT`에 포함하는 이유: 3.2절은 약세 판단이 나와도 판정 기준 시장을 바꾸지 않는다고 정했다. 모델이 작업과 다른 시장(예: 현물 작업에 `perpetual`)으로 제안서를 쓰면 가격·레버리지 검증의 전제가 달라지므로 강등이 아니라 스키마 오류로 처리한다.
+
+`forced_direction` 예외: 이 모드는 `NO_TRADE`를 허용하지 않으므로(2.2절, `V-ACTION`) 강등하면 허용 행동과 모순된다. 따라서 위 표에서 `DOWNGRADED`로 처리하는 규칙(`V-DIR-*`, `V-STOP-REQUIRED`, `V-PRICE-BASIS`, `V-LEVERAGE-CAP` 등, P1 명세 4.2절 `V-LIQ-BUFFER` 포함)의 위반은 모두 `NO_TRADE`로 강등하지 않고 `ruleEngine.verdict = BLOCKED`로 표시만 한다. 행동 값은 모델이 고른 방향을 그대로 두고, 결과 패널은 방향 대신 `규칙 위반 — 시뮬레이션 무효`를 보여준다. `V-BIAS`는 이 모드에 적용하지 않으며, `V-EVIDENCE-REF`의 근거 부족은 P1 명세 10.2절에 따라 경고만 한다. `V-DATA-QUALITY` 위반은 모든 모드에서 작업을 중단시킨다 (근거가 없는 데이터로는 강제 방향도 만들지 않는다).
 
 ### 3.7 요구사항
 
@@ -361,6 +364,8 @@ executionBackend: subprocess_per_role | single_session
 - **P0-3-T5** 알고리즘 모드에서 `ENTER_LONG` + `BEARISH` 응답은 `V-BIAS`로 강등된다.
 - **P0-3-T6** 화면 어디에도 확신도가 `%`나 숫자 게이지로 표시되지 않는다.
 - **P0-3-T7** `forced_direction` 모드에서 `action: NO_TRADE` 응답은 `V-ACTION`으로 `SCHEMA_ERROR` 또는 재시도로 처리된다.
+- **P0-3-T8** 현물 작업(`spot`)에 `marketType: perpetual`인 제안서는 `V-INSTRUMENT`로 `SCHEMA_ERROR` 또는 재시도로 처리된다.
+- **P0-3-T9** `forced_direction`에서 `V-LEVERAGE-CAP` 위반(예: 레버리지 25)은 `BLOCKED`로 표시되고, 행동이 `NO_TRADE`로 바뀌지 않는다.
 
 ---
 

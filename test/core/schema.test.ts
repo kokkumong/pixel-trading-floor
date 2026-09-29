@@ -42,6 +42,12 @@ test('모델이 덧붙인 필드는 버린다', () => {
 test('V-INSTRUMENT 종목·스냅샷·시장이 작업과 다르면 오류', () => {
   assert.deepEqual(codes(checkProposal(proposalOutput({ instrumentId: 'CRYPTO:ETH' }), proposalCtx())), ['V-INSTRUMENT']);
   assert.deepEqual(codes(checkProposal(proposalOutput({ snapshotId: 'other' }), proposalCtx())), ['V-INSTRUMENT']);
+});
+
+test('P0-3-T8 현물 작업에 perpetual 제안서는 V-INSTRUMENT 스키마 오류', () => {
+  const spotJob = proposalCtx('algorithm', { instrumentId: 'KR:000660', marketType: 'spot' });
+  const r = checkProposal(proposalOutput({ instrumentId: 'KR:000660', marketType: 'perpetual' }), spotJob);
+  assert.deepEqual(codes(r), ['V-INSTRUMENT']);
   assert.deepEqual(codes(checkProposal(proposalOutput({ marketType: 'spot' }), proposalCtx())), ['V-INSTRUMENT']);
 });
 
