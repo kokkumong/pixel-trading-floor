@@ -2,7 +2,15 @@
   "configVersion": 1,
   "models": {
     "default": "sonnet",
-    "roles": {}
+    "roles": {},
+    "effort": {
+      "default": "low",
+      "roles": {
+        "ACE": "medium",
+        "PM": "medium"
+      }
+    },
+    "_note": "effort는 claude --effort. 2026-09-29 haiku 실측(TARO 1회): 기본 68.7초·출력 7,638토큰, low 54.4초·5,143토큰. 출력 길이가 비용의 대부분이라 스키마 길이 조정이 더 효과적 (Phase 4)"
   },
   "budgets": {
     "algorithm": {
@@ -11,7 +19,10 @@
       "maxRetriesPerJob": 4,
       "maxInputChars": 20000,
       "maxOutputChars": 6000,
-      "maxOutputCharsByRole": { "ACE": 10000, "PM": 10000 },
+      "maxOutputCharsByRole": {
+        "ACE": 10000,
+        "PM": 10000
+      },
       "callTimeoutSeconds": 120,
       "maxDurationSeconds": 900
     },

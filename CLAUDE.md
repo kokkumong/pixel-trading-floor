@@ -64,3 +64,10 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - 지표 기대값: `python3 fixtures/indicators/gen_expected.py` (독립 구현, P1-3-R12)
 - 달력 `calendars.json`: KRX는 2026년까지만 (2027 휴장일은 KRX 12월 공고 뒤 추가), NYSE는 2027년까지
 - 실데이터 검증으로 명세에 반영된 규칙 (P0 v0.6, P1 v0.2): 주식 장중 TTL 25분, 외환 주말 규칙, 스캘핑 뉴스 수집(VIBE 제목만), NYSE Arca 허용, 달력 만료 30일 전 진단 경고
+
+## 모델 호출 계층 (src/core/model, src/core/job)
+- `createClaudeCliDriver` → `callRole`(예산 검사·재시도·호출 기록) → 역할 검증 함수. 드라이버: claude-cli(실전), fixture(데모, 호출 수 0), scripted(테스트)
+- 테스트용 가짜 CLI: `test/fixtures/fake-claude.mjs` (표준 입력의 `#MODE=ok|env|auth|quota|garbage|long|hang`)
+- 역할별 모델·사고 수준: `config/floor.config.json`의 `models` → `modelFor(role)`
+- 실측(haiku, TARO 1회): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰. **출력 길이(narrative)가 비용 대부분** → Phase 4에서 스키마 길이 축소
+- 실측: 모델이 근거 참조를 `derived:macd/hist`, `snap:<snapshotId>#/sources/...`처럼 틀리게 씀 → Phase 4 프롬프트에 정확한 예시 필수 (`derived:macd.hist`, `snap:binance.perp.price#/last`)
