@@ -89,3 +89,21 @@ test('전광판: 가격 소스가 모두 실패하면 가격 없이 경고를 �
   assert.equal(b.chart, null);
   assert.ok(b.warnings.length > 0);
 });
+
+test('전광판 등락: 장 마감 뒤 주식은 전 거래일 종가, 코인은 마지막 완성 봉 종가와 비교한다', () => {
+  const hynix = inst('하이닉스');
+  const day = (d: string, close: number) => {
+    const open = Date.parse(`${d}T00:00:00Z`);
+    return { openTime: open, closeTime: Date.parse(`${d}T06:30:00Z`), open: close, high: close, low: close, close, volume: 1 };
+  };
+  const candles = [day('2026-09-24', 100), day('2026-09-25', 110), day('2026-09-28', 120)];
+  const rec = (id: string, endpointType: 'price' | 'candle', payload: unknown, observedAt: string) =>
+    ({ id, provider: 'yahoo', endpointType, observedAt, fetchedAt: observedAt, status: 'ok' as const, estimated: false, untrustedText: false, payload, intervalSeconds: 86_400 });
+  const closedAt = '2026-09-28T06:30:00.000Z';
+  const records = [
+    rec('yahoo.spot.price', 'price', { last: 120, mark: null, index: null, currency: 'KRW', marketType: 'spot' }, closedAt),
+    rec('yahoo.spot.candles.1d', 'candle', { interval: '1d', candles }, closedAt),
+  ];
+  const b = buildBoard(hynix, records, new Date('2026-09-28T09:00:00Z'), false);
+  assert.equal(b.price?.changeRatio, (120 - 110) / 110);
+});

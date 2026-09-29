@@ -212,7 +212,7 @@ test('P0-7-T4 LAN 기기에서 all.zip, project.zip, 분석 실행·취소, 진�
     assert.equal((await l.remote('/api/diagnostics', { cookie })).status, 403);
     assert.equal((await l.remote('/reports', { cookie })).status, 200);
     assert.equal((await l.remote('/api/reports', { cookie })).status, 200);
-    assert.equal((await l.remote('/web/app.js', { cookie })).status, 200);
+    assert.equal((await l.remote('/web/floor.js', { cookie })).status, 200);
     // 서버 PC에서는 분석 실행 가능
     const ok = await l.req('/api/analyze', { body: analyzeBody() });
     assert.equal(ok.status, 202);
@@ -488,7 +488,7 @@ test('P0-7-T7, P0-7-R10 다른 사이트가 사용자 브라우저로 보낸 요
 test('응답을 다른 사이트가 끌어다 쓰지 못하게 CORP·COOP same-origin을 붙인다', async () => {
   const h = await start();
   try {
-    for (const p of ['/', '/api/status', '/reports', '/web/app.js']) {
+    for (const p of ['/', '/api/status', '/reports', '/web/floor.js']) {
       const r = await h.req(p);
       assert.equal(r.headers['cross-origin-resource-policy'], 'same-origin', p);
       assert.equal(r.headers['cross-origin-opener-policy'], 'same-origin', p);

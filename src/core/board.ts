@@ -16,6 +16,8 @@ import { INTERVAL_SECONDS, type CandlePayload, type FundingPayload, type FxPaylo
 export const BOARD_REFRESH_SECONDS = 15;
 export const BOARD_ESTIMATE_BADGE = '추정 · 직접 체결가 아님'; // P1-2-R10
 const CHART_BARS = 120;
+/** 장 마감 시세가 마감 시각보다 조금 늦게 찍혀도 같은 거래일로 본다 */
+const SESSION_GRACE_MS = 60 * 60_000;
 
 export interface BoardPerp {
   exchange: string;
@@ -131,10 +133,11 @@ export function buildBoard(inst: Instrument, records: readonly SourceRecord[], n
   if (priceRec) {
     const p = priceRec.payload as PricePayload;
     const last = p.last!;
-    // 가격이 마지막 완성 봉 뒤의 것이면 그 봉 종가, 아니면(장 마감 뒤 주식) 그 전 봉 종가와 비교
+    // 코인은 마지막 완성 봉 종가와 비교한다. 주식은 가격이 마지막 봉의 마감 시세이면(장 마감 뒤) 그 전 거래일 종가와 비교한다
     const obs = priceRec.observedAt ? Date.parse(priceRec.observedAt) : now.getTime();
     const lastBar = bars.at(-1);
-    const ref = lastBar && obs >= lastBar.closeTime ? lastBar.close : bars.at(-2)?.close;
+    const sameSession = inst.calendarId !== 'CRYPTO_24_7' && lastBar !== undefined && obs <= lastBar.closeTime + SESSION_GRACE_MS;
+    const ref = sameSession ? bars.at(-2)?.close : lastBar?.close;
     price = { value: last, currency: p.currency, sourceRef: priceRec.id, observedAt: priceRec.observedAt, changeRatio: ref ? (last - ref) / ref : null };
   } else {
     warnings.push('시세를 가져오지 못했습니다');
