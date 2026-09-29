@@ -137,7 +137,7 @@ export function createApp(o: AppOptions): App {
     'Content-Security-Policy': CSP,
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
-    'Referrer-Policy': 'no-referrer', // 토큰이 담긴 주소가 다른 곳으로 새지 않게
+    'Referrer-Policy': 'same-origin', // 토큰이 담긴 주소가 다른 사이트로 새지 않게. no-referrer면 폼 POST의 Origin이 null이 되어 R6에 막힌다
     'Cache-Control': 'no-store',
     // 다른 사이트가 응답을 <img>·<script> 등으로 끌어다 쓰거나 창 참조를 잡지 못하게
     'Cross-Origin-Resource-Policy': 'same-origin',

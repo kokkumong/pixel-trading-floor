@@ -681,3 +681,16 @@ test('P0-7-T10 Sec-Fetch-Site를 보내지 않는 구형 브라우저의 다른 
     await h.app.close();
   }
 });
+
+test('P0-7-R6 폼 POST가 실제 Origin을 싣도록 Referrer-Policy는 same-origin (no-referrer면 브라우저가 Origin: null을 보낸다)', async () => {
+  const h = await start();
+  try {
+    const r = await h.req('/diagnostics');
+    assert.equal(r.headers['referrer-policy'], 'same-origin');
+    // no-referrer 페이지의 폼 제출처럼 Origin: null이면 거부된다 (정책이 바뀌면 진단·ZIP 버튼이 모두 403이 됨)
+    assert.equal((await h.req('/diagnostics', { method: 'POST', origin: 'null' })).status, 403);
+    assert.equal((await h.req('/diagnostics', { method: 'POST' })).status, 200);
+  } finally {
+    await h.app.close();
+  }
+});
