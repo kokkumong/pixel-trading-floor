@@ -18,7 +18,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - 상대 import는 `.ts` 확장자까지 쓴다. 타입만 가져올 때는 `import type`
 - **런타임 의존성 0개**. `node:` 내장 모듈만. devDependencies는 `typescript`, `@types/node`뿐
 - 웹 UI(`src/web/`)는 빌드 없는 순수 JS + `// @ts-check`
-- 검증: `npm run verify` (= `tsc --noEmit` + `node --test`). 커밋 전 항상 통과시킨다
+- 검증: `npm run verify` (= `tsc --noEmit` 두 번(서버 `tsconfig.json`, 웹 JS `tsconfig.web.json` checkJs) + `node --test`). 커밋 전 항상 통과시킨다
 - 테스트 이름은 명세 검증 ID로 시작한다: `test('P0-3-T1 롱 손절가 역전 → NO_TRADE', ...)`
 - 테스트는 fixture·scripted 백엔드로만. 실제 claude·외부 API 호출은 수동 스모크 테스트에서만
 
@@ -111,14 +111,20 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음
   - `startServer(argv, env, out)`: `manager.recover()`(web 작업만 INTERRUPTED, 리포트 repair, 임시 파일 정리) → `app.listen()` → 안내 출력. LAN 토큰 주소는 서버 창에만 한 번. 서버 창 `r`+Enter 재발급, Ctrl+C는 실행 중 분석 취소 뒤 종료
 - `security.ts`(순수): `LanAuth`(128비트 토큰, 2시간, 재발급 시 세션 전부 무효, 세션 만료 = 토큰 만료, 세션 200개 상한), `checkFetchSite`(P0-7-R10), `isPrivateIPv4`, `allowedLocalAddress`, `allowedHosts`/`checkHost`/`checkOrigin`, `decideAccess`(접근 등급 read·analyze·local), `RateLimiter`, `redact`(sk-ant-, 토큰·쿠키, `?t=`, 홈 경로 사용자 이름)
-- `app.ts` `createApp(opts)`: 요청 검사 순서 Host → 교차 사이트 차단(`Sec-Fetch-Site`, `/` 페이지 이동만 예외) → 요청 수(모두 120/분) → `/?t=` 첫 접속(쿠키 발급 + 302) → 경로 표(없으면 404) → 접근 등급 → Origin(GET 외) → 분석 실행 수(3/분). 경로 표 = P0 명세 v0.7 7.4절. 모든 응답에 CSP·nosniff·no-referrer·no-store·CORP/COOP same-origin. 자원 상한 `LIMITS`(동시 연결 256, SSE IP당 8·전체 64, 헤더 15초·요청 30초). ZIP은 `ZipWriter`로 흘려 쓰고 한 번에 하나
+- `app.ts` `createApp(opts)`: 요청 검사 순서 Host → 교차 사이트 차단(`Sec-Fetch-Site`, `/` 페이지 이동만 예외) → 요청 수(모두 120/분) → `/?t=` 첫 접속(쿠키 발급 + 302) → 경로 표(없으면 404) → 접근 등급 → Origin(GET 외) → 분석 실행 수(3/분). 경로 표 = P0 명세 v0.8 7.4절. 모든 응답에 CSP·nosniff·no-referrer·no-store·CORP/COOP same-origin. 자원 상한 `LIMITS`(동시 연결 256, SSE IP당 8·전체 64, 헤더 15초·요청 30초). ZIP은 `ZipWriter`로 흘려 쓰고 한 번에 하나
   - 테스트는 `clientIp` 옵션으로 LAN 기기를 흉내 낸다 (`x-test-ip` 헤더, 운영 코드는 소켓 주소만)
 - `jobs.ts` `JobManager`: `start({symbol, mode, idempotencyKey, demo})` → started | busy(409) | rejected(400·503). 입력은 `normalizeSymbolInput`·모드 열거형 그대로(별칭 없음)·키 `[A-Za-z0-9_-]{8,64}`. 같은 키는 진행 중 약속 → 키 색인(처음 한 번 작업 기록을 훑어 만듦) 순서로 찾는다. 슬롯은 Claude 확인 전에 동기적으로 예약. `cancel`·`cancelAll`·`idle`·`view`·`snapshot`·`subscribe`
   - 이벤트: 작업 기록이 저장될 때마다 `{type:'job', job: JobView}`, 역할 호출 `{type:'call', phase:'start'|'end', role, ...}`, 끝 `{type:'end', state}`. SSE는 구독 → 현재 보기 → (끝났으면 바로 end)
   - `view.ts` `jobView`: PID·절대 경로 없음, 오류 상세는 홈 경로 가림, E-CLI-MISSING·E-AUTH·E-CLOCK이면 `hint: '/diagnostics'`, `panel`(panelView), `reportUrl`
-- `pages.ts`: 서버가 그리는 HTML(리포트 목록·열람, 진단, project.zip 확인). `html` 태그 템플릿이 모든 값을 이스케이프. 리포트 본문은 Markdown을 `<pre>`에 이스케이프해서 보인다 (Markdown 렌더러는 Phase 7)
+- `pages.ts`: 서버가 그리는 HTML(리포트 목록·열람, 진단, project.zip 확인, 스타일 `src/web/app.css`). `html` 태그 템플릿이 모든 값을 이스케이프. 리포트 본문은 `markdown.ts` `markdownToHtml`(모든 글자를 먼저 이스케이프하고 자기 태그만 넣음, 링크는 http·https + `rel="noopener noreferrer"`, 이미지는 `[이미지: …]` 글자)
 - `zip.ts` 의존성 없는 ZIP(deflate, UTF-8 이름, ZIP64 없음): `ZipWriter`(스트리밍·비동기)와 `buildZip`(작은 것). `bundle.ts` project.zip: `BUNDLE_INCLUDE`(넣을 최상위 항목) 안에서 `isExcluded`(비밀 이름, P1 명세 v0.3 R14) 제외, 목록 해시는 경로·크기·수정 시각
-- `src/web/`: **Phase 6 임시 화면**(index.html·app.js·app.css). 분석 실행 → SSE 로그 → 리포트 링크, `?demo=1` 워터마크. 인라인 스크립트·스타일 없음(CSP). Phase 7에서 픽셀 UI로 바꾼다
+- `board.ts` `BoardService.get(symbol, demo)` → `GET /api/board`: 레지스트리 해석(미국 주식 조회 포함) → 종목별 15초 캐시(동시 요청은 한 약속으로 묶음, 64종목 상한) → `core/board.ts`. 데모는 manifest의 algorithm 시나리오 기록만 쓰고 네트워크 클라이언트를 쓰지 않는다
+  - `core/board.ts`: `collectBoardSources(net, inst)`(가격·일봉, 한국 종목은 환율·Binance 무기한+펀딩·다른 거래소 무기한. 뉴스·심리·CoinGecko 없음) → `buildBoard(inst, records, now, demo)`(순수: 가격·직전 종가 대비 등락(주식 장 마감 뒤는 전 거래일), 일봉 120개 + MA20/MA50 + 20봉 고저, 멀티 거래소 `multi`(추정값 `BOARD_ESTIMATE_BADGE`·산출 거래소·시각, 괴리))
+- `src/web/` 픽셀 화면 (가이드 4장): `index.html`·`floor.css`·`floor.js`(DOM·API·SSE)·`model.js`(순수 표시 모델, `test/web/model.test.ts`)·`sprites.js`(글자 지도 → 캔버스 캐릭터)·`chart.js`(8비트 차트). 서버 페이지는 `app.css`
+  - 표시 규칙은 `model.js`에 모은다: `floorPlan(mode)`(스캘핑·강제 방향은 리스크 방이 스캘핑 데스크, PM 자리 없음), `panelModel`(COMPLETED·INSUFFICIENT_DATA만, 서버 `panelView` + DEMO 배지 + 화면 시각 만료), `consoleEntries`(수집 로그 → 뉴스 → 브리핑 → 토론 → 계획·심사 → 최종), `bubbles`, `multiRows`, `planLabel`, `FORCED_CONFIRM`, `DATA_FLOW`(P0 명세 6.2 문안)
+  - 모든 글자는 `textContent`로만 넣는다. `innerHTML`·`insertAdjacentHTML`·`eval` 등은 테스트가 파일을 읽어 금지한다(P1-7-T2). 링크는 서버가 준 경로(`reportUrl`, `/diagnostics`)만
+  - 강제 방향: URL·저장값으로 모드를 고르지 않는다(`initialMode`는 항상 algorithm). 확인 여부만 `sessionStorage`(`floor.forcedConfirmed`), `localStorage`는 쓰지 않는다
+  - API가 401이면 상단에 "서버 창에 표시된 주소로 다시 여세요" (이슈 #11의 로컬 토큰 도입 대비)
 - 테스트 도구: `test/server/server-helpers.ts`의 `manager()`(녹화 데이터 + autoDriver), `test/server/zip-reader.ts`의 `readZip`
 
 ## 진행 상황과 남은 단계
@@ -135,23 +141,16 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 | 4 | 작업 엔진과 역할 프롬프트 (`src/core/job`, `src/core/prompts`) | ✅ |
 | 5 | 리포트(JSON 원본 + MD), CLI 6개 명령(analyze·snapshot·next·submit·finalize·doctor), 데모 fixture → M1 | ✅ |
 | 6 | HTTP 서버와 보안 경계 (P0-7, P1-7, SSE, zip, /diagnostics) | ✅ |
-| **7** | **픽셀 UI (가이드 PDF 화면 구성)** | 다음 |
-| 8 | `/floor` 명령, 시작 스크립트, 가이드 v1.3, P1-11 실측 | |
+| 7 | 픽셀 UI (가이드 PDF 화면 구성), 전광판 API, 리포트 Markdown 렌더러 | ✅ |
+| **8** | **`/floor` 명령, 시작 스크립트, 가이드 v1.3, P1-11 실측** | 다음 |
 
-### Phase 7 참고 (다음 세션)
-- 화면이 쓸 API (전부 `src/server/app.ts` 경로 표):
-  - `GET /api/status` → `{mode, lan:{warning, expiresAt}|null, client:{local, canAnalyze, readOnly}, running:[jobId], demoModes, projectZip}`. 읽기 전용이면 ANALYZE 버튼을 숨긴다, LAN이면 상단에 `LAN 공유 중 · 암호화되지 않음`
-  - `POST /api/analyze` `{symbol, mode, idempotencyKey, demo}` → 202 `{jobId, job}` / 200 같은 키 기존 작업 / 409 `{error:'E-BUSY', running: JobView}` / 400·503 `{error, message, hint?}`. 키는 클릭 의도마다 한 번 만들고 응답 전 재전송에 재사용 (`src/web/app.js` 참고). 헤더 `Content-Type: application/json` 필수, Origin은 브라우저가 붙인다
-  - `GET /api/jobs/<id>/events` SSE: `job`(JobView 전체, 저장마다) · `call`(역할 시작·끝, 말풍선 연출용) · `end`. 구독 전 이벤트는 오지 않으므로 첫 `job`의 `outputs`로 화면을 복원한다
-  - `GET /api/jobs/<id>/snapshot`: 전광판·콘솔의 데이터 수집 로그·뉴스 제목용 (외부 텍스트: textContent로만)
-  - `POST /api/jobs/<id>/cancel`, `GET /api/reports?tab=`, 리포트 열람 `/reports/<id>`
-- 서버가 다른 사이트발 요청(`Sec-Fetch-Site: cross-site|same-site`)을 막으므로 화면은 같은 출처에서만 API를 부른다. 외부 CDN·폰트·이미지 불가 (CSP와 함께)
-- 반드시 지킬 것: 모델 출력·뉴스는 원시 HTML 금지(P1-7-R11) → Markdown 렌더러를 쓰면 원시 HTML을 막고 링크는 http/https + `rel="noopener noreferrer"`, 외부 이미지 금지. P1-7-T2의 화면 쪽 검증은 Phase 7에서 한다. CSP 때문에 인라인 스크립트·스타일·외부 폰트 불가 (파일로 `src/web/`에 두고 `STATIC_NAME` 규칙 `[a-z0-9-]+.(html|js|css|svg|png|ico)`을 따른다. 하위 폴더 없음)
-  - 데모 화면 전체와 결과 패널 안에 `DEMO · 실제 데이터 아님` (P1-8-R4), 강제 방향은 `강제 방향 시뮬레이션 · 판정 아님` 배지(P0-5-R3), 확신도는 LOW/MEDIUM/HIGH만(`%` 금지), PM 없는 결과에 `PM 승인` 금지 → `panelView` 결과를 그대로 쓴다
-- 아직 없는 API: **전광판 시세**(가이드 4-1·4-4, 15초 갱신, 한국 종목 멀티 거래소). 데모에서는 fixture 시세(P1-8-R5), LAN 등급은 read. 경로를 추가하면 P0 명세 7.4 표도 갱신한다
-- 이번 결정: 서버 복구는 subprocess_per_role 작업만(`recoverInterrupted`의 `only`), 세션 쿠키 만료 = 토큰 만료, 분석 실행 요청 제한은 인증·출처 통과 요청만 셈, 데모도 LAN에서는 분석 실행으로 보고 차단, 서버 내부 오류로 멈춘 작업은 `E-INTERRUPTED`(새 오류 코드를 만들지 않음), 리포트 JSON 다운로드는 원본 파일 그대로
-- 알려진 한계: 서버 시작 순간 별도 프로세스의 `floor.ts analyze`(web·subprocess 작업)가 돌고 있으면 그 작업도 INTERRUPTED가 된다. macOS 기본 `unzip`(Info-ZIP 6.0)은 UTF-8 파일명을 `?`로 보인다(데이터는 정상, Windows 탐색기는 정상)
-- 실측(sonnet, 서버 경로 BTC scalp 1회, Phase 6 스모크): 32.9초, 호출 5회, 재시도 0, 출력 5,512토큰, 보고 비용 $0.132, 결과 ACE 관망. 데모 algorithm(연출 지연 1.2초/역할)은 약 16초
-- 보안 재검토(Phase 6 PR 안에서 반영): 교차 사이트 요청 차단 P0-7-R10, 자원 상한 R11, LAN 사설 주소 한정, project.zip 포함 목록 방식. 받아들인 한계: 로컬 전용 모드는 인증 없음(같은 PC의 다른 프로세스·사용자, P0 명세 7.2), LAN 평문 HTTP. **Phase 8 시작 스크립트는 서버 출력을 파일로 남기지 않는다** (LAN 토큰이 서버 창에 찍힘). 미검증: Windows `taskkill` 트리 종료(P0-8-R6)·`.cmd` 실행(P1-7-R4), 뉴스 인젝션 표본 검사(P1-7-T3)
-- 남은 일: 브리핑·토론 근거 참조의 존재 검사 경고 (P1-10-R1, 지금은 제안서만), P1-10-R3 수치 불일치 경고, 강제 방향 데모 fixture, CoinGecko 403 원인(알고리즘 스모크에서 PARTIAL_DATA, 진단 ping은 통과), P0-F-T4(/floor 도구 제한, Phase 8), 시작 스크립트 `start-floor.cmd`·`start-floor-lan.cmd`와 가이드 9장 개정(P0-7.6, Phase 8)
-- 확인용: `npm start` → http://localhost:8000/?demo=1, `node --test "test/server/*.test.ts"`
+### Phase 8 참고 (다음 세션)
+- 범위: `/floor` 명령 정의(P1-5, P0-F-R1~R6·T4 도구 제한), 시작 스크립트 `start-floor.cmd`·`start-floor-lan.cmd`(P0-7.6, **서버 출력을 파일로 남기지 않는다** — LAN 토큰이 서버 창에 찍힘), 가이드 v1.3(P0 명세 12장 목록 + 아래 화면 변경), P1-11 예산 상한 실측 보정
+- `/floor`가 쓸 것: CLI `node src/cli/floor.ts snapshot|next|submit|finalize`(Phase 5, 단계 엔진 `next/submit/finalize`). 결과 패널의 `단일 세션 분석` 배지(P0-F-R6)는 `panelModel`이 `executionBackend === 'single_session'`으로 붙인다(Phase 7). 리포트 쪽 `analystIndependence: shared_context` 기록은 확인할 것
+- 가이드 v1.3에 반영할 화면 변경(Phase 7): 전광판은 모든 종목에서 보이고(한국 종목만 멀티 거래소 표 추가), 강제 방향은 탭마다 처음 한 번 확인 창, 확신도는 LOW/MEDIUM/HIGH(`58%` 같은 표기 삭제), 스캘핑·강제 방향 화면에는 PM 자리 없음, 상단 "데이터가 오가는 곳" 버튼(6.2 문안), 데모 전광판은 녹화 시세(P1-8-R5), 하단 시세 흐름 띠(가이드 1쪽의 BTC·ETH·TSLA… 띠)는 구현하지 않음
+- 이번 결정: 전광판은 종목별 15초 서버 캐시 + 화면 15초 갱신(IP당 분당 120회 한도 안). 등락은 직전 완성 봉 종가 기준(주식 장 마감 뒤 1시간 안의 시세는 전 거래일 종가 기준). 강제 방향 확인은 ANALYZE를 누를 때(모드 버튼이 아니라). 데모 전광판은 `BTC`만(다른 종목은 `E-DEMO`). 확신도는 패널·콘솔 모두 3단계만, 숫자 원값은 리포트에만. 웹 JS는 `tsconfig.web.json`(checkJs, DOM lib)으로 검사하고, 테스트가 `model.js`를 import하도록 서버 tsconfig에 `allowJs`
+- 이슈 #11(보안 보강, 열림)과의 경계: 진단 실행·ZIP 생성이 POST로 바뀌면 화면의 `진단` 링크는 목록 페이지로 그대로 두고 실행은 그 페이지의 버튼으로. 로컬 토큰이 들어오면 화면은 401 안내만 있으면 된다(같은 출처 fetch·EventSource는 쿠키를 자동으로 보냄)
+- 남은 일: 하단 시세 흐름 띠(선택), 강제 방향 데모 fixture(지금은 `?demo=1`에서 강제 방향을 누르면 E-DEMO), 브리핑·토론 근거 참조 존재 검사 경고와 화면의 `근거 확인 불가` 표시(P1-10-R1), P1-10-R3 수치 불일치 경고, CoinGecko 403 원인, 미검증 항목(Windows `taskkill` 트리 종료 P0-8-R6·`.cmd` 실행 P1-7-R4, 뉴스 인젝션 표본 P1-7-T3 → 이슈 #11)
+- 알려진 한계: 서버 시작 순간 별도 프로세스의 `floor.ts analyze`가 돌고 있으면 그 작업도 INTERRUPTED. macOS 기본 `unzip`은 UTF-8 파일명을 `?`로 보임. 픽셀 폰트는 PC에 `DungGeunMo`·`Galmuri11`이 있으면 쓰고 없으면 고정폭 글꼴(외부 폰트 불가)
+- 실측(sonnet, 픽셀 화면 BTC scalp 1회, Phase 7 스모크): 36.2초, 호출 5회, 재시도 0, 출력 5,753토큰, 보고 비용 $0.116, 결과 ACE 관망(거래 없음 · 강세 전망), 확신도 LOW. 화면: 역할별 생각 중 표시 → 말풍선 → 콘솔 타이핑 → 판정 패널 → 리포트 저장 알림 확인
+- 확인용: `npm start` → http://localhost:8000/?demo=1 (algorithm·scalp 데모), 실전 전광판은 `하이닉스` 입력, `node --test "test/web/*.test.ts" "test/server/*.test.ts"`. 브라우저 미리보기는 `.claude/launch.json`의 `floor`

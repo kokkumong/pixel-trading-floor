@@ -192,3 +192,10 @@ test('P1-7-T2 모델 응답의 HTML·javascript: 링크는 콘솔·말풍선에 
   assert.equal(bubbles(v).TARO, payload);
   assert.ok(consoleEntries(v).some((e) => e.lines.includes(payload)));
 });
+
+test('P0-F-R6 /floor(단일 세션) 결과 패널에 단일 세션 분석을 표시한다', async () => {
+  const { view } = await demoJob('scalp');
+  assert.equal(panelModel(view, Date.now())!.badges.includes('단일 세션 분석'), false);
+  const single = { ...view, finalDecision: { ...view.finalDecision!, executionBackend: 'single_session' as const } };
+  assert.ok(panelModel(single, Date.now())!.badges.includes('단일 세션 분석'));
+});

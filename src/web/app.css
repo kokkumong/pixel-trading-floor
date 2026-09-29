@@ -1,22 +1,41 @@
-/* Phase 6 임시 스타일. 픽셀 UI는 Phase 7 */
-:root { color-scheme: dark; --bg: #11131a; --fg: #e6e6e6; --muted: #9aa0ad; --warn: #ffb020; --line: #2a2f3a; --accent: #6cf; }
+/* 서버가 그리는 페이지(리포트 목록·열람, 진단, project.zip 확인) 스타일. 픽셀 화면(floor.css)과 같은 색 */
+:root {
+  color-scheme: dark; --bg: #0b0c12; --fg: #e8e6df; --muted: #8a8f9e; --warn: #ffb020; --line: #262a38; --gold: #f0c23c; --sim: #b36bff; --red: #ff4d4d;
+  font-family: "DungGeunMo", "Galmuri11", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.6; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px; }
-a { color: var(--accent); }
-nav.top { padding: 8px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 16px; }
-.banner.warn { background: var(--warn); color: #000; padding: 6px 16px; font-weight: bold; }
-.watermark { position: fixed; inset: 40% 0 auto 0; text-align: center; font-size: 48px; color: rgba(255, 176, 32, .18); pointer-events: none; transform: rotate(-12deg); z-index: 10; }
-.badge { display: inline-block; padding: 2px 8px; border: 1px solid var(--warn); color: var(--warn); }
+a { color: var(--gold); }
+h1 { color: var(--gold); font-weight: normal; font-size: 22px; }
+nav.top { padding: 8px 16px; border-bottom: 2px solid var(--line); display: flex; gap: 16px; background: #07080c; }
+nav.top a:first-child::before { content: "◆ "; }
+.banner.warn { background: var(--warn); color: #000; padding: 6px 16px; font-weight: bold; text-align: center; }
+.watermark { position: fixed; inset: 40% 0 auto 0; text-align: center; font-size: 48px; color: rgba(240, 194, 60, .16); pointer-events: none; transform: rotate(-12deg); z-index: 10; }
+.badge { display: inline-block; padding: 2px 8px; border: 2px solid var(--warn); color: var(--warn); }
+.badge.demo { background: var(--gold); color: #000; border-color: var(--gold); }
+.badge.sim { border-color: var(--sim); color: var(--sim); }
 .note { color: var(--muted); }
-form#analyze { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
-input, select, button { font: inherit; padding: 4px 8px; background: #1b1f29; color: var(--fg); border: 1px solid var(--line); }
-button:disabled { opacity: .5; }
-pre { white-space: pre-wrap; word-break: break-word; background: #0b0d12; border: 1px solid var(--line); padding: 12px; }
-pre.log { min-height: 200px; max-height: 60vh; overflow: auto; }
+button { font: inherit; padding: 4px 10px; background: #1b1f29; color: var(--fg); border: 2px solid var(--line); cursor: pointer; }
+button:hover { border-color: var(--gold); }
+pre { white-space: pre-wrap; word-break: break-word; background: #07080c; border: 2px solid var(--line); padding: 12px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
-tr.error td { color: #ff6b6b; }
+th { color: var(--muted); font-weight: normal; }
+tr.error td { color: var(--red); }
 tr.warn td { color: var(--warn); }
 .tabs { display: flex; gap: 16px; }
 ul.files span { color: var(--muted); }
+
+/* 리포트 본문 (src/server/markdown.ts가 만든 태그만 들어온다) */
+article.report { background: #10121a; border: 2px solid var(--line); padding: 8px 24px 20px; }
+article.report h1 { font-size: 22px; }
+article.report h2 { color: var(--gold); font-weight: normal; font-size: 17px; border-bottom: 1px dashed var(--line); padding-bottom: 2px; margin-top: 28px; }
+article.report h3 { font-size: 15px; margin-bottom: 4px; }
+article.report blockquote { margin: 8px 0; padding: 4px 12px; border-left: 4px solid var(--gold); background: #15161e; }
+article.report code { background: #1b1e28; padding: 0 4px; font-size: 12px; word-break: break-all; }
+article.report pre code { background: none; padding: 0; }
+article.report ul, article.report ol { padding-left: 22px; }
+article.report li { margin: 2px 0; }
+article.report table { margin: 8px 0; font-size: 13px; }
+article.report hr { border: 0; border-top: 1px dashed var(--line); }

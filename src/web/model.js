@@ -316,6 +316,7 @@ export function panelModel(job, nowMs) {
   const badges = [...job.panel.badges];
   if (job.demo) badges.unshift(DEMO_MARK); // P1-8-R4: 결과 패널 안에도
   if (d.validUntil && Date.parse(d.validUntil) < nowMs && !badges.includes('만료')) badges.push('만료');
+  if (d.executionBackend === 'single_session') badges.push('단일 세션 분석'); // P0-F-R6
   const p = d.proposal;
   /** @type {{ label: string; value: string }[]} */
   const rows = [];
