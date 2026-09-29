@@ -89,7 +89,7 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - 프롬프트 = `shared/common` + (`shared/briefing` | `shared/proposal` + `no-trade` 또는 `forced`) + `roles/<역할>`. 해시는 조합된 전문의 sha256 앞 12자 (`prompts.hash(role, mode)`), 작업 기록 `promptHashes`에 남는다
 - 강제 방향 ACE·BLITZ의 CLI 스키마는 action에서 NO_TRADE를 뺀다 (`jsonSchemaFor`). 검증 코드 V-ACTION은 그대로
 - 테스트 도구: `test/job-helpers.ts`의 `autoDriver(overrides)`(입력을 읽어 정상 출력 생성), `test/data-helpers.ts`의 `replayAcquirer(fixture)`
-- 실전 1건 실행: `node scripts/run-job.ts <종목> <모드>` (실제 데이터·claude, 기록은 `jobs/`)
+- 실전 1건 실행: `node src/cli/floor.ts analyze <종목> <모드>` (실제 데이터·claude, 기록은 `jobs/`, 리포트는 `reports/`)
 
 ## 진행 상황과 남은 단계
 범위: P0와 P1 전체 (보완안 14.2 릴리스 게이트). 각 단계는 명세 검증 ID를 통과 기준으로 하고, 끝나면 `npm run verify` 통과 후 커밋한다.

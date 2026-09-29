@@ -135,11 +135,6 @@ export class ReportStore {
     return null;
   }
 
-  fileOf(jobId: string): string | null {
-    if (!isJobId(jobId)) return null;
-    return this.jsonFiles().find((f) => f.includes(`_${jobId.slice(0, 8)}`) && this.read(f)?.jobId === jobId) ?? null;
-  }
-
   /** JSON만 있고 Markdown이 없는 리포트(이름 변경 직전 중단)의 Markdown을 JSON에서 다시 만든다 */
   repair(): string[] {
     const made: string[] = [];
