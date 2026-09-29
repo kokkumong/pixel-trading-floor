@@ -10,7 +10,7 @@ const price = () => num({ exclusiveMin: 0, code: 'V-POSITIVE' });
 export const ProposalOutputSchema = obj({
   instrumentId: str({ maxLength: 64, description: '입력의 instrumentId를 그대로 복사' }),
   snapshotId: str({ maxLength: 64, description: '입력의 snapshotId를 그대로 복사' }),
-  action: en(ACTIONS),
+  action: en(ACTIONS, { description: '근거가 약하면 NO_TRADE 선택 가능 (forced_direction 제외)' }),
   bias: en(BIASES),
   unforcedAction: nul(en(ACTIONS), { description: 'forced_direction 모드에서만 값, 그 외 null' }),
   marketType: en(MARKET_TYPES),

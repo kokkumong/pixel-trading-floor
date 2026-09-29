@@ -3,3 +3,4 @@ reports/
 .floor/
 *.tmp
 .DS_Store
+jobs/

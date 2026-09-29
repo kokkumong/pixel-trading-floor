@@ -65,12 +65,25 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - 달력 `calendars.json`: KRX는 2026년까지만 (2027 휴장일은 KRX 12월 공고 뒤 추가), NYSE는 2027년까지
 - 실데이터 검증으로 명세에 반영된 규칙 (P0 v0.6, P1 v0.2): 주식 장중 TTL 25분, 외환 주말 규칙, 스캘핑 뉴스 수집(VIBE 제목만), NYSE Arca 허용, 달력 만료 30일 전 진단 경고
 
-## 모델 호출 계층 (src/core/model, src/core/job)
+## 모델 호출 계층 (src/core/model, src/core/job/budget.ts·retry.ts)
 - `createClaudeCliDriver` → `callRole`(예산 검사·재시도·호출 기록) → 역할 검증 함수. 드라이버: claude-cli(실전), fixture(데모, 호출 수 0), scripted(테스트)
 - 테스트용 가짜 CLI: `test/fixtures/fake-claude.mjs` (표준 입력의 `#MODE=ok|env|auth|quota|garbage|long|hang`)
 - 역할별 모델·사고 수준: `config/floor.config.json`의 `models` → `modelFor(role)`
-- 실측(haiku, TARO 1회): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰. **출력 길이(narrative)가 비용 대부분** → Phase 4에서 스키마 길이 축소
-- 실측: 모델이 근거 참조를 `derived:macd/hist`, `snap:<snapshotId>#/sources/...`처럼 틀리게 씀 → Phase 4 프롬프트에 정확한 예시 필수 (`derived:macd.hist`, `snap:binance.perp.price#/last`)
+- 실측(haiku, TARO 1회, Phase 3): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰 → Phase 4에서 스키마 길이 축소 (narrative 1000자, claims 최대 6개)
+- 실측(sonnet, BTC scalp 5회, Phase 4 스모크): 43초, 출력 합계 6,401토큰, 보고 비용 $0.18, 재시도 0, 근거 참조 오류 0
+
+## 작업 엔진 (src/core/job, src/core/prompts)
+- `state.ts` 상태 머신(P1-1), `record.ts` job.json 형식, `store.ts` 원자적 저장(디스크가 종료 상태면 저장 거부), `steps.ts` 다음 단계 계산·토론 조기 종료·역할 출력 검증(순수), `decide.ts` RuleContext·FinalDecision 조립, `engine.ts` 단계 엔진, `runner.ts` 드라이버 루프
+- `createEngine({store, now})` → `createJob(req, acquirer)`(해석·수집·스냅샷. INSUFFICIENT_DATA는 여기서 종료) → `next(job)`(대기 단계 목록 + `inputs/<stepId>.json` 기록. 애널리스트는 여러 개) → `submit(job, stepId, raw)` → `finalize(job, {save})`
+  - 다음 단계는 커서가 아니라 출력에서 계산한다 (`pendingSteps`). stepId는 역할 이름, 토론은 `BULL-1`, `BEAR-2`
+  - `/floor`(single_session)는 CLI 명령마다 `openJob(jobId)`(스냅샷 해시 검증)로 이어간다. submit 실패는 재시도로 세고 두 번째 실패면 SCHEMA_ERROR. finalize에서 P0-F-R5 예산 검사
+  - `runJob(engine, job, driver, signal)`: 병렬 단계 중 하나가 실패하면 나머지를 취소하고 첫 실패 코드로 끝낸다
+  - PM MODIFY의 `modifiedFields`는 코드가 계산한다(비면 스키마 오류). REJECT → `proposal: null` + `PM_REJECTED`, ACE 제안은 `outputs.proposal`에 보존
+  - COMPLETED·INSUFFICIENT_DATA만 `finalDecision`을 가진다. 시작 시 `recoverInterrupted()`: 진행 중 작업 → INTERRUPTED, 기록된 PID는 명령줄에 claude가 있을 때만 그룹째 종료
+- 프롬프트 = `shared/common` + (`shared/briefing` | `shared/proposal` + `no-trade` 또는 `forced`) + `roles/<역할>`. 해시는 조합된 전문의 sha256 앞 12자 (`prompts.hash(role, mode)`), 작업 기록 `promptHashes`에 남는다
+- 강제 방향 ACE·BLITZ의 CLI 스키마는 action에서 NO_TRADE를 뺀다 (`jsonSchemaFor`). 검증 코드 V-ACTION은 그대로
+- 테스트 도구: `test/job-helpers.ts`의 `autoDriver(overrides)`(입력을 읽어 정상 출력 생성), `test/data-helpers.ts`의 `replayAcquirer(fixture)`
+- 실전 1건 실행: `node scripts/run-job.ts <종목> <모드>` (실제 데이터·claude, 기록은 `jobs/`)
 
 ## 진행 상황과 남은 단계
 범위: P0와 P1 전체 (보완안 14.2 릴리스 게이트). 각 단계는 명세 검증 ID를 통과 기준으로 하고, 끝나면 `npm run verify` 통과 후 커밋한다.
@@ -81,21 +94,16 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 | 1 | 스키마 DSL, 규칙 엔진, 표시 규칙 (`src/core/schema`, `src/core/rules`) | ✅ |
 | 2 | 레지스트리, 달력, 지표, 공급자 어댑터, 스냅샷, 역할별 입력 (`src/core/data`) | ✅ |
 | 3 | claude 드라이버, 오류 코드, 예산, 재시도 (`src/core/model`, `src/core/job/budget.ts`, `retry.ts`) | ✅ |
-| **4** | **작업 엔진과 역할 프롬프트** | 다음 |
-| 5 | 리포트(JSON 원본 + MD), CLI 6개 명령(analyze·snapshot·next·submit·finalize·doctor), 데모 fixture → M1 | |
+| 4 | 작업 엔진과 역할 프롬프트 (`src/core/job`, `src/core/prompts`) | ✅ |
+| **5** | **리포트(JSON 원본 + MD), CLI 6개 명령(analyze·snapshot·next·submit·finalize·doctor), 데모 fixture → M1** | 다음 |
 | 6 | HTTP 서버와 보안 경계 (P0-7, P1-7, SSE, zip, /diagnostics) | |
 | 7 | 픽셀 UI (가이드 PDF 화면 구성) | |
 | 8 | `/floor` 명령, 시작 스크립트, 가이드 v1.3, P1-11 실측 | |
 
-### Phase 4 범위 (다음 세션이 할 일)
-- `src/core/job/state.ts`: P1-1 상태 머신 (모드별 경로, 종료 상태 불변)
-- `src/core/job/store.ts`: `jobs/<jobId>/job.json` 원자적 기록, 하위 프로세스 PID 기록, 시작 시 진행 중 작업 → `INTERRUPTED` (P1-1-R5)
-- `src/core/job/engine.ts`: 단계 엔진 `createJob → next → submit → finalize`. 브라우저(SubprocessDriver 루프, 애널리스트 병렬)·`/floor`(세션이 CLI로 호출)·데모가 모두 이것을 쓴다 (P1-5-R1)
-  - algorithm: 애널리스트 4 병렬 → 토론(최대 2라운드, 조기 종료 P0-1.4) → ACE → RISKY→SAFE→NEUTRAL → PM(APPROVE/MODIFY/REJECT, `diffProposalFields`)
-  - scalp·forced: TARO·VIBE → BLITZ → GUARD → ACE (forced는 `unforcedAction` 필수)
-  - `INSUFFICIENT_DATA`는 모델 호출 전에 종료 (P0-4-R4). 규칙 엔진 → `FinalDecision` 조립 (`RuleContext`는 스냅샷에서 만든다)
-  - 과거 판정 회고는 끔 (P1-9)
-- `src/core/prompts/roles/*.md` 13개 + 내용 해시 (P1-6-R3). 포함할 것: 불신 데이터 블록 지시(P0-4-R7), NO_TRADE 선택 가능(P0-3-R4), forced 지시(P0-5-R6), 근거 참조 정확한 예시, 한국어 출력
-- **Phase 3 실측 반영**: 출력 길이가 비용 대부분 → 브리핑 `narrative`·`summary` 등 스키마 길이 축소 검토, 기본 `--effort low`
-- 통과 기준: P0-1-T1~T5, P0-2-T2·T3, P0-5-T5, P0-8-T1, P0-4-T1, P1-1-T1·T2·T4, P1-5-T1·T2 (scripted 드라이버로. 실제 claude는 마지막 스모크 1회만)
+### Phase 5 참고 (다음 세션)
+- 리포트는 `engine.finalize(job, { save })`의 `save`에서 쓴다 (SAVING 단계, 실패 시 E-DISK). P1-6 파일명 규칙, `.tmp-` → JSON → MD 이름 변경, 대상이 있으면 E-DISK
+- 메타데이터 원자료는 job.json에 있다: `usage`, `promptHashes`, `usage.calls[].modelId`(CLI 보고 모델), `outputs`(proposals = blitzPlan·ACE·PM 수정안, briefings), `snapshot.snapshotHash`
+- CLI `snapshot`·`next`·`submit`·`finalize`는 엔진 함수를 그대로 감싼다 (종료 코드는 P1-5.1 표). `analyze`는 `runJob` + claude 드라이버 (`scripts/run-job.ts` 참고)
+- 데모: 녹화 스냅샷 + 역할 응답을 `createFixtureDriver`로 재생 (응답의 snapshotId·instrumentId가 스냅샷과 맞아야 검증 통과)
+- 남은 일: 브리핑·토론 근거 참조의 존재 검사 경고 (지금은 제안서 참조만 규칙 엔진이 검사, P1-10-R1), P1-10-R3 수치 불일치 경고, idempotency key 중복 요청 처리 (P0-8-R4, Phase 6)
 - 확인용: `node scripts/inspect.ts <종목> <모드>` (모델 호출 없이 코어 전체 출력)

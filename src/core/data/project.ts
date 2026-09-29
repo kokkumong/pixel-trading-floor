@@ -39,6 +39,7 @@ export interface PriorOutputs {
   blitzPlan?: TradeProposal;
   proposal?: TradeProposal; // ACE 제안
   reviews?: Briefing[]; // 리스크 심사 (순서대로)
+  debateRound?: number; // BULL·BEAR가 발언할 라운드 (1부터)
 }
 
 const BARS: Record<Mode, number> = { algorithm: 30, scalp: 32, forced_direction: 32 };
@@ -77,6 +78,11 @@ function bars(s: AnalysisSnapshot, n: number): RoleInput['recentBars'] {
   const p = src.payload as CandlePayload;
   const row = (c: Candle) => [new Date(c.openTime).toISOString(), c.open, c.high, c.low, c.close, c.volume];
   return { interval: p.interval, rows: p.candles.slice(-n).map(row), current: p.current ? [...row(p.current), 'incomplete'] : null };
+}
+
+/** derived:<이름> 참조가 가리키는 값 전체 (역할 입력의 derived와 같은 모양) */
+export function derivedValues(s: AnalysisSnapshot): Record<string, unknown> {
+  return indicators(s);
 }
 
 function indicators(s: AnalysisSnapshot, keys?: string[]): Record<string, unknown> {
@@ -140,6 +146,7 @@ export function buildRoleInput(s: AnalysisSnapshot, role: Role, prior: PriorOutp
     case 'BULL':
     case 'BEAR':
       base.prior = {
+        round: prior.debateRound ?? 1,
         briefings: (['TARO', 'DIANA', 'NOVA', 'VIBE'] as const).map((r) => structured(b[r])).filter(Boolean),
         debate: prior.debate ?? [],
       };

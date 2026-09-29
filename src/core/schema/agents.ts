@@ -11,17 +11,17 @@ export const BriefingOutputSchema = obj({
     obj({
       claimId: str({ pattern: /^c\d{1,2}$/, description: 'c1, c2, …' }),
       kind: en(['observation', 'interpretation', 'assumption'] as const),
-      text: str({ maxLength: 400 }),
+      text: str({ maxLength: 300 }),
       evidenceRefs: arr(ref(), { maxItems: 6, description: 'observation은 1개 이상 필수' }),
     }),
-    { minItems: 1, maxItems: 8 },
+    { minItems: 1, maxItems: 6 },
   ),
-  counterScenario: str({ maxLength: 600 }),
-  changeTriggers: arr(str({ maxLength: 200 }), { maxItems: 5 }),
-  dataLimitations: arr(str({ maxLength: 200 }), { maxItems: 5 }),
+  counterScenario: str({ maxLength: 400 }),
+  changeTriggers: arr(str({ maxLength: 160 }), { maxItems: 4 }),
+  dataLimitations: arr(str({ maxLength: 160 }), { maxItems: 4 }),
   bias: en(BIASES),
   summary: str({ maxLength: 200, description: '말풍선용 한두 문장' }),
-  narrative: str({ maxLength: 2500, description: '콘솔 브리핑 전문' }),
+  narrative: str({ maxLength: 1000, description: '콘솔 브리핑. 앞 필드를 되풀이하지 않는 3~5문장' }),
 });
 export type BriefingOutput = Infer<typeof BriefingOutputSchema>;
 export type BriefingRole = Extract<Role, 'TARO' | 'DIANA' | 'NOVA' | 'VIBE' | 'GUARD' | 'RISKY' | 'SAFE' | 'NEUTRAL'>;
@@ -32,11 +32,11 @@ export interface Briefing extends BriefingOutput {
 }
 
 export const DebateOutputSchema = obj({
-  steelman: nul(str({ maxLength: 500 }), { description: '상대의 가장 강한 근거 요약. 첫 BULL 발언은 null' }),
+  steelman: nul(str({ maxLength: 400 }), { description: '상대의 가장 강한 근거 요약. 첫 BULL 발언은 null' }),
   evidenceRefs: arr(ref(), { maxItems: 10 }),
   openIssues: arr(str({ maxLength: 200 }), { maxItems: 3, description: '상대가 아직 답하지 않은 핵심 쟁점' }),
   summary: str({ maxLength: 200 }),
-  narrative: str({ maxLength: 2500 }),
+  narrative: str({ maxLength: 1000 }),
 });
 export type DebateOutput = Infer<typeof DebateOutputSchema>;
 export interface DebateMessage extends DebateOutput {
@@ -50,7 +50,7 @@ export const PmOutputSchema = obj({
   reasonCodes: arr(str({ maxLength: 40 }), { maxItems: 10 }),
   revisedProposal: nul(ProposalOutputSchema, { description: 'MODIFY일 때만 수정한 전체 제안서, 그 외 null' }),
   summary: str({ maxLength: 200 }),
-  narrative: str({ maxLength: 2500 }),
+  narrative: str({ maxLength: 1000 }),
 });
 export type PmOutput = Infer<typeof PmOutputSchema>;
 
