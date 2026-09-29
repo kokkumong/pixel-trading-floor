@@ -108,16 +108,16 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - `analyze`는 interface `web`·subprocess_per_role로 기록한다. 실전 전 `auth status`로 로그인 확인(미로그인 시 작업을 만들지 않음). `--demo`는 fixture 재생
 
 ## HTTP 서버 (src/server, src/web)
-- `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0`
+- `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음
   - `startServer(argv, env, out)`: `manager.recover()`(web 작업만 INTERRUPTED, 리포트 repair, 임시 파일 정리) → `app.listen()` → 안내 출력. LAN 토큰 주소는 서버 창에만 한 번. 서버 창 `r`+Enter 재발급, Ctrl+C는 실행 중 분석 취소 뒤 종료
-- `security.ts`(순수): `LanAuth`(128비트 토큰, 2시간, 재발급 시 세션 전부 무효, 세션 만료 = 토큰 만료), `allowedHosts`/`checkHost`/`checkOrigin`, `decideAccess`(접근 등급 read·analyze·local), `RateLimiter`, `redact`(sk-ant-, 토큰·쿠키, `?t=`, 홈 경로 사용자 이름)
-- `app.ts` `createApp(opts)`: 요청 검사 순서 Host → 요청 수(모두 120/분) → `/?t=` 첫 접속(쿠키 발급 + 302) → 경로 표(없으면 404) → 접근 등급 → Origin(GET 외) → 분석 실행 수(3/분). 경로 표 = P0 명세 v0.7 7.4절. 모든 응답에 CSP·nosniff·no-referrer·no-store
+- `security.ts`(순수): `LanAuth`(128비트 토큰, 2시간, 재발급 시 세션 전부 무효, 세션 만료 = 토큰 만료, 세션 200개 상한), `checkFetchSite`(P0-7-R10), `isPrivateIPv4`, `allowedLocalAddress`, `allowedHosts`/`checkHost`/`checkOrigin`, `decideAccess`(접근 등급 read·analyze·local), `RateLimiter`, `redact`(sk-ant-, 토큰·쿠키, `?t=`, 홈 경로 사용자 이름)
+- `app.ts` `createApp(opts)`: 요청 검사 순서 Host → 교차 사이트 차단(`Sec-Fetch-Site`, `/` 페이지 이동만 예외) → 요청 수(모두 120/분) → `/?t=` 첫 접속(쿠키 발급 + 302) → 경로 표(없으면 404) → 접근 등급 → Origin(GET 외) → 분석 실행 수(3/분). 경로 표 = P0 명세 v0.7 7.4절. 모든 응답에 CSP·nosniff·no-referrer·no-store·CORP/COOP same-origin. 자원 상한 `LIMITS`(동시 연결 256, SSE IP당 8·전체 64, 헤더 15초·요청 30초). ZIP은 `ZipWriter`로 흘려 쓰고 한 번에 하나
   - 테스트는 `clientIp` 옵션으로 LAN 기기를 흉내 낸다 (`x-test-ip` 헤더, 운영 코드는 소켓 주소만)
-- `jobs.ts` `JobManager`: `start({symbol, mode, idempotencyKey, demo})` → started | busy(409) | rejected(400·503). 입력은 `normalizeSymbolInput`·모드 열거형 그대로(별칭 없음)·키 `[A-Za-z0-9_-]{8,64}`. 같은 키는 진행 중 약속 → 작업 기록 순서로 찾는다. 슬롯은 Claude 확인 전에 동기적으로 예약. `cancel`·`cancelAll`·`idle`·`view`·`snapshot`·`subscribe`
+- `jobs.ts` `JobManager`: `start({symbol, mode, idempotencyKey, demo})` → started | busy(409) | rejected(400·503). 입력은 `normalizeSymbolInput`·모드 열거형 그대로(별칭 없음)·키 `[A-Za-z0-9_-]{8,64}`. 같은 키는 진행 중 약속 → 키 색인(처음 한 번 작업 기록을 훑어 만듦) 순서로 찾는다. 슬롯은 Claude 확인 전에 동기적으로 예약. `cancel`·`cancelAll`·`idle`·`view`·`snapshot`·`subscribe`
   - 이벤트: 작업 기록이 저장될 때마다 `{type:'job', job: JobView}`, 역할 호출 `{type:'call', phase:'start'|'end', role, ...}`, 끝 `{type:'end', state}`. SSE는 구독 → 현재 보기 → (끝났으면 바로 end)
   - `view.ts` `jobView`: PID·절대 경로 없음, 오류 상세는 홈 경로 가림, E-CLI-MISSING·E-AUTH·E-CLOCK이면 `hint: '/diagnostics'`, `panel`(panelView), `reportUrl`
 - `pages.ts`: 서버가 그리는 HTML(리포트 목록·열람, 진단, project.zip 확인). `html` 태그 템플릿이 모든 값을 이스케이프. 리포트 본문은 Markdown을 `<pre>`에 이스케이프해서 보인다 (Markdown 렌더러는 Phase 7)
-- `zip.ts` 의존성 없는 ZIP(deflate, UTF-8 이름, ZIP64 없음). `bundle.ts` project.zip 목록(제외: `.env*`, `.claude`, `*credentials*`, `node_modules`, `reports`, `jobs`, `logs`, `*.key`, `*.pem`, `.git`, 심볼릭 링크)과 목록 해시
+- `zip.ts` 의존성 없는 ZIP(deflate, UTF-8 이름, ZIP64 없음): `ZipWriter`(스트리밍·비동기)와 `buildZip`(작은 것). `bundle.ts` project.zip: `BUNDLE_INCLUDE`(넣을 최상위 항목) 안에서 `isExcluded`(비밀 이름, P1 명세 v0.3 R14) 제외, 목록 해시는 경로·크기·수정 시각
 - `src/web/`: **Phase 6 임시 화면**(index.html·app.js·app.css). 분석 실행 → SSE 로그 → 리포트 링크, `?demo=1` 워터마크. 인라인 스크립트·스타일 없음(CSP). Phase 7에서 픽셀 UI로 바꾼다
 - 테스트 도구: `test/server/server-helpers.ts`의 `manager()`(녹화 데이터 + autoDriver), `test/server/zip-reader.ts`의 `readZip`
 
@@ -145,11 +145,13 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - `GET /api/jobs/<id>/events` SSE: `job`(JobView 전체, 저장마다) · `call`(역할 시작·끝, 말풍선 연출용) · `end`. 구독 전 이벤트는 오지 않으므로 첫 `job`의 `outputs`로 화면을 복원한다
   - `GET /api/jobs/<id>/snapshot`: 전광판·콘솔의 데이터 수집 로그·뉴스 제목용 (외부 텍스트: textContent로만)
   - `POST /api/jobs/<id>/cancel`, `GET /api/reports?tab=`, 리포트 열람 `/reports/<id>`
+- 서버가 다른 사이트발 요청(`Sec-Fetch-Site: cross-site|same-site`)을 막으므로 화면은 같은 출처에서만 API를 부른다. 외부 CDN·폰트·이미지 불가 (CSP와 함께)
 - 반드시 지킬 것: 모델 출력·뉴스는 원시 HTML 금지(P1-7-R11) → Markdown 렌더러를 쓰면 원시 HTML을 막고 링크는 http/https + `rel="noopener noreferrer"`, 외부 이미지 금지. P1-7-T2의 화면 쪽 검증은 Phase 7에서 한다. CSP 때문에 인라인 스크립트·스타일·외부 폰트 불가 (파일로 `src/web/`에 두고 `STATIC_NAME` 규칙 `[a-z0-9-]+.(html|js|css|svg|png|ico)`을 따른다. 하위 폴더 없음)
   - 데모 화면 전체와 결과 패널 안에 `DEMO · 실제 데이터 아님` (P1-8-R4), 강제 방향은 `강제 방향 시뮬레이션 · 판정 아님` 배지(P0-5-R3), 확신도는 LOW/MEDIUM/HIGH만(`%` 금지), PM 없는 결과에 `PM 승인` 금지 → `panelView` 결과를 그대로 쓴다
 - 아직 없는 API: **전광판 시세**(가이드 4-1·4-4, 15초 갱신, 한국 종목 멀티 거래소). 데모에서는 fixture 시세(P1-8-R5), LAN 등급은 read. 경로를 추가하면 P0 명세 7.4 표도 갱신한다
 - 이번 결정: 서버 복구는 subprocess_per_role 작업만(`recoverInterrupted`의 `only`), 세션 쿠키 만료 = 토큰 만료, 분석 실행 요청 제한은 인증·출처 통과 요청만 셈, 데모도 LAN에서는 분석 실행으로 보고 차단, 서버 내부 오류로 멈춘 작업은 `E-INTERRUPTED`(새 오류 코드를 만들지 않음), 리포트 JSON 다운로드는 원본 파일 그대로
 - 알려진 한계: 서버 시작 순간 별도 프로세스의 `floor.ts analyze`(web·subprocess 작업)가 돌고 있으면 그 작업도 INTERRUPTED가 된다. macOS 기본 `unzip`(Info-ZIP 6.0)은 UTF-8 파일명을 `?`로 보인다(데이터는 정상, Windows 탐색기는 정상)
 - 실측(sonnet, 서버 경로 BTC scalp 1회, Phase 6 스모크): 32.9초, 호출 5회, 재시도 0, 출력 5,512토큰, 보고 비용 $0.132, 결과 ACE 관망. 데모 algorithm(연출 지연 1.2초/역할)은 약 16초
+- 보안 재검토(Phase 6 PR 안에서 반영): 교차 사이트 요청 차단 P0-7-R10, 자원 상한 R11, LAN 사설 주소 한정, project.zip 포함 목록 방식. 받아들인 한계: 로컬 전용 모드는 인증 없음(같은 PC의 다른 프로세스·사용자, P0 명세 7.2), LAN 평문 HTTP. **Phase 8 시작 스크립트는 서버 출력을 파일로 남기지 않는다** (LAN 토큰이 서버 창에 찍힘). 미검증: Windows `taskkill` 트리 종료(P0-8-R6)·`.cmd` 실행(P1-7-R4), 뉴스 인젝션 표본 검사(P1-7-T3)
 - 남은 일: 브리핑·토론 근거 참조의 존재 검사 경고 (P1-10-R1, 지금은 제안서만), P1-10-R3 수치 불일치 경고, 강제 방향 데모 fixture, CoinGecko 403 원인(알고리즘 스모크에서 PARTIAL_DATA, 진단 ping은 통과), P0-F-T4(/floor 도구 제한, Phase 8), 시작 스크립트 `start-floor.cmd`·`start-floor-lan.cmd`와 가이드 9장 개정(P0-7.6, Phase 8)
 - 확인용: `npm start` → http://localhost:8000/?demo=1, `node --test "test/server/*.test.ts"`

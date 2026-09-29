@@ -460,7 +460,7 @@ test('P1-8-R6, P1-7-R13 Claude 확인 실패 응답에 진단 링크, 오류 응
 const CROSS_IMG = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'no-cors', 'Sec-Fetch-Dest': 'image' };
 const CROSS_NAV = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
 
-test('P0-7-R10 다른 사이트가 사용자 브라우저로 보낸 요청은 부작용 전에 거부되고, 사용자의 요청 한도를 쓰지 못한다', async () => {
+test('P0-7-T7, P0-7-R10 다른 사이트가 사용자 브라우저로 보낸 요청은 부작용 전에 거부되고, 사용자의 요청 한도를 쓰지 못한다', async () => {
   let diagRuns = 0;
   const h = await start({ enableProjectZip: true, diagnostics: async () => { diagRuns++; return { ok: true, clockSkewMs: 0, checks: [] }; } });
   try {
@@ -496,7 +496,7 @@ test('응답을 다른 사이트가 끌어다 쓰지 못하게 CORP·COOP same-o
   }
 });
 
-test('SSE 연결 수 상한: 한 주소가 진행 연결을 무한히 열 수 없다', async () => {
+test('P0-7-R11 SSE 연결 수 상한: 한 주소가 진행 연결을 무한히 열 수 없다', async () => {
   const h = await start({ managerOpts: { driver: () => autoDriver({ TARO: () => ({ hang: true }) }) } });
   const open: import('node:http').ClientRequest[] = [];
   let id = '';
@@ -523,7 +523,7 @@ test('SSE 연결 수 상한: 한 주소가 진행 연결을 무한히 열 수 �
   }
 });
 
-test('P0-7.1 LAN 모드는 0.0.0.0에 바인딩해도 고른 사설 주소·루프백이 아닌 인터페이스로 들어온 연결을 끊는다', async () => {
+test('P0-7-T8 LAN 모드는 0.0.0.0에 바인딩해도 고른 사설 주소·루프백이 아닌 인터페이스로 들어온 연결을 끊는다', async () => {
   const l = await lan(); // lanAddrs = [LAN_IP(가짜)] → 이 PC의 실제 주소는 목록 밖
   try {
     assert.equal((await l.req('/api/status')).status, 200); // 루프백

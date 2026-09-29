@@ -147,7 +147,7 @@ test('P0-7.1 연결 수준 검사: 로컬 모드는 루프백으로 들어온 �
   assert.equal(allowedLocalAddress(undefined, 'lan', ['192.168.0.12']), false);
 });
 
-test('LAN 세션 수 상한: 첫 접속을 반복해도 세션 표가 무한히 커지지 않는다 (오래된 것부터 버림)', () => {
+test('P0-7-R11 LAN 세션 수 상한: 첫 접속을 반복해도 세션 표가 무한히 커지지 않는다 (오래된 것부터 버림)', () => {
   const auth = new LanAuth();
   const first = auth.createSession();
   for (let i = 0; i < MAX_LAN_SESSIONS; i++) auth.createSession();

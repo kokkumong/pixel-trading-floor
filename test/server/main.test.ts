@@ -88,7 +88,7 @@ test('npm start 진입점: 별도 프로세스로 뜨고 Ctrl+C(SIGINT)로 정�
   assert.equal(code, 0);
 });
 
-test('P0-7.1 사설 네트워크 주소가 없으면 LAN 모드를 시작하지 않는다', async () => {
+test('P0-7-T8 사설 네트워크 주소가 없으면 LAN 모드를 시작하지 않는다', async () => {
   const r = await startServer(['--lan', '--port', '0'], {}, () => {}, { interfaces: () => ['100.64.0.5', '8.8.8.8'] });
   assert.ok('error' in r);
   assert.match(r.error, /사설 네트워크 주소.*찾지 못해/);
