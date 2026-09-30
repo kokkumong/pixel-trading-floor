@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "positions/1",
+  "updatedAt": "2026-09-29T08:00:00Z",
+  "account": {
+    "equity": {
+      "KRW": null,
+      "USD": null,
+      "USDT": 10000
+    },
+    "riskPerTradePercent": 1
+  },
+  "positions": [
+    {
+      "instrumentId": "CRYPTO:BTC",
+      "targets": [
+        87000
+      ],
+      "openedAt": "2026-09-10T00:00:00Z",
+      "note": "데모 가짜 포지션",
+      "id": "d0000000-0000-4000-8000-00000000a002",
+      "marketType": "spot",
+      "side": "LONG",
+      "avgEntryPrice": 76000,
+      "quantity": 0.05,
+      "leverage": null,
+      "marginMode": null,
+      "liquidationPrice": null,
+      "stopLoss": 78000
+    }
+  ]
+}

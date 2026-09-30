@@ -3,7 +3,7 @@
 import type { EvidenceIssue } from '../rules/audit.ts';
 import type { Briefing } from '../schema/agents.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
-import { actionBiasLabel, BIAS_NOTE, CONFIDENCE_BAND_LABEL, CONFIDENCE_NOTE, panelView } from '../rules/display.ts';
+import { actionBiasLabel, BIAS_NOTE, CONFIDENCE_BAND_LABEL, CONFIDENCE_NOTE, DISCLAIMER, NO_POSITION_BIAS_NOTE, panelView } from '../rules/display.ts';
 import type { Report } from './report.ts';
 
 const MODE_LABEL = { algorithm: '알고리즘', scalp: '스캘핑 20x', forced_direction: '강제 방향 시뮬레이션' } as const;
@@ -43,6 +43,21 @@ function proposalLines(p: TradeProposal): string[] {
   return lines;
 }
 
+/** 사용한 포지션 요약·적용 계획·수량 계산 조건 (P2-5.1: 비율 정보와 제안 수량만, 총 자산·손실 한도 금액은 쓰지 않는다) */
+function positionLines(r: Report, summary: string | null): string[] {
+  const d = r.finalDecision;
+  const out: string[] = [];
+  if (summary) out.push(`- ${summary}`);
+  const plan = d.positionPlan; // decision/2에는 없다
+  if (plan) {
+    out.push(`- 판정 뒤 손절: ${num(plan.stopLoss)}${plan.stopUpdated ? ' (갱신)' : ''} · 목표: ${plan.targets.length ? plan.targets.map(num).join(', ') : '-'}${plan.sizeFraction === null ? '' : ` · 청산 비율 ${Math.round(plan.sizeFraction * 100)}%`}`);
+  }
+  const k = d.sizing;
+  if (k) out.push(`- 수량 계산: 기준가 ${num(k.entryPrice)} · 손절 ${num(k.stopLoss)} · ${k.assumptions.join(' · ')}`);
+  for (const n of r.positionContext?.notes ?? []) out.push(`- ${mdText(n)}`);
+  return out;
+}
+
 /** 주장 옆 표시 (P1-10-R1): 같은 역할·claimId의 근거 검사 결과 이름 */
 function claimMarks(issues: readonly EvidenceIssue[], role: string, claimId: string): string {
   const labels = [...new Set(issues.filter((x) => x.role === role && x.claimId === claimId).map((x) => x.label))];
@@ -61,9 +76,11 @@ function briefingLines(b: Briefing, issues: readonly EvidenceIssue[]): string[] 
 
 export function renderMarkdown(r: Report): string {
   const d = r.finalDecision;
-  const v = panelView(d, new Date(r.completedAt));
+  const pc = r.positionContext ?? null; // 리포트 v1에는 없다
+  const v = panelView(d, new Date(r.completedAt), pc);
   const L: string[] = [];
   L.push(`# ${mdText(r.displayName)} · ${MODE_LABEL[r.mode]} · ${v.title}`, '');
+  L.push(`> **고지** — ${v.disclaimer}`, ''); // P2-6-R2
   for (const n of headerNotices(r)) L.push(`> ${n}`, '');
   L.push(
     `- 종목: ${mdText(r.symbolInput)} → ${r.instrumentId} (${r.snapshot.marketType})`,
@@ -75,8 +92,9 @@ export function renderMarkdown(r: Report): string {
   L.push('## 최종 판정', '');
   if (v.badges.length) L.push(`[${v.badges.join('] [')}]`, '');
   L.push(`**${v.headline}**`, '');
-  for (const n of v.notes) if (n !== BIAS_NOTE) L.push(`- ${n}`);
-  if (d.action === 'NO_TRADE') L.push(`- 방향 판단(${d.bias}): ${BIAS_NOTE}`);
+  const biasNote = v.notes.find((n) => n === BIAS_NOTE || n === NO_POSITION_BIAS_NOTE);
+  for (const n of v.notes) if (n !== biasNote) L.push(`- ${n}`);
+  if (biasNote) L.push(`- 방향 판단(${d.bias}): ${biasNote}`);
   if (d.confidence) L.push(`- 확신도: ${d.confidence.band} (${CONFIDENCE_BAND_LABEL[d.confidence.band]}) · 보정 전 점수 ${d.confidence.score} · ${CONFIDENCE_NOTE}`);
   L.push(`- 상태: ${d.status} · 규칙 엔진 ${d.ruleEngine.verdict}${d.reasonCodes.length ? ` · 사유 ${d.reasonCodes.join(', ')}` : ''}`);
   if (d.pmDecision) L.push(`- PM 결정: ${d.pmDecision}${d.modifiedFields.length ? ` (변경: ${d.modifiedFields.join(', ')})` : ''}`);
@@ -84,6 +102,7 @@ export function renderMarkdown(r: Report): string {
   for (const x of d.ruleEngine.violations) L.push(`- 위반 ${x.code}: ${mdText(x.message)}`);
   for (const w of d.ruleEngine.warnings) L.push(`- 경고: ${mdText(w)}`);
   L.push('');
+  if (v.position || pc?.notes.length) L.push('### 보유 포지션', '', ...positionLines(r, v.position), '');
   if (d.proposal) L.push('### 채택된 제안', '', ...proposalLines(d.proposal), '');
   if (d.risk) {
     const k = d.risk;
@@ -165,6 +184,6 @@ export function renderMarkdown(r: Report): string {
     L.push('');
     for (const w of r.warnings) L.push(`- 작업 경고: ${mdText(w)}`);
   }
-  L.push('', '---', '분석 시뮬레이션 결과이며 실제 주문 기능은 없습니다. 투자 조언이 아닙니다.', '');
+  L.push('', '---', `${DISCLAIMER} 이 앱에는 주문 기능이 없습니다.`, '');
   return L.join('\n');
 }

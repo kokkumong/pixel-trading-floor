@@ -3,7 +3,7 @@
 // 모델 출력과 외부 텍스트는 textContent로만 넣는다 (P1-7-R11). HTML 문자열을 해석하는 API는 쓰지 않는다 (test/web/model.test.ts가 검사).
 import { drawChart } from './chart.js';
 import {
-  bubbles, consoleEntries, DATA_FLOW, errorView, fmtChange, fmtClock, fmtPrice, FORCED_CONFIRM, floorPlan, initialMode, isDemo,
+  bubbles, consoleEntries, DATA_FLOW, demoScenarioOptions, errorView, fmtChange, fmtClock, fmtPrice, FORCED_CONFIRM, floorPlan, initialMode, isDemo,
   MODES, multiRows, needsForcedConfirm, panelModel, planLabel, roleStatus, ROLES, stateLabel, WORLD_CLOCKS,
 } from './model.js';
 import {
@@ -148,6 +148,20 @@ function bindControls() {
   $('toast').addEventListener('click', () => { $('toast').hidden = true; });
 }
 
+/** 데모에서만: 이 모드의 포지션 데모(가짜 보유) 선택 (P2-8). 목록은 서버 manifest에서 온다 */
+function renderDemoScenarios() {
+  const sel = /** @type {HTMLSelectElement} */ ($('demo-scenario'));
+  const opts = demoScenarioOptions(state.status?.demoScenarios, state.mode);
+  sel.hidden = !demo || opts.length <= 1;
+  const keep = sel.value;
+  sel.replaceChildren(...opts.map((o) => {
+    const e = /** @type {HTMLOptionElement} */ (el('option', '', o.label));
+    e.value = o.value;
+    return e;
+  }));
+  if (opts.some((o) => o.value === keep)) sel.value = keep;
+}
+
 function renderMode() {
   for (const b of document.querySelectorAll('.mode')) {
     b.setAttribute('aria-checked', String(/** @type {HTMLElement} */ (b).dataset.mode === state.mode));
@@ -155,6 +169,7 @@ function renderMode() {
   $('go').classList.toggle('forced', state.mode === 'forced_direction');
   $('plan').textContent = `${MODES[state.mode].label} · ${planLabel(state.mode, state.status?.plans)}`;
   if (demo && state.status && !state.status.demoModes.includes(state.mode)) $('plan').textContent += ' · 이 모드의 데모는 없습니다';
+  renderDemoScenarios();
   renderHolding();
 }
 
@@ -292,7 +307,8 @@ async function analyze() {
   }
   go.disabled = true;
   state.pendingKey ??= crypto.randomUUID();
-  const body = { symbol: /** @type {HTMLInputElement} */ ($('symbol')).value, mode: state.mode, idempotencyKey: state.pendingKey, demo };
+  const scenario = demo ? /** @type {HTMLSelectElement} */ ($('demo-scenario')).value : '';
+  const body = { symbol: /** @type {HTMLInputElement} */ ($('symbol')).value, mode: state.mode, idempotencyKey: state.pendingKey, demo, ...(scenario ? { demoScenario: scenario } : {}) };
   try {
     const { res, body: r } = await api('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (res.status === 409 && r?.running) {
@@ -479,7 +495,8 @@ function renderPanel() {
   $('panel-badges').replaceChildren(...p.badges.map((b) => el('span', `badge ${b === '강제 방향 시뮬레이션' ? 'sim' : b.startsWith('DEMO') ? 'demo' : b === '규칙 차단' ? 'block' : ''}`, b)));
   $('panel-title').textContent = `최종 판정 · ${p.title}`;
   $('panel-notes').replaceChildren(...p.notes.map((n, i) => el('div', i === 0 && p.simulation ? 'first-sim' : '', n)));
-  $('panel-position').replaceChildren(...p.positionNotes.map((n) => el('div', '', n)));
+  $('panel-position').replaceChildren(...(p.position ? [el('div', 'pos-summary', p.position)] : []), ...p.positionNotes.map((n) => el('div', '', n)));
+  $('panel-disclaimer').textContent = p.disclaimer;
   $('panel-headline').textContent = p.headline;
   const conf = $('panel-conf');
   conf.replaceChildren();

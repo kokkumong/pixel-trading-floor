@@ -53,8 +53,10 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - 파일명: 로컬 시간대, `:`→`-` (`2026-09-29T17-25-59+09-00_CRYPTO-BTC_algorithm_b7bca590[_SIM|_LITE][_DEMO]`). 강제 방향 데모는 `_SIM_DEMO`
   - 같은 프로세스에서 MD 단계가 실패하면 JSON도 지우고 E-DISK. 프로세스가 죽으면 JSON만 남을 수 있고 `repair()`가 MD를 다시 만든다. `cleanupTmp(now)`는 1시간 지난 `.tmp-*` 삭제
   - `list(tab)`: `analysis`(기본, 데모 제외) · `simulation` · `lightweight` · `demo`. `get(jobId)`: 파일명의 jobId 앞 8자로 찾고 내용으로 확인
+  - 리포트 v2(P2-2-R4): `positionContext` 전체를 담는다(v1은 없음, store는 둘 다 읽음). Markdown은 제목 아래·끝에 고지(`DISCLAIMER`), `### 보유 포지션`(요약·판정 뒤 계획·수량 계산 조건). 총 자산·손실 한도 금액은 Markdown에 쓰지 않는다
 - 데모: `fixtures/demo/v1/manifest.json`(모드 → 시나리오), `<이름>.snapshot.json`(수집 직후 SourceRecord + 시각), `<이름>.responses.json`(역할별 원래 모델 출력, 스냅샷 ID는 `{{snapshotId}}`). `demoAcquirer`(BlockedNet 연결) + `demoDriver` + `demoClock`(녹화 시각 + 실제 경과). 재조립한 스냅샷 해시가 원본과 같다
   - 새 데모: 실전 작업 뒤 `node scripts/make-demo.ts <jobId> <이름>` → manifest에 추가. 지금은 algorithm(PM 기각), scalp(ACE 관망), forced_direction(scalp 녹화를 바탕으로 ACE 응답만 롱·`unforcedAction: NO_TRADE`로 손으로 쓴 fixture)이 있다. 데모 fixture는 근거 검사 경고 0건이어야 한다 (P1-10-T2)
+  - 포지션 데모(P2-8): manifest `positionScenarios`(`btc-hold`·`btc-reduce`·`btc-exit`)가 기존 스냅샷을 재사용하고 `<이름>.responses.json`·`<이름>.positions.json`(가짜 북)을 쓴다. `loadDemo(mode, dir, scenario)`, `demoPositions(s)` → 엔진 `demoPositions`(데모는 실제 북 `positions`를 부르지 않음). 선택은 `JobManager.start({demoScenario})`·CLI `--scenario`·웹 데모 "보유 예시"
 - 진단: `runDiagnostics({net, dirs, env, executable, claudeTest})` → Node(`nodeCheck`: 최소 버전, `NODE_SECURITY_BASELINE` 보안 릴리스·지원 종료 경고. 새 보안 릴리스가 나오면 표 갱신)·Claude CLI(존재, 버전 ≥ 2.1.280, `auth status`의 loggedIn·authMethod)·API 키 환경변수·공급자 9곳·시계 오차·달력·쓰기 권한·선택 시험 호출(haiku 1회). 이메일·키 값은 결과에 넣지 않는다
 - CLI `node src/cli/floor.ts <analyze|snapshot|next|submit|finalize|doctor>`: `main(argv, deps)`로 테스트한다(의존성 주입). 루트는 `FLOOR_HOME` 또는 프로젝트 폴더. 종료 코드 `EXIT`(P1-5.1: 0, 1 기타, 2 종목, 3 데이터, 4 스키마, 5 예산, 10 단계 없음)
   - `next`는 `inputs/<단계>.json`, `prompts/<단계>.md`, `schemas/<단계>.json`, 출력 자리 `outputs/<단계>.json`을 준다. `submit --file`은 작업 디렉터리 안 파일만
@@ -74,6 +76,8 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - 수량(`rules/sizing.ts` `suggestSize`): 손실 한도(총 자산 × %) ÷ |기준가 − 손절|, ADD는 기존 리스크를 뺀 여유만. 코인 소수 6자리·주식 1주 내림, `MARGIN_HEAVY`(증거금 > 총 자산 50%). 총 자산 없거나 기존 손절 없는 ADD(`NO_STOP_ON_POSITION`)는 제안 없음
   - 모델 입력(`data/project.ts`): `POSITION_ROLES`(BLITZ·GUARD·ACE·RISKY·SAFE·NEUTRAL·PM)에만 `RoleInput.position`(`positionInput()`: 비율·가격·보유 시간, 수량·총 자산·메모·청산가 없음). 압축하지 않는다. `/floor`는 `inputs/<stepId>.json`으로 같은 투영을 받고, 훅이 `.floor/` 읽기를 막는다
   - 표시(`rules/display.ts` `panelView`): 유지·추가 진입 검토·일부 청산 검토 (N%)·전량 청산 검토, 톤 `caution`(REDUCE·EXIT·위험 경고), 강한 경고는 notes 맨 앞, 강제 방향 `포지션 무시 시뮬레이션`, 데이터 부족+보유 `포지션은 그대로이며 판정이 없음`
+- 화면·리포트 문구(P2-6, Phase 14): `panelView(d, now, pc)`가 `position`(`positionSummary`: 판정에 쓴 포지션 한 줄, 수량·총 자산 없음)과 `disclaimer`를 준다. NO_TRADE 주석은 북 확인 + 보유 없음이면 `NO_POSITION_BIAS_NOTE`, 그 밖은 `BIAS_NOTE`
+- `mask.ts`(P2-5-R4·R6): `maskSizing`·`maskDecision`·`maskPositionContext`·`maskReport`가 수량·손실 한도·증거금·계좌·보유 수량을 `[masked]`로 바꾼 사본을 만든다(가격·비율은 남김). 진단은 `positionCheck`로 건수만
 
 ## HTTP 서버 (src/server, src/web)
 - `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음
@@ -84,6 +88,7 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - `jobs.ts` `JobManager`: `start({symbol, mode, idempotencyKey, demo})` → started | busy(409) | rejected(400·503). 입력은 `normalizeSymbolInput`·모드 열거형 그대로(별칭 없음)·키 `[A-Za-z0-9_-]{8,64}`. 같은 키는 진행 중 약속 → 키 색인(처음 한 번 작업 기록을 훑어 만듦) 순서로 찾는다. 슬롯은 Claude 확인 전에 동기적으로 예약. `cancel`·`cancelAll`·`idle`·`view`·`snapshot`·`subscribe`
   - 이벤트: 작업 기록이 저장될 때마다 `{type:'job', job: JobView}`, 역할 호출 `{type:'call', phase:'start'|'end', role, ...}`, 끝 `{type:'end', state}`. SSE는 구독 → 현재 보기 → (끝났으면 바로 end)
   - `view.ts` `jobView`: PID·절대 경로 없음, 오류 상세는 홈 경로 가림, E-CLI-MISSING·E-AUTH·E-CLOCK이면 `hint: '/diagnostics'`, `panel`(panelView), `reportUrl`
+  - LAN 기기(`!c.isLocal`)에는 `maskJobView`(작업 보기·분석 시작 응답·SSE)와 `maskReport`(리포트 JSON·MD·HTML)로 가린 사본을 보낸다. `all.zip`은 로컬에서도 가린 JSON과 거기서 다시 만든 MD를 담는다. `/api/status`에 `demoScenarios`
 - `pages.ts`: 서버가 그리는 HTML(리포트 목록·열람, 진단, project.zip 확인, 스타일 `src/web/app.css`). `html` 태그 템플릿이 모든 값을 이스케이프. 리포트 본문은 `markdown.ts` `markdownToHtml`(모든 글자를 먼저 이스케이프하고 자기 태그만 넣음, 링크는 http·https + `rel="noopener noreferrer"`, 이미지는 `[이미지: …]` 글자)
 - `zip.ts` 의존성 없는 ZIP(deflate, UTF-8 이름, ZIP64 없음): `ZipWriter`(스트리밍·비동기)와 `buildZip`(작은 것). `bundle.ts` project.zip: `BUNDLE_INCLUDE`(넣을 최상위 항목) 안에서 `isExcluded`(비밀 이름, P1 명세 v0.3 R14) 제외, 목록 해시는 경로·크기·수정 시각
 - `board.ts` `BoardService.get(symbol, demo)` → `GET /api/board`: 레지스트리 해석(미국 주식 조회 포함) → 종목별 15초 캐시(동시 요청은 한 약속으로 묶음, 64종목 상한) → `core/board.ts`. 데모는 manifest의 algorithm 시나리오 기록만 쓰고 네트워크 클라이언트를 쓰지 않는다

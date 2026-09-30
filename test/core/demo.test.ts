@@ -4,18 +4,19 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBlockedNet, type NetClient } from '../../src/core/data/net.ts';
-import { demoAcquirer, demoClock, demoDriver, demoModes, loadDemo, type DemoScenario } from '../../src/core/demo.ts';
-import { createEngine } from '../../src/core/job/engine.ts';
+import { demoAcquirer, demoClock, demoDriver, demoModes, demoPositions, DemoUnavailableError, loadDemo, positionDemos, type DemoScenario } from '../../src/core/demo.ts';
+import { createEngine, type EngineOptions } from '../../src/core/job/engine.ts';
+import { panelView } from '../../src/core/rules/display.ts';
 import { runJob } from '../../src/core/job/runner.ts';
 import { JobStore } from '../../src/core/job/store.ts';
 import type { Report } from '../../src/core/report/report.ts';
 import { ReportStore, reportSaver } from '../../src/core/report/store.ts';
 import type { Mode } from '../../src/core/schema/types.ts';
 
-async function runDemo(s: DemoScenario, net: NetClient = createBlockedNet()) {
+async function runDemo(s: DemoScenario, net: NetClient = createBlockedNet(), extra: Pick<EngineOptions, 'positions' | 'demoPositions'> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'floor-demo-'));
   const now = demoClock(s);
-  const engine = createEngine({ store: new JobStore(join(root, 'jobs')), now });
+  const engine = createEngine({ store: new JobStore(join(root, 'jobs')), now, ...extra });
   const job = await engine.createJob({ idempotencyKey: 'demo', mode: s.mode, symbolInput: s.symbol, interface: 'web', demo: true }, demoAcquirer(s, net));
   assert.ok(job.snapshot, job.record.error?.detail);
   const reports = new ReportStore(join(root, 'reports'));
@@ -111,4 +112,42 @@ test('P1-8-T1 강제 방향 데모: 신호 없이도 롱/숏 중 하나를 고�
   assert.ok(d.unforcedAction !== null);
   assert.equal(d.ruleEngine.verdict, 'PASS', JSON.stringify(d.ruleEngine.violations));
   assert.equal(job.record.usage.calls.length, 5);
+});
+
+// ── P2-8 포지션 데모 ──
+
+const POSITION_DEMOS: Record<string, { action: string; headline: string; codes?: string[] }> = {
+  'btc-hold': { action: 'HOLD', headline: '유지' },
+  'btc-reduce': { action: 'REDUCE', headline: '일부 청산 검토 (50%)' },
+  'btc-exit': { action: 'EXIT', headline: '전량 청산 검토', codes: ['LIQUIDATION_NEAR'] },
+};
+
+test('P2-8-T1 포지션 데모 3종: 외부 요청 0건·모델 호출 0회·근거 경고 0건, 실제 포지션 북은 읽지 않는다', async () => {
+  assert.deepEqual(positionDemos().map((p) => p.name).sort(), Object.keys(POSITION_DEMOS).sort());
+  let attempts = 0;
+  const blocked = createBlockedNet();
+  const counting: NetClient = { kind: 'blocked', get: (url, e) => { attempts++; return blocked.get(url, e); } };
+  for (const p of positionDemos()) {
+    const want = POSITION_DEMOS[p.name]!;
+    let realReads = 0;
+    const s = loadDemo(p.mode, undefined, p.name);
+    const { job } = await runDemo(s, counting, { positions: () => { realReads++; throw new Error('데모가 실제 북을 읽음'); }, demoPositions: () => demoPositions(s) });
+    const r = job.record;
+    const d = r.finalDecision!;
+    assert.equal(r.state, 'COMPLETED', `${p.name}: ${r.error?.detail}`);
+    assert.equal(r.usage.modelCallCount, 0);
+    assert.equal(realReads, 0, p.name);
+    assert.deepEqual(r.evidenceAudit, [], `${p.name}: ${JSON.stringify(r.evidenceAudit)}`);
+    assert.equal(d.action, want.action, `${p.name}: ${JSON.stringify(d.ruleEngine)}`);
+    assert.equal(d.positionRef, r.positionContext?.position?.id);
+    const v = panelView(d, new Date(d.decidedAt), r.positionContext ?? null);
+    assert.equal(v.headline, want.headline);
+    assert.notEqual(v.tone, 'long', p.name);
+    assert.ok(v.position?.startsWith('사용한 포지션: '), p.name);
+    for (const c of want.codes ?? []) assert.ok(d.reasonCodes.includes(c), `${p.name}: ${d.reasonCodes.join(',')}`);
+  }
+  assert.equal(attempts, 0);
+  assert.throws(() => loadDemo('algorithm', undefined, 'btc-hold'), DemoUnavailableError);
+  assert.throws(() => loadDemo('scalp', undefined, 'nope'), DemoUnavailableError);
+  assert.equal(demoPositions(loadDemo('scalp')), null, '포지션 없는 데모는 컨텍스트를 만들지 않는다');
 });

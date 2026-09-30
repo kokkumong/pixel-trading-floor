@@ -187,6 +187,28 @@ test('P1-8-T1 서버 데모 실행: 외부 요청 0건, 모델 호출 0회, _DEM
   assert.equal(fetches, 0);
 });
 
+test('P2-8-R1 포지션 데모는 fixture 북만 쓰고 이 PC의 .floor/positions.json을 읽지 않는다', async () => {
+  const { m, root } = manager({ acquirer: () => { throw new Error('데모에서 실전 획득기 사용'); } });
+  // 실제 북: 같은 종목·시장이지만 값이 다른 보유
+  const real = await m.positions.put({ account: { equity: { USDT: 55555 } }, positions: [{ symbol: 'BTC', marketType: 'perpetual', side: 'SHORT', avgEntryPrice: 12345, quantity: 3, leverage: 2, marginMode: 'cross', liquidationPrice: null, stopLoss: null, targets: [], note: '실제' }] });
+  assert.ok(real.ok);
+  const r = await m.start({ symbol: 'BTC', mode: 'scalp', idempotencyKey: key(3), demo: true, demoScenario: 'btc-hold' });
+  assert.equal(r.kind, 'started');
+  await m.idle();
+  if (r.kind !== 'started') return;
+  const rec = m.jobs.load(r.jobId);
+  assert.equal(rec.state, 'COMPLETED', rec.error?.detail);
+  assert.equal(rec.finalDecision?.action, 'HOLD');
+  assert.equal(rec.positionContext?.position?.avgEntryPrice, 82000);
+  assert.equal(rec.positionContext?.account.equity, 10000);
+  assert.ok(!readFileSync(join(root, 'jobs', r.jobId, 'job.json'), 'utf8').includes('12345'));
+  // 시나리오 검사: 데모가 아니거나 모드가 다르거나 없는 이름이면 거절
+  for (const bad of [{ demo: false, demoScenario: 'btc-hold' }, { demo: true, demoScenario: 'btc-reduce' }, { demo: true, demoScenario: 'nope' }, { demo: true, demoScenario: '../x' }]) {
+    const x = await m.start({ symbol: 'BTC', mode: 'scalp', idempotencyKey: key(4 + Object.keys(bad).length + String(bad.demoScenario).length), ...bad });
+    assert.equal(x.kind, 'rejected', JSON.stringify(bad));
+  }
+});
+
 test('P1-1-R5, P1-6-R7 서버 시작 정리: web 작업만 INTERRUPTED, 진행 중 /floor 작업은 유지, 임시 파일 정리', async () => {
   const root = mkdtempSync(join(tmpdir(), 'floor-srv-'));
   const store = new JobStore(join(root, 'jobs'));

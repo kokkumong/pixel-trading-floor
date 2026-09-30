@@ -61,6 +61,8 @@ export interface EngineOptions {
   prompts?: PromptSet;
   /** 보유 포지션 북 읽기 (P2-1-R8). 작업 시작 때 한 번 읽는다. 없으면 포지션 컨텍스트를 만들지 않는다 */
   positions?: () => BookRead;
+  /** 데모 작업이 쓰는 가짜 포지션 북 (fixture, P2-8-R1). 데모는 positions를 절대 부르지 않는다 */
+  demoPositions?: () => BookRead | null;
 }
 
 export interface FinalizeOptions {
@@ -146,8 +148,8 @@ export function createEngine(opts: EngineOptions): Engine {
       const record = newJobRecord({ ...req, jobId: req.jobId ?? randomUUID() }, now());
       store.create(record);
       const job: Job = { record, snapshot: null };
-      // 시작 순간의 북으로 고정한다. 강제 방향은 포지션을 무시하고(D23) 데모는 실제 북을 읽지 않는다 (P2-8)
-      const book = opts.positions && record.mode !== 'forced_direction' && !record.demo ? opts.positions() : null;
+      // 시작 순간의 북으로 고정한다. 강제 방향은 포지션을 무시하고(D23) 데모는 실제 북 대신 fixture 북만 쓴다 (P2-8-R1)
+      const book = record.mode === 'forced_direction' ? null : record.demo ? opts.demoPositions?.() ?? null : opts.positions?.() ?? null;
 
       let res: Resolution;
       try {
