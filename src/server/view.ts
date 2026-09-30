@@ -32,6 +32,7 @@ export interface JobView {
   debate: JobRecord['debate'];
   outputs: JobRecord['outputs'];
   warnings: string[];
+  evidenceAudit: JobRecord['evidenceAudit'];
   finalDecision: JobRecord['finalDecision'];
   panel: PanelView | null;
   reportUrl: string | null;
@@ -50,7 +51,7 @@ export function jobView(r: JobRecord, now: Date, home: string = homedir()): JobV
       modelCallCount: r.usage.modelCallCount, retryCallCount: r.usage.retryCallCount,
       calls: r.usage.calls.map((c) => ({ role: c.role, startedAt: c.startedAt, durationSeconds: c.durationSeconds, outcome: c.outcome, retried: c.retried, modelId: c.modelId })),
     },
-    debate: r.debate, outputs: r.outputs, warnings: r.warnings.map(clean), finalDecision: d,
+    debate: r.debate, outputs: r.outputs, warnings: r.warnings.map(clean), evidenceAudit: r.evidenceAudit ?? [], finalDecision: d,
     panel: d && d.action && d.bias ? panelView(d, now) : null,
     reportUrl: r.report ? `/reports/${r.jobId}` : null,
   };

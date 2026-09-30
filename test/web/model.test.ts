@@ -118,6 +118,31 @@ test('P1-8-R4 데모 결과 패널 안에도 DEMO 표기, 화면 전체 워터�
   assert.equal(p.title, 'PM 기각 → 거래 없음');
 });
 
+test('P1-10-T2 화면: 근거를 확인할 수 없는 주장 옆에 근거 확인 불가, 토론 발언에 인용 경고를 표시한다', async () => {
+  const { m } = manager({
+    driver: () => autoDriver({
+      TARO: (input) => {
+        const out = sampleOutput('TARO', input) as { claims: { evidenceRefs: string[] }[] };
+        out.claims[0]!.evidenceRefs = ['snap:binance.perp.price#/nope'];
+        return { output: out };
+      },
+      BEAR: () => ({ output: { steelman: 'BULL 요지', evidenceRefs: ['derived:rsi14'], openIssues: [], summary: '요약', narrative: '반박' } }),
+    }),
+  });
+  const r = await m.start({ symbol: 'BTC', mode: 'algorithm', idempotencyKey: 'evidence-audit-key' });
+  await m.idle();
+  const v = m.view((r as { jobId: string }).jobId)!;
+  assert.equal(v.state, 'COMPLETED');
+  assert.ok(v.evidenceAudit.length >= 2);
+  const entries = consoleEntries(v);
+  const taro = entries.find((e) => e.role === 'TARO')!;
+  assert.ok(taro.lines.includes('[c1 · observation] 관찰 ⚠ 근거 확인 불가 (snap:binance.perp.price#/nope)'), taro.lines.join('\n'));
+  assert.ok(taro.lines.includes('[c2 · interpretation] 해석'));
+  const bear = entries.find((e) => e.role === 'BEAR')!;
+  assert.ok(bear.lines.some((l) => l.startsWith('⚠ 브리핑 인용 없음')), bear.lines.join('\n'));
+  assert.equal(entries.find((e) => e.role === 'BULL')!.lines.some((l) => l.startsWith('⚠')), false);
+});
+
 test('P0-8-R2·P1-1-T3 실패·취소 작업은 판정 패널에 나오지 않고 오류 코드 안내를 보인다', async () => {
   const { m } = manager({ driver: () => autoDriver({ TARO: () => ({ error: 'E-AUTH' }) }) });
   const r = await m.start({ symbol: 'BTC', mode: 'scalp', idempotencyKey: 'fail-auth-key' });
