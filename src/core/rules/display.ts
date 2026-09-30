@@ -1,5 +1,6 @@
 // 화면 표기 규칙. 표시값은 FinalDecision에서 파생하며 저장하지 않는다 (P0 명세 3.1-4).
-import type { FinalDecision } from '../schema/decision.ts';
+import type { PositionContext } from '../position/context.ts';
+import type { FinalDecision, Sizing } from '../schema/decision.ts';
 import type { Action, Bias, ConfidenceBand, MarketType } from '../schema/types.ts';
 
 /** action + bias 조합 표기 (P0 명세 3.2, P2 포지션 명세 2.2). 포지션 행동은 판정형으로 쓴다 (P2-6-R1) */
@@ -13,7 +14,17 @@ export function actionBiasLabel(action: Action, bias: Bias, sizeFraction: number
   return { BULLISH: '거래 없음 · 강세 전망', BEARISH: '거래 없음 · 약세 전망', NEUTRAL: '거래 없음 · 방향 불명확' }[bias];
 }
 
-export const BIAS_NOTE = '보유 여부를 모르는 상태의 시장 방향 판단'; // P0 명세 11.2-3
+/** NO_TRADE 주석 (P0 명세 11.2-3). 포지션 북이 없거나 읽지 못한 분석 */
+export const BIAS_NOTE = '보유 여부를 모르는 상태의 시장 방향 판단';
+/** 수량 제안 한 줄 (가정과 함께, P2-3-R4) */
+export function sizingNote(s: Sizing): string {
+  return `제안 수량 ${s.suggestedQuantity} (${s.assumptions.join(' · ')})`;
+}
+
+/** NO_TRADE 주석: 포지션 북을 읽었고 이 종목·시장 보유가 없음을 확인한 분석 (P2-6-R3) */
+export const NO_POSITION_BIAS_NOTE = '이 종목 보유가 없는 상태의 시장 방향 판단';
+/** 판정 패널·리포트 고정 고지 (P2-6-R2). 접기·숨기기 없음 */
+export const DISCLAIMER = '자동 분석 결과이며 투자 자문이 아닙니다. 주문은 직접 실행하며 손실의 책임은 본인에게 있습니다.';
 export const POSITION_IGNORED_NOTE = '포지션 무시 시뮬레이션'; // P2-2-R6
 export const NO_DECISION_WITH_POSITION = '포지션은 그대로이며 판정이 없음'; // P2-3-R3
 export const REVERSAL_NOTE = '반대 방향 진입은 청산 후 새로 분석해 판단합니다'; // P2-2-R2
@@ -76,12 +87,40 @@ export interface PanelView {
   headline: string; // 큰 글씨 판정 표기
   tone: Tone;
   notes: string[];
+  /** 판정에 쓴 보유 포지션 요약 (P2-6-R3). 수량·총 자산 없음 */
+  position: string | null;
+  disclaimer: string;
+}
+
+const SIDE_LABEL = { LONG: '롱', SHORT: '숏' } as const;
+const MARKET_LABEL = { spot: '현물', perpetual: '무기한' } as const;
+const signed = (x: number) => `${x > 0 ? '+' : ''}${x}%`;
+
+/** 사용한 포지션 한 줄: 시장·방향·레버리지·평단·수익률·손절·(청산가)·북 기준 시각 (P2-6-R3). 입력 오류를 바로 알아채도록 입력값 그대로 쓴다 */
+export function positionSummary(pc: PositionContext | null | undefined): string | null {
+  const p = pc?.position;
+  if (!pc || !p) return null;
+  const parts = [`${MARKET_LABEL[p.marketType]} ${SIDE_LABEL[p.side]}${p.leverage ? ` ${p.leverage}배` : ''}`, `평단 ${p.avgEntryPrice}`];
+  if (pc.derived) {
+    const lev = (p.leverage ?? 1) > 1 ? ` (레버리지 반영 ${signed(pc.derived.unrealizedPnlPercentLeveraged)})` : '';
+    parts.push(`수익률 ${signed(pc.derived.unrealizedPnlPercent)}${lev}`);
+  }
+  parts.push(`손절 ${p.stopLoss ?? '없음'}`);
+  if (p.liquidationPrice !== null) parts.push(`청산가 ${p.liquidationPrice}`);
+  parts.push(`기준 ${pc.book.updatedAt ?? '-'}`);
+  return `사용한 포지션: ${parts.join(' · ')}`;
+}
+
+/** NO_TRADE 주석: 포지션 북을 읽었고 보유가 없으면 확인된 문구, 그 밖(북 없음·오류·이전 작업)은 모르는 상태 문구 */
+function biasNote(pc: PositionContext | null | undefined): string {
+  return pc && pc.book.status === 'ok' && pc.position === null ? NO_POSITION_BIAS_NOTE : BIAS_NOTE;
 }
 
 /** 판정 패널 제목과 표기 (P0-2-R2, P0-3.6 forced 예외, P0-5-R6) */
-export function panelView(d: FinalDecision, now: Date = new Date()): PanelView {
+export function panelView(d: FinalDecision, now: Date = new Date(), pc: PositionContext | null = null): PanelView {
   const badges: string[] = [];
   const notes: string[] = [];
+  const base = { position: d.positionRef && pc?.position?.id === d.positionRef ? positionSummary(pc) : null, disclaimer: DISCLAIMER };
   if (d.forcedDirection) badges.push('강제 방향 시뮬레이션');
   if (d.ruleEngine.verdict !== 'PASS') badges.push('규칙 차단');
   if (d.validUntil && Date.parse(d.validUntil) < now.getTime()) badges.push('만료');
@@ -89,7 +128,7 @@ export function panelView(d: FinalDecision, now: Date = new Date()): PanelView {
 
   if (d.action === null || d.bias === null) {
     if (d.positionRef) notes.push(NO_DECISION_WITH_POSITION);
-    return { badges, title: '판정 없음', headline: statusLabel(d.status), tone: 'error', notes };
+    return { badges, title: '판정 없음', headline: statusLabel(d.status), tone: 'error', notes, ...base };
   }
 
   let title: string;
@@ -104,14 +143,14 @@ export function panelView(d: FinalDecision, now: Date = new Date()): PanelView {
 
   if (d.forcedDirection) {
     if (d.ruleEngine.verdict === 'BLOCKED') {
-      return { badges, title, headline: '규칙 위반 — 시뮬레이션 무효', tone: 'blocked', notes };
+      return { badges, title, headline: '규칙 위반 — 시뮬레이션 무효', tone: 'blocked', notes, ...base };
     }
     const u = unforcedLabel(d.action, d.unforcedAction);
     if (u) notes.unshift(u);
-    return { badges, title, headline: actionBiasLabel(d.action, d.bias), tone: 'simulation', notes };
+    return { badges, title, headline: actionBiasLabel(d.action, d.bias), tone: 'simulation', notes, ...base };
   }
 
-  if (d.action === 'NO_TRADE') notes.push(BIAS_NOTE);
+  if (d.action === 'NO_TRADE') notes.push(biasNote(pc));
   const codes = d.reasonCodes;
   const alerts = Object.keys(POSITION_ALERTS).filter((c) => codes.includes(c)).map((c) => POSITION_ALERTS[c]!);
   if (d.positionRef && d.ruleEngine.verdict === 'DOWNGRADED') {
@@ -120,7 +159,7 @@ export function panelView(d: FinalDecision, now: Date = new Date()): PanelView {
   for (const c of Object.keys(POSITION_NOTES)) if (codes.includes(c)) notes.push(POSITION_NOTES[c]!);
   const plan = d.positionPlan;
   if (plan?.stopUpdated) notes.push(`손절 갱신: ${plan.stopLoss}`);
-  if (d.sizing) notes.push(`제안 수량 ${d.sizing.suggestedQuantity} (${d.sizing.assumptions.join(' · ')})`); // P2-3-R4
+  if (d.sizing) notes.push(sizingNote(d.sizing)); // P2-3-R4
   if (d.action === 'EXIT') notes.push(REVERSAL_NOTE);
   notes.unshift(...alerts);
 
@@ -129,7 +168,7 @@ export function panelView(d: FinalDecision, now: Date = new Date()): PanelView {
       : d.action === 'ADD' ? (plan?.side === 'SHORT' ? 'short' : 'long')
         : d.action === 'REDUCE' || d.action === 'EXIT' ? 'caution' : 'neutral';
   if (tone === 'long' && alerts.length > 0) tone = 'caution';
-  return { badges, title, headline: actionBiasLabel(d.action, d.bias, plan?.sizeFraction ?? null), tone, notes };
+  return { badges, title, headline: actionBiasLabel(d.action, d.bias, plan?.sizeFraction ?? null), tone, notes, ...base };
 }
 
 /** 강제 방향 결과의 근거 부족 표기 (P0-5-R6). 방향 표시보다 먼저 보여준다. */

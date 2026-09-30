@@ -20,75 +20,16 @@ import type { Mode, Role } from '../../src/core/schema/types.ts';
 import { registry, replayAcquirer } from '../data-helpers.ts';
 import { JOB, proposal, proposalCtx, proposalOutput, ruleCtx, SNAP } from '../helpers.ts';
 import { autoDriver, floorDrive, sampleProposal, type Override } from '../job-helpers.ts';
+import { bookRead, decisionOf, held, POS, runWithBook, SECRET } from '../position-helpers.ts';
 
-const POS = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const codes = (r: ReturnType<typeof checkProposal>) => (r.ok ? [] : r.errors.map((e) => e.code));
 const vcodes = (o: { violations: { code: string }[] }) => o.violations.map((v) => v.code);
 const noSleep = async () => true;
-
-/** 가격 100 기준 BTC 무기한 롱 보유 (평단 95, 수량 1, 5배, 손절 92). 총 자산 1000 USDT, 한도 1% */
-function held(pos: Partial<Position> = {}, o: { equity?: number | null; risk?: number; none?: boolean } = {}): PositionContext {
-  const { note: _n, ...rest } = pos;
-  const position: Omit<Position, 'note'> = {
-    id: POS, instrumentId: 'CRYPTO:BTC', marketType: 'perpetual', side: 'LONG', avgEntryPrice: 95, quantity: 1, leverage: 5,
-    marginMode: 'isolated', liquidationPrice: null, stopLoss: 92, targets: [110], openedAt: null, ...rest,
-  };
-  const equity = o.equity === undefined ? 1000 : o.equity;
-  return {
-    schemaVersion: 'position-context/1', builtAt: '2026-09-30T00:00:00Z',
-    book: { status: 'ok', updatedAt: '2026-09-30T00:00:00Z', ageHours: 0, positionCount: o.none ? 0 : 1 },
-    instrumentId: 'CRYPTO:BTC', marketType: 'perpetual', position: o.none ? null : position,
-    account: { currency: 'USDT', equity, riskPerTradePercent: o.risk ?? 1 },
-    price: { value: 100, kind: 'mark', sourceRef: 'binance.perp.price' },
-    derived: o.none ? null : derive(position, 100, equity), otherMarkets: [], warnings: [], notes: [],
-  };
-}
 const keep = { entry: { type: 'market' as const, min: null, max: null }, stopLoss: null, targets: [], leverage: 5 };
 const hold = (over: Partial<ProposalOutput> = {}) => proposal({ action: 'HOLD', positionRef: POS, ...keep, ...over });
 const add = (over: Partial<ProposalOutput> = {}) => proposal({ action: 'ADD', positionRef: POS, ...keep, entry: { type: 'limit', min: 100, max: 100 }, ...over });
 const rules = (p: ReturnType<typeof proposal>, ctx: PositionContext | null, over: Parameters<typeof ruleCtx>[1] = {}) =>
   applyRules(p, ruleCtx('scalp', { positionContext: ctx, ...over }));
-
-/** applyRules 결과로 만든 최소 판정 (화면 표기 검사용) */
-function decisionOf(o: ReturnType<typeof applyRules>, ctx: PositionContext | null, mode: Mode = 'scalp'): FinalDecision {
-  return {
-    schemaVersion: 'decision/3', jobId: JOB, snapshotId: SNAP, mode, resultClass: mode === 'forced_direction' ? 'simulation' : 'analysis',
-    status: o.status, action: o.action, bias: o.bias, unforcedAction: null, proposal: null,
-    decidedAt: '2026-09-30T00:00:00Z', validUntil: null, confidence: null, reasonCodes: o.reasonCodes,
-    ruleEngine: { verdict: o.verdict, violations: o.violations, warnings: o.warnings }, risk: o.risk,
-    finalDecisionMaker: 'ACE', pmDecision: null, modifiedFields: [], forcedDirection: mode === 'forced_direction', executionBackend: 'subprocess_per_role',
-    positionRef: ctx?.position?.id ?? null, positionPlan: o.positionPlan, sizing: o.sizing,
-  };
-}
-
-// ── 엔진 경로 (실제 포지션 북) ──
-
-const SECRET = { quantity: 0.123456, equity: 98765.43, note: '비밀메모-XYZ' };
-
-function bookRead(marketType: 'spot' | 'perpetual', over: Record<string, unknown> = {}): BookRead {
-  const r = validateBook({
-    schemaVersion: 'positions/1', updatedAt: '2026-09-29T00:00:00Z',
-    account: { equity: { USDT: SECRET.equity, USD: SECRET.equity }, riskPerTradePercent: 1 },
-    positions: [{
-      id: POS, instrumentId: 'CRYPTO:BTC', marketType, side: 'LONG', avgEntryPrice: 80000, quantity: SECRET.quantity,
-      leverage: marketType === 'perpetual' ? 10 : null, marginMode: marketType === 'perpetual' ? 'isolated' : null,
-      liquidationPrice: null, stopLoss: 78000, targets: [90000], openedAt: '2026-09-28T00:00:00Z', note: SECRET.note, ...over,
-    }],
-  }, (id) => registry.get(id) !== undefined);
-  assert.ok(r.ok, JSON.stringify(!r.ok && r.errors));
-  return { status: 'ok', book: r.book };
-}
-
-async function runWithBook(mode: Mode, overrides: Partial<Record<Role, Override>> = {}, fail: string[] = []) {
-  const r = replayAcquirer(mode === 'algorithm' ? 'btc-algorithm' : 'btc-scalp', { fail });
-  const root = mkdtempSync(join(tmpdir(), 'floor-p13-'));
-  const store = new JobStore(root);
-  const engine = createEngine({ store, now: () => r.at, positions: () => bookRead(mode === 'algorithm' ? 'spot' : 'perpetual') });
-  const job = await engine.createJob({ idempotencyKey: `k-${Math.random()}`, mode, symbolInput: r.symbol, interface: 'web' }, r.acquirer);
-  const driver = autoDriver(overrides);
-  if (job.record.state !== 'INSUFFICIENT_DATA') await runJob(engine, job, driver, new AbortController().signal, { sleep: noSleep });
-  return { engine, job, store, root, driver, rec: job.record, d: job.record.finalDecision };
-}
 
 // ── P2-2 행동 집합 ──
 

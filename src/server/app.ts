@@ -10,8 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { demoModes } from '../core/demo.ts';
 import { LAN_WARNING, runDiagnostics, type DiagResult } from '../core/diag.ts';
 import { createRealNet } from '../core/data/net.ts';
+import { maskReport } from '../core/position/mask.ts';
 import { renderMarkdown } from '../core/report/markdown.ts';
-import type { ReportTab } from '../core/report/report.ts';
+import type { Report, ReportTab } from '../core/report/report.ts';
 import { budgetFor } from '../core/job/budget.ts';
 import { PLANNED_CALLS } from '../core/job/state.ts';
 import { MODES } from '../core/schema/types.ts';
@@ -23,6 +24,7 @@ import {
   allowedHosts, allowedLocalAddress, checkFetchSite, checkHost, checkOrigin, decideAccess, isLoopback, LOCAL_SESSION_COOKIE, parseCookies, RATE_LIMITS, RateLimiter,
   redact, SESSION_COOKIE, sessionCookie, type Access, type LanAuth, type ServerMode,
 } from './security.ts';
+import { maskJobView, type JobView } from './view.ts';
 import { ZipWriter } from './zip.ts';
 
 export const WEB_DIR = fileURLToPath(new URL('../web/', import.meta.url));
@@ -206,6 +208,12 @@ export function createApp(o: AppOptions): App {
   const sseOpen = new Map<string, number>();
   let sseTotal = 0;
 
+  /** LAN 기기에는 금액·수량을 가린 보기 (P2-5-R6) */
+  const shown = (c: Ctx, v: JobView | null) => (v && !c.isLocal ? maskJobView(v) : v);
+  const viewFor = (c: Ctx, jobId: string) => shown(c, m.view(jobId));
+  /** 리포트 본문: 원본 JSON은 이 PC에서만, LAN 기기와 ZIP은 가린 사본에서 다시 만든다 (P2-5-R4·R6) */
+  const reportFor = (c: Ctx, r: Report) => (c.isLocal ? r : maskReport(r));
+
   function sse(c: Ctx, jobId: string) {
     if (!m.view(jobId)) throw new HttpError(404, 'E-NOT-FOUND', '없는 작업입니다');
     const mine = sseOpen.get(c.ip) ?? 0;
@@ -229,11 +237,11 @@ export function createApp(o: AppOptions): App {
     };
     // 구독을 먼저 걸고 현재 상태를 보낸다 (사이에 끝나도 놓치지 않게)
     const off = m.subscribe(jobId, (e) => {
-      write(e.type, e);
+      write(e.type, e.type === 'job' ? { ...e, job: shown(c, e.job)! } : e);
       if (e.type === 'end') stop();
     });
     c.req.on('close', stop);
-    const v = m.view(jobId)!;
+    const v = viewFor(c, jobId)!;
     write('job', { type: 'job', job: v });
     if (v.terminal && !m.running().includes(jobId)) {
       write('end', { type: 'end', state: v.state });
@@ -277,8 +285,8 @@ export function createApp(o: AppOptions): App {
       handle: async (c) => {
         const body = await readJsonBody(c.req);
         const r = await m.start(body);
-        if (r.kind === 'started') return json(c.res, r.existing ? 200 : 202, { jobId: r.jobId, existing: r.existing, job: m.view(r.jobId) });
-        if (r.kind === 'busy') return json(c.res, 409, { error: 'E-BUSY', message: '실행 중인 분석이 있습니다', running: r.runningJobId ? m.view(r.runningJobId) : null });
+        if (r.kind === 'started') return json(c.res, r.existing ? 200 : 202, { jobId: r.jobId, existing: r.existing, job: viewFor(c, r.jobId) });
+        if (r.kind === 'busy') return json(c.res, 409, { error: 'E-BUSY', message: '실행 중인 분석이 있습니다', running: r.runningJobId ? viewFor(c, r.runningJobId) : null });
         json(c.res, r.status, { error: r.code, message: clean(r.message), ...(r.hint ? { hint: r.hint } : {}) });
       },
     },
@@ -295,7 +303,7 @@ export function createApp(o: AppOptions): App {
     {
       method: 'GET', path: new RegExp(`^/api/jobs/${UUID}$`), access: 'read',
       handle: (c) => {
-        const v = m.view(c.params[0]!);
+        const v = viewFor(c, c.params[0]!);
         if (!v) throw new HttpError(404, 'E-NOT-FOUND', '없는 작업입니다');
         json(c.res, 200, v);
       },
@@ -338,9 +346,10 @@ export function createApp(o: AppOptions): App {
         if (!found) throw new HttpError(404, 'E-NOT-FOUND', '없는 리포트입니다');
         const ext = c.params[1];
         if (ext === '.json') {
-          return send(c.res, 200, 'application/json; charset=utf-8', readFileSync(found.json), { 'Content-Disposition': `attachment; filename="${asciiName(found.json)}"` });
+          const body = c.isLocal ? readFileSync(found.json) : `${JSON.stringify(reportFor(c, found.report), null, 2)}\n`;
+          return send(c.res, 200, 'application/json; charset=utf-8', body, { 'Content-Disposition': `attachment; filename="${asciiName(found.json)}"` });
         }
-        const md = found.md ? readFileSync(found.md, 'utf8') : renderMarkdown(found.report);
+        const md = found.md && c.isLocal ? readFileSync(found.md, 'utf8') : renderMarkdown(reportFor(c, found.report));
         if (ext === '.md') {
           return send(c.res, 200, 'text/markdown; charset=utf-8', md, { 'Content-Disposition': `attachment; filename="${asciiName(found.json.replace(/\.json$/, '.md'))}"` });
         }
@@ -405,7 +414,7 @@ export function createApp(o: AppOptions): App {
   let zipping = false;
 
   /** 한 번에 하나만, 파일을 하나씩 읽어 흘려 쓴다 (전체를 메모리에 모으지 않음) */
-  async function streamZip(c: Ctx, filename: string, files: { name: string; path: string }[]) {
+  async function streamZip(c: Ctx, filename: string, files: ({ name: string; path: string } | { name: string; data: Buffer })[]) {
     if (zipping) throw new HttpError(503, 'E-BUSY', '다른 ZIP을 만드는 중입니다. 잠시 뒤 다시 시도하세요');
     zipping = true;
     try {
@@ -417,7 +426,7 @@ export function createApp(o: AppOptions): App {
         c.res.once('close', gone);
       }));
       const zip = new ZipWriter(write);
-      for (const f of files) await zip.add(f.name, await readFile(f.path));
+      for (const f of files) await zip.add(f.name, 'data' in f ? f.data : await readFile(f.path));
       await zip.finish();
       c.res.end();
     } finally {
@@ -428,17 +437,19 @@ export function createApp(o: AppOptions): App {
   async function allZip(c: Ctx) {
     // P1-7-R15: 기본 목록(분석 탭)만, 크기 상한
     const items = m.reports.list('analysis');
-    const files: string[] = [];
+    // P2-5-R4: 금액·수량·총 자산을 가린 JSON과 그 JSON에서 다시 만든 Markdown을 담는다 (원본 파일은 그대로)
+    const files: { name: string; data: Buffer }[] = [];
     for (const r of items) {
       const found = m.reports.locate(r.jobId);
       if (!found) continue;
-      files.push(found.json);
-      if (found.md) files.push(found.md);
+      const masked = maskReport(found.report);
+      files.push({ name: `reports/${basename(found.json)}`, data: Buffer.from(`${JSON.stringify(masked, null, 2)}\n`) });
+      files.push({ name: `reports/${basename(found.json).replace(/\.json$/, '.md')}`, data: Buffer.from(renderMarkdown(masked)) });
     }
-    const total = files.reduce((s, f) => s + statSync(f).size, 0);
+    const total = files.reduce((s, f) => s + f.data.length, 0);
     const max = o.allZipMaxBytes ?? ALL_ZIP_MAX_BYTES;
     if (total > max) throw new HttpError(413, 'E-TOO-LARGE', `리포트 합계 ${Math.round(total / 1024 / 1024)}MB가 상한 ${Math.round(max / 1024 / 1024)}MB를 넘어 ZIP을 만들지 않습니다`);
-    await streamZip(c, 'reports.zip', files.map((f) => ({ name: `reports/${basename(f)}`, path: f })));
+    await streamZip(c, 'reports.zip', files);
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {

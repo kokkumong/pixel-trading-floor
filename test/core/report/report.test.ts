@@ -56,7 +56,7 @@ test('P1-6-T4 리포트 JSON만으로 모드·스냅샷·프롬프트·모델·�
   const paths = job.record.report!;
   assert.ok(paths.json.endsWith('.json') && existsSync(paths.json) && existsSync(paths.md));
   const rep = readJson(paths.json);
-  assert.equal(rep.reportSchemaVersion, 1);
+  assert.equal(rep.reportSchemaVersion, 2);
   assert.equal(rep.appVersion, APP_VERSION);
   assert.equal(rep.coreVersion, CORE_VERSION);
   assert.equal(rep.mode, 'algorithm');
@@ -191,7 +191,7 @@ test('P1-6-R6 대상 파일이 이미 있으면 덮어쓰지 않고 E-DISK로 �
       // 같은 작업의 리포트가 이미 저장된 상황 (중복 저장)
       save(structuredClone(x));
       first = d.reports.list()[0]!.file;
-      writeFileSync(first, readFileSync(first, 'utf8').replace('"reportSchemaVersion": 1', '"reportSchemaVersion": 1, "marker": true'));
+      writeFileSync(first, readFileSync(first, 'utf8').replace('"reportSchemaVersion": 2', '"reportSchemaVersion": 2, "marker": true'));
       save(x);
     },
   });

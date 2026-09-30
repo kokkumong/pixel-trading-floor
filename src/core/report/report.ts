@@ -5,6 +5,7 @@ import type { AnalysisSnapshot } from '../data/snapshot.ts';
 import { modelFor } from '../job/budget.ts';
 import type { Job } from '../job/engine.ts';
 import type { PmReview } from '../job/record.ts';
+import type { PositionContext } from '../position/context.ts';
 import { RULE_ENGINE_VERSION } from '../rules/engine.ts';
 import type { Briefing, BriefingRole, DebateMessage } from '../schema/agents.ts';
 import type { FinalDecision } from '../schema/decision.ts';
@@ -13,7 +14,8 @@ import type { DebateStopReason, ExecutionBackend, Mode, ResultClass, Role } from
 import { APP_VERSION, CORE_VERSION } from '../version.ts';
 import type { CallRecord } from '../job/budget.ts';
 
-export const REPORT_SCHEMA_VERSION = 1;
+/** 2: positionContext 추가 (P2-2-R4). 1은 이전 리포트 읽기용 */
+export const REPORT_SCHEMA_VERSION = 2;
 
 export interface ReportMeta {
   /** claude --version 결과. 확인할 수 없으면 'unknown', 데모는 'none' */
@@ -21,7 +23,7 @@ export interface ReportMeta {
 }
 
 export interface Report {
-  reportSchemaVersion: typeof REPORT_SCHEMA_VERSION;
+  reportSchemaVersion: 1 | typeof REPORT_SCHEMA_VERSION;
   appVersion: string;
   coreVersion: string;
   interface: 'web' | 'floor';
@@ -64,6 +66,8 @@ export interface Report {
     calls: CallRecord[];
   };
   finalDecision: FinalDecision;
+  /** 판정에 쓴 포지션 컨텍스트 전체 (P2-5.1, 재현·수량 검증용). 리포트 v1에는 없다. LAN·ZIP에서는 maskReport로 가린다 */
+  positionContext?: PositionContext | null;
   /** BLITZ 계획, ACE 제안, PM 수정안 순서 */
   proposals: TradeProposal[];
   briefings: Partial<Record<BriefingRole, Briefing>>;
@@ -142,6 +146,7 @@ export function buildReport(job: Job, meta: ReportMeta, completedAt: Date): Repo
       calls: r.usage.calls,
     },
     finalDecision: d,
+    positionContext: r.positionContext ?? null,
     proposals,
     briefings: o.briefings,
     debate: { maxRounds: r.debate.maxRounds, roundCount: r.debate.roundCount, stopReason: r.debate.stopReason, messages: o.debate },

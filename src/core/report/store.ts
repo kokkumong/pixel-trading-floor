@@ -6,7 +6,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { FinalizeOptions } from '../job/engine.ts';
 import { isJobId } from '../job/store.ts';
 import { renderMarkdown } from './markdown.ts';
-import { buildReport, localTzOffsetMinutes, reportBaseName, reportTab, type Report, type ReportMeta, type ReportTab } from './report.ts';
+import { buildReport, localTzOffsetMinutes, REPORT_SCHEMA_VERSION, reportBaseName, reportTab, type Report, type ReportMeta, type ReportTab } from './report.ts';
 
 export interface ReportStoreOptions {
   /** 파일명 시간대 (분). 없으면 이 PC의 시간대 */
@@ -104,7 +104,7 @@ export class ReportStore {
   private read(file: string): Report | null {
     try {
       const r = JSON.parse(readFileSync(file, 'utf8')) as Report;
-      return r && r.reportSchemaVersion === 1 && isJobId(r.jobId) && r.finalDecision ? r : null;
+      return r && (r.reportSchemaVersion === 1 || r.reportSchemaVersion === REPORT_SCHEMA_VERSION) && isJobId(r.jobId) && r.finalDecision ? r : null;
     } catch {
       return null; // 깨진 파일은 목록에서 뺀다
     }

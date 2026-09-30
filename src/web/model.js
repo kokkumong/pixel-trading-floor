@@ -14,6 +14,9 @@ export const MODES = {
   forced_direction: { label: '강제 방향 시뮬레이션', short: '⚔강제 방향' },
 };
 
+/** 판정 패널 고정 고지 (P2-6-R2). 서버 panelView의 DISCLAIMER와 같은 문구이며, 이전 서버 응답에 없을 때만 쓴다 */
+export const DISCLAIMER = '자동 분석 결과이며 투자 자문이 아닙니다. 주문은 직접 실행하며 손실의 책임은 본인에게 있습니다.';
+
 /** 역할 소개 (가이드 3장). 화면의 이름표·콘솔 머리글에 쓴다 */
 /** @type {Record<Role, { title: string; room: string }>} */
 export const ROLES = {
@@ -341,7 +344,12 @@ export function panelModel(job, nowMs) {
   const p = d.proposal;
   /** @type {{ label: string; value: string }[]} */
   const rows = [];
-  if (p && d.action !== 'NO_TRADE') {
+  const plan = d.positionPlan; // decision/2에는 없다
+  if (plan && d.action !== 'ADD') {
+    // 보유 포지션 판정(유지·청산 검토): 진입 대신 판정 뒤 손절·목표 (P2-2-R5)
+    rows.push({ label: '손절', value: `${fmtPrice(plan.stopLoss)}${plan.stopUpdated ? ' (갱신)' : ''}` });
+    rows.push({ label: '목표', value: (plan.targets ?? []).map((/** @type {number} */ t) => fmtPrice(t)).join(' / ') || '—' });
+  } else if (p && d.action !== 'NO_TRADE') {
     rows.push({ label: '진입', value: entryText(p) });
     rows.push({ label: '손절', value: fmtPrice(p.stopLoss) });
     rows.push({ label: '목표', value: (p.targets ?? []).map((/** @type {number} */ t) => fmtPrice(t)).join(' / ') || '—' });
@@ -361,6 +369,9 @@ export function panelModel(job, nowMs) {
     notes: /** @type {string[]} */ (job.panel.notes),
     // 코드가 만든 포지션 한 줄 (다른 시장 보유·오래된 보유 정보·파일 오류, P2-1-R9·R10). 금액은 없다
     positionNotes: /** @type {string[]} */ (job.positionNotes ?? []),
+    // 판정에 쓴 보유 포지션 요약 (P2-6-R3)과 고정 고지 (P2-6-R2). 고지는 접거나 숨기지 않는다
+    position: /** @type {string | null} */ (job.panel.position ?? null),
+    disclaimer: /** @type {string} */ (job.panel.disclaimer ?? DISCLAIMER),
     confidence: d.confidence ? d.confidence.band : null,
     confidenceNote: d.confidence ? CONFIDENCE_NOTE : null,
     rows,

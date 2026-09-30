@@ -479,7 +479,8 @@ function renderPanel() {
   $('panel-badges').replaceChildren(...p.badges.map((b) => el('span', `badge ${b === '강제 방향 시뮬레이션' ? 'sim' : b.startsWith('DEMO') ? 'demo' : b === '규칙 차단' ? 'block' : ''}`, b)));
   $('panel-title').textContent = `최종 판정 · ${p.title}`;
   $('panel-notes').replaceChildren(...p.notes.map((n, i) => el('div', i === 0 && p.simulation ? 'first-sim' : '', n)));
-  $('panel-position').replaceChildren(...p.positionNotes.map((n) => el('div', '', n)));
+  $('panel-position').replaceChildren(...(p.position ? [el('div', 'pos-summary', p.position)] : []), ...p.positionNotes.map((n) => el('div', '', n)));
+  $('panel-disclaimer').textContent = p.disclaimer;
   $('panel-headline').textContent = p.headline;
   const conf = $('panel-conf');
   conf.replaceChildren();

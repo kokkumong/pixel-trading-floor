@@ -756,3 +756,68 @@ test('P2-1-R8·R10 화면 분석은 시작 때 포지션 북을 고정하고, �
     await h.app.close();
   }
 });
+
+// ── P2-5 마스킹 (Phase 14) ──
+
+const EQUITY = 98765.43; // 손실 한도 1% = 987.65
+const spotBook = { account: { equity: { USDT: EQUITY } }, positions: [btcPerp({ marketType: 'spot', leverage: null, marginMode: null, liquidationPrice: null, quantity: 0.123457 })] };
+
+test('P2-5-T3 LAN 응답(작업·SSE·리포트)은 금액·수량·총 자산을 가리고, 서버 PC는 원본을 본다', async () => {
+  const l = await lan();
+  try {
+    assert.equal((await l.req('/api/positions', { method: 'PUT', body: spotBook })).status, 200);
+    const r = await l.req('/api/analyze', { body: analyzeBody({ mode: 'scalp' }) }); // 무기한 작업 · 현물 보유 → 진입 수량 제안
+    await l.m.idle();
+    const id = r.json.jobId;
+    const local = (await l.req(`/api/jobs/${id}`)).json;
+    assert.equal(local.finalDecision.action, 'ENTER_LONG');
+    const q = local.finalDecision.sizing.suggestedQuantity;
+    assert.equal(typeof q, 'number');
+    assert.equal(local.finalDecision.sizing.riskBudget, 987.65);
+
+    const cookie = await l.login();
+    const secrets = [String(EQUITY), '987.65', '0.123457', `제안 수량 ${q} `];
+    const clean = (label: string, text: string) => {
+      for (const s of secrets) assert.ok(!text.includes(s), `${label}: ${s}`);
+      assert.ok(text.includes('[masked]'), label);
+    };
+    const remote = await l.remote(`/api/jobs/${id}`, { cookie });
+    clean('job', remote.text);
+    assert.equal(remote.json.finalDecision.sizing.suggestedQuantity, '[masked]');
+    assert.ok(remote.json.panel.notes.some((n: string) => n.startsWith('제안 수량 [masked] (')));
+    const sse = await readSse(l.port, l.lanHost, `/api/jobs/${id}/events`, { Cookie: cookie, 'x-test-ip': LAN_IP });
+    clean('sse', JSON.stringify(sse.events));
+    for (const ext of ['.json', '.md', '']) clean(`report${ext}`, (await l.remote(`/reports/${id}${ext}`, { cookie })).text);
+    // 서버 PC는 저장된 원본 그대로
+    assert.ok((await l.req(`/reports/${id}.json`)).text.includes(String(EQUITY)));
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P2-5-T3 all.zip은 가린 JSON·Markdown을 담고, project.zip은 .floor/를 담지 않는다', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'floor-proj-'));
+  for (const [rel, text] of [['package.json', '{}'], ['.floor/positions.json', JSON.stringify(spotBook)], ['.floor/positions.json.bak', 'x'], ['src/.floor/x.json', 'x']] as const) {
+    mkdirSync(join(projectRoot, rel, '..'), { recursive: true });
+    writeFileSync(join(projectRoot, rel), text);
+  }
+  const h = await start({ projectRoot, enableProjectZip: true });
+  try {
+    await h.req('/api/positions', { method: 'PUT', body: spotBook });
+    await h.req('/api/analyze', { body: analyzeBody({ mode: 'scalp' }) });
+    await h.m.idle();
+    const entries = readZip((await h.req('/reports/all.zip', { method: 'POST' })).body);
+    assert.deepEqual(entries.map((e) => e.name.split('.').at(-1)).sort(), ['json', 'md']);
+    for (const e of entries) {
+      const text = e.data.toString('utf8');
+      for (const s of [String(EQUITY), '987.65', '0.123457']) assert.ok(!text.includes(s), `${e.name}: ${s}`);
+      assert.ok(text.includes('[masked]'), e.name);
+    }
+    const files = await h.req('/api/project-zip/files');
+    const z = await h.req('/project.zip', { body: `confirm=${files.json.listHash}`, type: 'application/x-www-form-urlencoded' });
+    const names = readZip(z.body).map((e) => e.name);
+    assert.deepEqual(names, ['pixel-trading-floor/package.json']);
+  } finally {
+    await h.app.close();
+  }
+});

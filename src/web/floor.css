@@ -155,6 +155,8 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .panel-risk { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 4px; }
 .panel-violations { color: var(--red); font-size: 11px; }
 .panel-rationale { font-size: 11px; color: #c9c6bd; margin: 6px 0 0; }
+.panel-notes .pos-summary { color: var(--fg); }
+.panel-disclaimer { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); margin: 8px 0 0; padding-top: 4px; }
 .tone-long .panel-headline { color: var(--green); }
 .tone-short .panel-headline { color: var(--red); }
 .tone-neutral .panel-headline { color: var(--gold); }

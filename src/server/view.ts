@@ -3,7 +3,8 @@ import { homedir } from 'node:os';
 import type { JobRecord } from '../core/job/record.ts';
 import { isTerminal, type JobState } from '../core/job/state.ts';
 import { needsDiagnostics } from '../core/live.ts';
-import { panelView, type PanelView } from '../core/rules/display.ts';
+import { maskDecision, maskSizing } from '../core/position/mask.ts';
+import { panelView, sizingNote, type PanelView } from '../core/rules/display.ts';
 import type { Role } from '../core/schema/types.ts';
 import { redact } from './security.ts';
 
@@ -54,7 +55,20 @@ export function jobView(r: JobRecord, now: Date, home: string = homedir()): JobV
       calls: r.usage.calls.map((c) => ({ role: c.role, startedAt: c.startedAt, durationSeconds: c.durationSeconds, outcome: c.outcome, retried: c.retried, modelId: c.modelId })),
     },
     debate: r.debate, outputs: r.outputs, warnings: r.warnings.map(clean), evidenceAudit: r.evidenceAudit ?? [], positionNotes: r.positionContext?.notes ?? [], finalDecision: d,
-    panel: d && d.action && d.bias ? panelView(d, now) : null,
+    panel: d && d.action && d.bias ? panelView(d, now, r.positionContext ?? null) : null,
     reportUrl: r.report ? `/reports/${r.jobId}` : null,
+  };
+}
+
+/** LAN 기기에 보내는 작업 보기: 수량 제안의 금액·수량을 가린다 (P2-5-R6). 보유 요약(가격·비율)과 문구는 남긴다 */
+export function maskJobView(v: JobView): JobView {
+  const s = v.finalDecision?.sizing;
+  if (!s) return v;
+  const hidden = sizingNote(maskSizing(s)!);
+  const shown = sizingNote(s);
+  return {
+    ...v,
+    finalDecision: maskDecision(v.finalDecision),
+    panel: v.panel && { ...v.panel, notes: v.panel.notes.map((n) => (n === shown ? hidden : n)) },
   };
 }
