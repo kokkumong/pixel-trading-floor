@@ -158,6 +158,7 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .tone-long .panel-headline { color: var(--green); }
 .tone-short .panel-headline { color: var(--red); }
 .tone-neutral .panel-headline { color: var(--gold); }
+.tone-caution .panel-headline { color: #e8913a; }
 .tone-blocked .panel-headline, .tone-error .panel-headline { color: #9a9fb0; }
 .tone-simulation { border-color: var(--sim); box-shadow: 0 0 0 var(--px) var(--sim); }
 .tone-simulation .panel-headline { color: var(--sim); }

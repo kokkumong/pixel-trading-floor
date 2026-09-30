@@ -113,3 +113,8 @@ export function newJobRecord(req: JobRequest, now: Date): JobRecord {
     pids: [],
   };
 }
+
+/** 판정에 쓰는 보유 포지션 (강제 방향은 포지션을 무시한다, P2-2-R6) */
+export function heldPosition(r: JobRecord): NonNullable<PositionContext['position']> | null {
+  return r.mode === 'forced_direction' ? null : r.positionContext?.position ?? null;
+}

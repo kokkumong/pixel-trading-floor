@@ -7,7 +7,7 @@ import type { SchemaError } from '../schema/dsl.ts';
 import { checkProposal, diffProposalFields, type ProposalAuthor, type ProposalContext } from '../schema/proposal.ts';
 import type { DebateStopReason, Mode, Role } from '../schema/types.ts';
 import { budgetFor } from './budget.ts';
-import type { JobRecord } from './record.ts';
+import { heldPosition, type JobRecord } from './record.ts';
 import type { JobState } from './state.ts';
 
 export interface StepKey {
@@ -71,7 +71,10 @@ export type StepCheck = { ok: true; apply: (r: JobRecord) => void } | { ok: fals
 
 function proposalCtx(r: JobRecord, author: ProposalAuthor): ProposalContext {
   if (!r.snapshot || !r.instrumentId || !r.marketType) throw new Error('스냅샷 없는 작업');
-  return { mode: r.mode, jobId: r.jobId, snapshotId: r.snapshot.snapshotId, instrumentId: r.instrumentId, marketType: r.marketType, author };
+  return {
+    mode: r.mode, jobId: r.jobId, snapshotId: r.snapshot.snapshotId, instrumentId: r.instrumentId, marketType: r.marketType, author,
+    positionId: heldPosition(r)?.id ?? null,
+  };
 }
 
 /** 역할 출력을 검증하고, 통과하면 작업 기록에 반영하는 함수를 돌려준다 */

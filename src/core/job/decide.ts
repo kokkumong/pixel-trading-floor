@@ -7,12 +7,13 @@ import { confidenceBand } from '../rules/display.ts';
 import { auditEvidence, type EvidenceIssue } from '../rules/audit.ts';
 import { applyRules, type RuleContext } from '../rules/engine.ts';
 import { createEvidenceIndex } from '../rules/evidence.ts';
-import type { FinalDecision } from '../schema/decision.ts';
+import type { PositionContext } from '../position/context.ts';
+import type { FinalDecision, PositionPlan } from '../schema/decision.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
 import { MODE_META } from '../schema/types.ts';
-import type { JobRecord } from './record.ts';
+import { heldPosition, type JobRecord } from './record.ts';
 
-export function ruleContextFor(s: AnalysisSnapshot, briefs: Record<string, readonly string[]>): RuleContext {
+export function ruleContextFor(s: AnalysisSnapshot, briefs: Record<string, readonly string[]>, positionContext: PositionContext | null = null): RuleContext {
   const sources: Record<string, { estimated: boolean; price: number | null }> = {};
   const payloads: Record<string, unknown> = {};
   for (const x of s.sources) {
@@ -34,6 +35,7 @@ export function ruleContextFor(s: AnalysisSnapshot, briefs: Record<string, reado
     riskPrice,
     atr14: s.derived.indicators?.atr14 ?? null,
     evidence: createEvidenceIndex({ snapshot: payloads, derived: derivedValues(s), briefs }),
+    positionContext,
   };
 }
 
@@ -64,17 +66,22 @@ export function buildDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): Fin
   const rejected = pm?.pmDecision === 'REJECT';
   const adopted: TradeProposal = pm?.pmDecision === 'MODIFY' && pm.revisedProposal ? pm.revisedProposal : ace;
 
-  const o = applyRules(adopted, ruleContextFor(s, briefIndex(r)));
+  const held = heldPosition(r);
+  const o = applyRules(adopted, ruleContextFor(s, briefIndex(r), r.mode === 'forced_direction' ? null : r.positionContext ?? null));
   const reasonCodes = rejected ? ['PM_REJECTED', ...o.reasonCodes.filter((c) => c !== 'NO_EDGE')] : o.reasonCodes;
+  // P2-2-R7: PM 기각은 포지션이 있으면 HOLD(기존 손절·목표 유지), 없으면 NO_TRADE
+  const rejectedPlan: PositionPlan | null = held
+    ? { positionRef: held.id, side: held.side, stopLoss: held.stopLoss, targets: held.targets, stopUpdated: false, sizeFraction: null }
+    : null;
   const decidedAt = now.toISOString();
   return {
-    schemaVersion: 'decision/2',
+    schemaVersion: 'decision/3',
     jobId: r.jobId,
     snapshotId: s.snapshotId,
     mode: r.mode,
     resultClass: meta.resultClass,
-    status: rejected ? 'NO_TRADE' : o.status,
-    action: rejected ? 'NO_TRADE' : o.action,
+    status: rejected ? (held ? 'VALID' : 'NO_TRADE') : o.status,
+    action: rejected ? (held ? 'HOLD' : 'NO_TRADE') : o.action,
     bias: o.bias,
     unforcedAction: adopted.unforcedAction,
     // P0-2-R4: 기각된 ACE 제안은 판정에 채택하지 않는다 (작업 기록·리포트의 proposals에만 남는다)
@@ -90,18 +97,22 @@ export function buildDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): Fin
     modifiedFields: pm?.pmDecision === 'MODIFY' ? pm.modifiedFields : [],
     forcedDirection: r.mode === 'forced_direction',
     executionBackend: r.executionBackend,
+    positionRef: held?.id ?? null,
+    positionPlan: rejected ? rejectedPlan : o.positionPlan,
+    sizing: rejected ? null : o.sizing,
   };
 }
 
-/** 필수 데이터 부족: 모델 호출 없이 끝난 작업의 판정 (P0-4.5) */
+/** 필수 데이터 부족: 모델 호출 없이 끝난 작업의 판정 (P0-4.5). 포지션이 있어도 행동은 없다 (P2-3-R3) */
 export function insufficientDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): FinalDecision {
   const meta = MODE_META[r.mode];
   return {
-    schemaVersion: 'decision/2', jobId: r.jobId, snapshotId: s.snapshotId, mode: r.mode, resultClass: meta.resultClass,
+    schemaVersion: 'decision/3', jobId: r.jobId, snapshotId: s.snapshotId, mode: r.mode, resultClass: meta.resultClass,
     status: 'INSUFFICIENT_DATA', action: null, bias: null, unforcedAction: null, proposal: null,
     decidedAt: now.toISOString(), validUntil: null, confidence: null, reasonCodes: ['INSUFFICIENT_DATA'],
     ruleEngine: { verdict: 'BLOCKED', violations: [{ code: 'V-DATA-QUALITY', message: '필수 데이터 부족' }], warnings: s.dataQuality.warnings },
     risk: null, finalDecisionMaker: meta.finalDecisionMaker, pmDecision: null, modifiedFields: [],
     forcedDirection: r.mode === 'forced_direction', executionBackend: r.executionBackend,
+    positionRef: heldPosition(r)?.id ?? null, positionPlan: null, sizing: null,
   };
 }

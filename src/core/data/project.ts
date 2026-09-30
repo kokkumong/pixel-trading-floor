@@ -1,7 +1,9 @@
 // 역할별 입력 투영 (P0 명세 4.6). 스냅샷 전체가 아니라 역할에 필요한 필드만, 사용 가능한 소스만 넘긴다.
 // 외부 자유 텍스트는 별도 untrusted 블록으로 분리한다 (P0-4-R7). 과거 판정 회고는 넣지 않는다 (P1-9-R2).
 // 애널리스트 입력에는 다른 애널리스트의 출력이 없다 (P1-10-R4).
+// 보유 포지션은 결정 역할에만, 비율·가격만 별도 블록으로 넣는다 (P2-4-R1·R2·R5).
 import type { Briefing, DebateMessage, PmOutput } from '../schema/agents.ts';
+import type { PositionContext } from '../position/context.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
 import type { Currency, Mode, Role } from '../schema/types.ts';
 import type { Candle } from './candles.ts';
@@ -30,7 +32,49 @@ export interface RoleInput {
   prior?: Record<string, unknown>;
   /** 외부 자유 텍스트. 지시가 아니라 분석 대상 데이터 */
   untrusted?: { news?: { title: string; source: string | null; publishedAt: string; summary?: string | null }[] };
+  /** 사용자가 입력한 보유 포지션 (결정 역할만). 신뢰 입력이지만 뉴스와 섞지 않는다 */
+  position?: PositionInput;
   dataWarnings: string[];
+}
+
+/** 모델에 보내는 포지션 정보: 비율·상대값과 가격만. 금액·수량·총 자산·메모는 넣지 않는다 (P2-4-R2, D17) */
+export interface PositionInput {
+  positionRef: string;
+  marketType: AnalysisSnapshot['marketType'];
+  side: 'LONG' | 'SHORT';
+  leverage: number | null;
+  marginMode: 'isolated' | 'cross' | null;
+  avgEntryPrice: number;
+  stopLoss: number | null;
+  targets: number[];
+  unrealizedPnlPercent: number | null;
+  unrealizedPnlPercentLeveraged: number | null;
+  rMultiple: number | null;
+  stopDistancePercent: number | null;
+  liquidationDistancePercent: number | null;
+  positionWeightPercent: number | null;
+  /** 진입 시각부터 스냅샷 수집까지 (진입 시각 미입력이면 null) */
+  holdingHours: number | null;
+  /** 포지션 북이 마지막으로 저장된 뒤 지난 시간 */
+  bookAgeHours: number | null;
+}
+
+/** 포지션 정보를 받는 역할 (P2-4 4.1 표). 분석가 4명과 BULL·BEAR는 받지 않는다 */
+export const POSITION_ROLES: readonly Role[] = ['BLITZ', 'GUARD', 'ACE', 'RISKY', 'SAFE', 'NEUTRAL', 'PM'];
+
+export function positionInput(pc: PositionContext | null | undefined, collectedAt: string): PositionInput | null {
+  const p = pc?.position;
+  if (!pc || !p) return null;
+  const d = pc.derived;
+  const held = p.openedAt === null ? null : Math.max(0, (Date.parse(collectedAt) - Date.parse(p.openedAt)) / 3_600_000);
+  return {
+    positionRef: p.id, marketType: p.marketType, side: p.side, leverage: p.leverage, marginMode: p.marginMode,
+    avgEntryPrice: p.avgEntryPrice, stopLoss: p.stopLoss, targets: p.targets,
+    unrealizedPnlPercent: d?.unrealizedPnlPercent ?? null, unrealizedPnlPercentLeveraged: d?.unrealizedPnlPercentLeveraged ?? null,
+    rMultiple: d?.rMultiple ?? null, stopDistancePercent: d?.stopDistancePercent ?? null,
+    liquidationDistancePercent: d?.liquidationDistancePercent ?? null, positionWeightPercent: d?.positionWeightPercent ?? null,
+    holdingHours: held === null ? null : Math.round(held * 10) / 10, bookAgeHours: pc.book.ageHours,
+  };
 }
 
 export interface PriorOutputs {
@@ -130,7 +174,8 @@ function structured(b: Briefing | undefined) {
 
 const VOL_KEYS = ['atr14', 'realizedVol', 'realizedVolPeriod', 'recentHigh20', 'recentLow20', 'lastClose'];
 
-export function buildRoleInput(s: AnalysisSnapshot, role: Role, prior: PriorOutputs = {}): RoleInput {
+/** position은 작업에 고정된 포지션 컨텍스트. 강제 방향 작업은 null이다 (P2-2-R6) */
+export function buildRoleInput(s: AnalysisSnapshot, role: Role, prior: PriorOutputs = {}, position: PositionContext | null = null): RoleInput {
   const base: RoleInput = {
     role, jobId: s.jobId, snapshotId: s.snapshotId, instrumentId: s.instrumentId, displayName: s.displayName,
     mode: s.mode, marketType: s.marketType, collectedAt: s.collectedAt, market: s.market,
@@ -194,7 +239,8 @@ export function buildRoleInput(s: AnalysisSnapshot, role: Role, prior: PriorOutp
   if (role !== 'PM') base.dataWarnings = s.dataQuality.warnings.filter((w) => !w.startsWith('선택 소스')).slice(0, 5);
   // 앞선 역할 출력(prior)은 압축하지 않는다: 제안서 가격이 바뀌면 PM 수정 필드 계산이 틀어진다
   const { prior: priorOut, ...rest } = base;
-  return { ...compact(rest), ...(priorOut ? { prior: priorOut } : {}) };
+  const pos = s.mode !== 'forced_direction' && POSITION_ROLES.includes(role) ? positionInput(position, s.collectedAt) : null;
+  return { ...compact(rest), ...(pos ? { position: pos } : {}), ...(priorOut ? { prior: priorOut } : {}) };
 }
 
 export class InputBudgetError extends Error {}

@@ -10,3 +10,4 @@
 - `validForMinutes`: algorithm은 10080 이하, scalp·forced_direction은 240 이하.
 - `confidence`: 0~100 정수. 적중 확률이 아니라 근거의 강도에 대한 자기 평가다.
 - `rationale`은 400자 안팎, `invalidationConditions`는 판단이 틀렸다고 볼 구체 조건.
+- 입력에 보유 포지션(`position`)이 없으면 `positionRef`와 `sizeFraction`은 null이다.

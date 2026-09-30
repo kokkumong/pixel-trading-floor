@@ -28,16 +28,18 @@ export function proposalOutput(over: Partial<ProposalOutput> = {}): ProposalOutp
     evidenceRefs: ['derived:rsi14', 'snap:binance.perp.price#/last'],
     invalidationConditions: ['15분봉 종가 98 이탈'],
     warnings: [],
+    positionRef: null,
+    sizeFraction: null,
     ...over,
   };
 }
 
 export function proposal(over: Partial<ProposalOutput> = {}, author: TradeProposal['author'] = 'ACE'): TradeProposal {
-  return { schemaVersion: 'proposal/2', jobId: JOB, author, ...proposalOutput(over) };
+  return { schemaVersion: 'proposal/3', jobId: JOB, author, ...proposalOutput(over) };
 }
 
 export function proposalCtx(mode: Mode = 'scalp', over: Partial<ProposalContext> = {}): ProposalContext {
-  return { mode, jobId: JOB, snapshotId: SNAP, instrumentId: 'CRYPTO:BTC', marketType: 'perpetual', author: 'ACE', ...over };
+  return { mode, jobId: JOB, snapshotId: SNAP, instrumentId: 'CRYPTO:BTC', marketType: 'perpetual', author: 'ACE', positionId: null, ...over };
 }
 
 export const evidence: EvidenceIndex = createEvidenceIndex({

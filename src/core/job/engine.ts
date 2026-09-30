@@ -18,7 +18,7 @@ import type { BookRead } from '../position/store.ts';
 import type { MarketType, Role } from '../schema/types.ts';
 import { budgetFor, modelFor, type JobBudget } from './budget.ts';
 import { auditJob, buildDecision, insufficientDecision } from './decide.ts';
-import { newJobRecord, type JobRecord, type JobRequest } from './record.ts';
+import { heldPosition, newJobRecord, type JobRecord, type JobRequest } from './record.ts';
 import type { Validation } from './retry.ts';
 import { isTerminal, transition, type JobState, type TerminalState } from './state.ts';
 import { checkStepOutput, pendingSteps, summarizeErrors, type StepKey } from './steps.ts';
@@ -223,11 +223,12 @@ export function createEngine(opts: EngineOptions): Engine {
 
       const cfg = budgetFor(r.mode);
       const steps: Step[] = [];
+      const held = heldPosition(r) !== null;
       for (const k of pending) {
-        const systemPrompt = prompts.systemPrompt(k.role, r.mode);
+        const systemPrompt = prompts.systemPrompt(k.role, r.mode, held);
         let fitted: ReturnType<typeof fitInput>;
         try {
-          fitted = fitInput(buildRoleInput(snap, k.role, priorFor(r, k)), cfg.maxInputChars, systemPrompt.length);
+          fitted = fitInput(buildRoleInput(snap, k.role, priorFor(r, k), held ? r.positionContext : null), cfg.maxInputChars, systemPrompt.length);
         } catch (e) {
           if (!(e instanceof InputBudgetError)) throw e;
           terminate(job, 'BUDGET_EXCEEDED', 'E-BUDGET', e.message, k.role); // P0-8-R3
@@ -238,11 +239,11 @@ export function createEngine(opts: EngineOptions): Engine {
           if (!r.warnings.includes(w)) r.warnings.push(w);
         }
         const inputPath = store.writeJson(r.jobId, `inputs/${k.stepId}.json`, fitted.input);
-        r.promptHashes[k.role] = prompts.hash(k.role, r.mode);
+        r.promptHashes[k.role] = prompts.hash(k.role, r.mode, held);
         const { model, effort } = modelFor(k.role);
         steps.push({
           ...k, input: fitted.input, inputText: fitted.text, inputPath,
-          request: { role: k.role, systemPrompt, jsonSchema: jsonSchemaFor(k.role, r.mode), model, effort },
+          request: { role: k.role, systemPrompt, jsonSchema: jsonSchemaFor(k.role, r.mode, held), model, effort },
         });
       }
       save(job);
