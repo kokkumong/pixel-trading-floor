@@ -28,7 +28,23 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-없음
+- Phase: 14, 이슈 #29, 브랜치 `feature/29-phase14-position-report` (Phase 13 이슈 #27은 병합 뒤에도 열려 있어 닫음)
+- 다음 단계: 구현 계속
+- 통과 기준: P2-6-T1 ✅ · P2-6-T2 ✅ · P2-6-R3 ✅ · P2-2-R4(리포트 v2·v1 읽기) ✅ · P2-5-T3 maskReport ✅ `test/core/position-report.test.ts` / P2-5-T3 LAN·SSE·리포트·all.zip·project.zip ✅ `test/server/app.test.ts` 끝 두 테스트 / P2-5-T2 ⬜ / P2-8-T1 ⬜
+- 바꾼 파일: `src/core/rules/display.ts`, `src/core/position/mask.ts`(신규), `src/core/report/{report,markdown,store}.ts`, `src/server/{view,app}.ts`, `src/web/{model.js,floor.js,index.html,floor.css}`, `test/position-helpers.ts`(신규: Phase 13 테스트의 `POS·held·decisionOf·SECRET·bookRead·runWithBook`을 옮김, `runWithBook`에 4번째 인자 `book`), `test/core/position-report.test.ts`(신규), `test/core/report/report.test.ts`
+- 결정:
+  - `panelView(d, now, pc = null)`: `PanelView`에 `position`(판정에 쓴 포지션 요약 한 줄, `positionSummary(pc)`: 시장·방향·레버리지·평단·수익률(레버리지 반영)·손절·청산가·`기준 <book.updatedAt>`, 수량·총 자산 없음)과 `disclaimer`(`DISCLAIMER`, 모든 패널). 요약은 `d.positionRef === pc.position.id`일 때만
+  - NO_TRADE 주석: 북을 읽었고(`status: ok`) 보유 없음이면 `NO_POSITION_BIAS_NOTE`("이 종목 보유가 없는 상태의 시장 방향 판단"), 북 없음·오류·이전 작업은 기존 `BIAS_NOTE`("보유 여부를 모르는 상태…"). 명세 P2-6-R3 문자 그대로가 아니라 "알맞은 문구"로 해석함 — 둘 다 맞는 문장이 되게
+  - 리포트 `reportSchemaVersion` 2(`positionContext?` 추가), store는 1·2 모두 읽음. Markdown: 제목 아래 `> **고지** — …`, `### 보유 포지션`(요약·판정 뒤 손절/목표/청산 비율·수량 계산 조건·컨텍스트 notes), 끝줄 `DISCLAIMER + 이 앱에는 주문 기능이 없습니다.` 총 자산·손실 한도 금액은 Markdown에 쓰지 않음
+  - 마스킹(`position/mask.ts`, `MASK = '[masked]'`): sizing의 `suggestedQuantity·riskBudget·existingRisk·addableRisk·marginRequired`, `positionContext.account` 통째, `position.quantity`. 가격·비율은 남김. 원본 파일은 그대로 두고 LAN(`!c.isLocal`) 응답(`/api/jobs/:id`·분석 시작 응답·SSE job 이벤트·`/reports/:id[.json|.md]`)과 `all.zip`(항상, 로컬도)만 가린 사본. 리포트 본문은 가린 JSON에서 Markdown을 다시 만든다. 마스킹하지 않는 내보내기는 두지 않음(명세 [구현 시 결정] → 없음)
+  - `maskJobView`: `sizingNote(s)`(display.ts로 뺌) 줄을 가린 줄로 바꾼다. project.zip은 원래 `.floor`·`jobs`·`reports`를 빼므로 테스트만 추가
+  - 웹 패널: `#panel-position` 첫 줄에 요약(`pos-summary`), 새 `#panel-disclaimer`(항상). 보유 판정(ADD 제외)은 진입 대신 판정 뒤 손절·목표 행. `model.js`에 `DISCLAIMER` 사본(이전 서버 응답 대비)
+- 남은 일 (순서대로):
+  1. P2-5-T2: 진단에 "포지션 N건 저장됨"만(`src/core/diag.ts` `runDiagnostics`에 한 항목, 값 없이 개수), 회귀 테스트 — 포지션이 있는 작업의 외부 요청 URL·헤더·본문(녹화 net), 서버 로그(`logs`), `/api/diagnostics`, 오류 메시지에 수량·총 자산·평단·메모가 없음. `SECRET` 값 사용
+  2. P2-8: 포지션 데모 fixture 3종. 계획: manifest에 `positionScenarios: { <이름>: { mode, snapshot: <기존 스냅샷 이름>, label } }`, 파일 `<이름>.responses.json`·`<이름>.positions.json`(가짜 북). 예: `btc-hold`(scalp, 무기한 롱 수익 → HOLD, 근거 2개+무효화 조건), `btc-reduce`(algorithm, 스냅샷 btc-algorithm은 **현물**이라 현물 롱 → REDUCE 0.5, PM APPROVE), `btc-exit`(scalp, 청산가 근접 → EXIT). BLITZ·ACE(·PM) 응답을 포지션 행동으로 손으로 쓴다(`positionRef`는 가짜 북의 id). 엔진은 지금 `record.demo`면 북을 읽지 않음(`engine.ts:150`) → `EngineOptions.demoPositions?: () => BookRead` 추가해 데모만 fixture 북을 쓰게. 선택: `loadDemo(mode, dir, scenario?)`, `JobManager.start({..., demoScenario})`, CLI `analyze BTC scalp --demo --scenario btc-hold`, 웹은 데모일 때 시나리오 선택. 테스트: 3종 모두 외부 요청 0·모델 호출 0(FixtureDriver)·근거 경고 0·실제 `.floor/positions.json`을 읽지 않음(루트에 다른 값의 북을 두고 결과에 안 섞이는지)
+  3. 결함 주입: 마스킹 한 줄(예: `maskSizing`의 `riskBudget`)·고지 누락·`biasNote` 조건을 망가뜨려 테스트가 잡는지
+  4. `docs/ARCHITECTURE.md` 포지션·리포트·HTTP 절에 위 내용 짧게, (선택) 실제 스모크
+- 실측: 없음
 
 ## Phase 14 참고
 - 범위: P2 명세 5·6·8장 — 판정 패널·리포트의 포지션 요약·고지 문구(P2-6-R1~R4·R6), `JobView`·리포트·zip·LAN의 금액·수량·총 자산 마스킹(P2-5-T2·T3), 포지션 데모 fixture(P2-8-T1), 리포트 스키마 필드(P2-2-R4)
