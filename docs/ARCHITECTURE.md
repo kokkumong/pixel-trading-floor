@@ -58,6 +58,9 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - CLI `node src/cli/floor.ts <analyze|snapshot|next|submit|finalize|doctor>`: `main(argv, deps)`로 테스트한다(의존성 주입). 루트는 `FLOOR_HOME` 또는 프로젝트 폴더. 종료 코드 `EXIT`(P1-5.1: 0, 1 기타, 2 종목, 3 데이터, 4 스키마, 5 예산, 10 단계 없음)
   - `next`는 `inputs/<단계>.json`, `prompts/<단계>.md`, `schemas/<단계>.json`, 출력 자리 `outputs/<단계>.json`을 준다. `submit --file`은 작업 디렉터리 안 파일만
   - `analyze`는 interface `web`·subprocess_per_role로 기록한다. 실전 전 `auth status`로 로그인 확인(미로그인 시 작업을 만들지 않음). `--demo`는 fixture 재생
+- `/floor`(P1-5): 스킬 `.claude/skills/floor/SKILL.md`(`context: fork`, `agent: floor-session`, `disable-model-invocation`)가 하위 에이전트 `.claude/agents/floor-session.md`(`tools: Bash, Read, Write`)를 부른다. **스킬 frontmatter의 `hooks`는 포크된 문맥에 걸리지 않으므로** 도구 제한 훅은 에이전트 frontmatter의 PreToolUse에 둔다: `scripts/floor-guard.ts`(Bash는 `node src/cli/floor.ts snapshot|next|submit|finalize`와 명령별 옵션만, 따옴표 밖 셸 메타문자 거부, Read는 `jobs/<id>/{inputs,prompts,schemas,outputs}/`, Write·Edit는 `outputs/`만). 테스트 `test/scripts/floor-guard.test.ts`
+- `scripts/measure-budget.ts`(P1-11 도구): `run <종목> <모드> --count N`이 `analyze`를 반복 실행하고 `report [--interface floor]`가 job.json에서 백분위·산출값·명세 부록 표를 만든다. 본 측정(조합별 10회 이상)은 아직 안 함 (HANDOFF)
+- 시작 스크립트 `start-floor.cmd`·`start-floor-lan.cmd`(P0-7.6): `node src\server\main.ts [--lan] --open`, 서버 출력을 파일로 남기지 않는다(LAN 토큰). `*.cmd`는 `.gitattributes`로 CRLF 고정
 
 ## HTTP 서버 (src/server, src/web)
 - `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음
