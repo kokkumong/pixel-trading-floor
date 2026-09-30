@@ -43,8 +43,8 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - `sweepAbandoned(exceptJobId)`: 스냅샷 뒤 `maxDurationSeconds`가 지난 진행 중 single_session 작업 → INTERRUPTED (P1-5-T3). CLI가 명령마다 부른다
   - `Acquirer.clockSkewMs()`: 수집 중 Date 헤더로 잰 시계 오차. 60초 초과면 스냅샷 전에 FAILED(E-CLOCK), 30초 초과면 경고 (`data/clock.ts`)
 - 근거 인용 검사(P1-10, `src/core/rules/audit.ts`): `auditEvidence(outputs, snapshot, derived)`는 **경고만** 만들고 판정은 바꾸지 않는다(강등은 규칙 엔진 V-EVIDENCE-REF). 제출마다 전체를 다시 계산해 `job.json evidenceAudit`에 넣고 → `JobView.evidenceAudit`(화면 콘솔 꼬리표) → 리포트 JSON `evidenceAudit`(Markdown 주장 꼬리표와 "## 근거 검사" 절)로 흐른다. 종류: `UNRESOLVED_REF`·`VALUE_MISMATCH`·`NO_BRIEF_REF`·`UNSOURCED_NUMBER`. 오탐 줄이기: 참조별 검사(본문 숫자 중 하나가 참조 값 0.5% 안이면 통과), 불일치는 다른 참조와도 안 맞는 숫자 중 참조 값 ±1% 안의 것만, 어림수(`약 N`·`N대`)와 한 자리 정수는 제외, 유효한 `snap:`·`derived:` 참조가 있는 발언은 새 수치 검사를 건너뜀. `claudeCliVersion`은 `RunOptions`/`FinalizeOptions`로 받아 `??=`로 처음 값만 기록(P1-11-R3)
-- 프롬프트 = `shared/common` + (`shared/briefing` | `shared/proposal` + `no-trade` 또는 `forced`) + `roles/<역할>`. 해시는 조합된 전문의 sha256 앞 12자 (`prompts.hash(role, mode)`), 작업 기록 `promptHashes`에 남는다
-- 강제 방향 ACE·BLITZ의 CLI 스키마는 action에서 NO_TRADE를 뺀다 (`jsonSchemaFor`). 검증 코드 V-ACTION은 그대로
+- 프롬프트 = `shared/common` + (`shared/briefing` | `shared/proposal` + `no-trade`·`forced`·`position` 중 하나) + (보유 작업의 검토 역할: `shared/position-review`) + `roles/<역할>`. 해시는 조합된 전문의 sha256 앞 12자 (`prompts.hash(role, mode, held)`), 작업 기록 `promptHashes`에 남는다
+- ACE·BLITZ의 CLI 스키마는 action을 좁힌다 (`jsonSchemaFor(role, mode, held)`): 강제 방향 ENTER_LONG·ENTER_SHORT, 보유 HOLD·ADD·REDUCE·EXIT, 그 외 ENTER_*·NO_TRADE. 검증 코드 V-ACTION·V-POS-STATE는 그대로 (PM `revisedProposal`은 좁히지 않음)
 - 테스트 도구: `test/job-helpers.ts`의 `autoDriver(overrides)`(입력을 읽어 정상 출력 생성), `test/data-helpers.ts`의 `replayAcquirer(fixture)`
 - 실전 1건 실행: `node src/cli/floor.ts analyze <종목> <모드>` (실제 데이터·claude, 기록은 `jobs/`, 리포트는 `reports/`)
 
@@ -68,6 +68,12 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - `store.ts`: `.floor/positions.json` 읽기(`BookRead`: ok·missing·invalid)·쓰기(`.floor/` 0700, 임시 0600 → `.bak` 복사 → rename)
 - `context.ts`: `buildPositionContext(read, snapshot, now)` → `position-context/1`(매칭 포지션 메모 제외·계좌·판정 기준 가격·`derive()` 파생 값·다른 시장 보유·경고·한 줄 notes). 작업 시작 때 한 번 만들어 `record.positionContext`에 고정. forced_direction·데모는 null
 - `service.ts` `PositionService`: `GET/PUT /api/positions`의 뒷단. PUT은 북 전체 교체, `symbol`을 `resolveWithLookup`으로 해석, 응답 `BookView {status, book, errors, names}`
+- 포지션 인지 판정(P2-2·3·4, Phase 13): 보유 여부는 `heldPosition(record)`(`job/record.ts`, forced는 항상 null)
+  - 스키마: 행동 = `ENTRY_ACTIONS` + `POSITION_ACTIONS`. `proposal/3`에 `positionRef`·`sizeFraction`, `checkProposal`의 V-POS-STATE(`ProposalContext.positionId`)가 행동·참조·REDUCE 비율을 본다(스키마 오류 → 재시도). `decision/3`에 `positionRef`·`positionPlan`(적용 손절·목표·비율)·`sizing`
+  - 규칙(`rules/engine.ts`, `rules/2`, `RuleContext.positionContext`): 보유 중 강등은 HOLD(계획은 기존 값, 수량 없음). ADD는 보유 방향 ENTER로 바꿔 진입 규칙을 적용. V-STOP-WIDEN(무시+경고)·V-EXIT-CONSISTENCY(무시)·V-POS-STOP-DIR(`STOP_ALREADY_HIT`)·V-POS-LIQ-BUFFER(청산가 입력 시 단순 V-LIQ-BUFFER 대신)·V-POS-LIQ-NEAR(`LIQUIDATION_NEAR`, ADD만 차단)·V-RISK-BUDGET(ADD 여유 0 → `RISK_BUDGET_FULL`)·HOLD의 근거 2개와 V-HOLD-INVALIDATION
+  - 수량(`rules/sizing.ts` `suggestSize`): 손실 한도(총 자산 × %) ÷ |기준가 − 손절|, ADD는 기존 리스크를 뺀 여유만. 코인 소수 6자리·주식 1주 내림, `MARGIN_HEAVY`(증거금 > 총 자산 50%). 총 자산 없거나 기존 손절 없는 ADD(`NO_STOP_ON_POSITION`)는 제안 없음
+  - 모델 입력(`data/project.ts`): `POSITION_ROLES`(BLITZ·GUARD·ACE·RISKY·SAFE·NEUTRAL·PM)에만 `RoleInput.position`(`positionInput()`: 비율·가격·보유 시간, 수량·총 자산·메모·청산가 없음). 압축하지 않는다. `/floor`는 `inputs/<stepId>.json`으로 같은 투영을 받고, 훅이 `.floor/` 읽기를 막는다
+  - 표시(`rules/display.ts` `panelView`): 유지·추가 진입 검토·일부 청산 검토 (N%)·전량 청산 검토, 톤 `caution`(REDUCE·EXIT·위험 경고), 강한 경고는 notes 맨 앞, 강제 방향 `포지션 무시 시뮬레이션`, 데이터 부족+보유 `포지션은 그대로이며 판정이 없음`
 
 ## HTTP 서버 (src/server, src/web)
 - `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음

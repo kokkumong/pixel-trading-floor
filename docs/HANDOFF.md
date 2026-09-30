@@ -21,18 +21,27 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 10 | 데모 fixture 정리(근거 검사 경고 0건), 강제 방향 BTC 데모 fixture, 가이드 v1.5 | ✅ |
 | 11 | P2 포지션 명세(`P2-포지션-명세`), P0 D3 폐기(P0 v0.10, 보완안 v1.3) | ✅ |
 | 12 | 포지션 북 스키마·검증·저장(`.floor/positions.json`)·API, 입력 화면, 파생 값 (P2-1, P2-5-T1) | ✅ |
-| **13** | **행동 집합 확장·스키마 v3·규칙 엔진·수량 제안·프롬프트·역할별 입력·`/floor` 투영 (P2-2·3·4)** | **다음** |
-| 14 | 리포트·화면 표기·고지·마스킹·LAN·데모 fixture (P2-5·6·8) | |
+| 13 | 행동 집합 확장·스키마 v3·규칙 엔진·수량 제안·프롬프트·역할별 입력·`/floor` 투영 (P2-2·3·4) | ✅ |
+| **14** | **리포트·화면 표기·고지·마스킹·LAN·데모 fixture (P2-5·6·8)** | **다음** |
 | 15 | macOS 시작 파일·시작 시 doctor·가이드 개정 (P2-7, P2-6-R5) | |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-- Phase: 13, 이슈 #27, 브랜치 `feature/27-phase13-position-decisions`
-- 다음 단계: 마무리 (구현·`verify:quiet` 통과·push 완료)
-- 통과 기준: P2-2-T1·T2·T3 ✅, P2-3-T1~T6 ✅, P2-4-T1~T4 ✅ 모두 `test/core/position-decision.test.ts` (15개, 추가로 P2-2-R7 PM 기각 → HOLD). 결함 주입 10건(STOP-WIDEN·V-POS-STATE·투영 역할·수량 누출·LIQ-NEAR·STOP-DIR·RISK-BUDGET·NO_STOP·HOLD 무효화·PM 기각) 모두 테스트가 잡음
-- 바꾼 파일: `src/core/schema/{types,proposal,decision}.ts`, `src/core/rules/{engine,display}.ts`, `src/core/rules/sizing.ts`(신규), `src/core/job/{decide,steps,engine,record}.ts`, `src/core/data/project.ts`, `src/core/prompts/index.ts`, `src/core/prompts/shared/{position,position-review}.md`(신규)·`proposal.md`, `src/web/{model.js,floor.css}`, `scripts/inspect.ts`, `fixtures/demo/v1/*.responses.json`(제안서에 `positionRef`·`sizeFraction` null 추가), 테스트 헬퍼 `test/{helpers,job-helpers}.ts`, `test/core/{display,schema}.test.ts`
-- 결정:
+없음
+
+## Phase 14 참고
+- 범위: P2 명세 5·6·8장 — 판정 패널·리포트의 포지션 요약·고지 문구(P2-6-R1~R4·R6), `JobView`·리포트·zip·LAN의 금액·수량·총 자산 마스킹(P2-5-T2·T3), 포지션 데모 fixture(P2-8-T1), 리포트 스키마 필드(P2-2-R4)
+- 쓸 API·파일: `FinalDecision`(`decision/3`)의 `positionRef`·`positionPlan`·`sizing`, `record.positionContext`(`position-context/1`), `panelView()`(`src/core/rules/display.ts`)가 만드는 notes, `src/server/view.ts`(`JobView`: 지금 `positionNotes`와 `finalDecision` 전체), `src/core/report/{report,markdown}.ts`, `src/server/zip.ts`, 데모 `fixtures/demo/v1/*`·`src/core/demo.ts`
+- Phase 14로 넘어온 일:
+  - 마스킹: `finalDecision.sizing`(수량·손실 한도·증거금 금액)과 panelView notes의 `제안 수량 N` 줄이 지금 그대로 `JobView`·리포트에 들어간다. LAN 응답·zip은 `[masked]`로 (P2-5-T3)
+  - `BIAS_NOTE`("보유 여부를 모르는 상태") → 포지션 없음이 확인된 분석에서만 알맞은 문구로 (P2-6-R3). 지금은 NO_TRADE면 항상 붙는다
+  - 결과 패널에 사용한 포지션 요약(방향·평단·수익률·손절·기준 시각)과 고정 고지 문구 (P2-6-R2·R3)
+  - 리포트 Markdown·JSON에 포지션 판정 필드 반영, 이전 `decision/2`·`proposal/2` 리포트 읽기 유지
+  - 포지션 데모 fixture (외부 요청 0·모델 호출 0·근거 경고 0, 실제 북을 읽지 않음)
+  - (선택) 실제 스모크: 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → 포지션 행동으로 완료되는지와 호출 수·시간·비용
+- Phase 13 통과 기준: P2-2-T1~T3·P2-3-T1~T6·P2-4-T1~T4 모두 `test/core/position-decision.test.ts` (+ P2-2-R7 PM 기각 → HOLD). 결함 주입 10건 모두 테스트가 잡음
+- Phase 13 결정 (유지):
   - 행동: `ENTRY_ACTIONS`(ENTER_LONG·ENTER_SHORT·NO_TRADE) + `POSITION_ACTIONS`(HOLD·ADD·REDUCE·EXIT) = `ACTIONS`. `ALLOWED_ACTIONS`는 모드만 보고(algorithm·scalp 7개, forced 2개), 포지션 유무는 `checkProposal`의 V-POS-STATE(행동·`positionRef`·`sizeFraction`)가 본다. `ProposalContext.positionId` 추가. 보유 판정은 `heldPosition(record)`(`record.ts`, forced는 항상 null)
   - `proposal/3`: `positionRef`(null 허용 문자열), `sizeFraction`(0.25~0.75 숫자, 정확한 값은 V-POS-STATE). `decision/3`: `positionRef`·`positionPlan{positionRef, side, stopLoss, targets, stopUpdated, sizeFraction}`·`sizing`. 이전 버전은 타입만 3이고 읽기는 런타임에서 필드가 없을 뿐(화면은 `d.positionRef` 등 falsy 처리)
   - 규칙(`rules/2`): 보유 중 강등은 HOLD(`bias`는 유지), 강등 시 계획은 기존 손절·목표로 되돌리고 수량 제안 없음. ADD는 보유 방향 ENTER로 바꿔 진입 규칙(V-BIAS·V-STOP-REQUIRED·V-DIR·V-LIQ-BUFFER·근거)을 그대로 적용. 청산가를 입력한 포지션은 단순 V-LIQ-BUFFER 대신 V-POS-LIQ-BUFFER(손절 거리 ≤ 0.5 × 현재가~청산가, ADD 차단·HOLD 경고). V-POS-LIQ-NEAR(청산 거리 < 2×ATR)는 ADD만 막고 `LIQUIDATION_NEAR` 사유. HOLD는 유효 근거 2개 + `invalidationConditions` 필수(V-EVIDENCE-REF·V-HOLD-INVALIDATION, 위반이면 DOWNGRADED로 표시)
@@ -42,29 +51,7 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
   - 모델 입력: `RoleInput.position`(`PositionInput`) 별도 블록, `POSITION_ROLES` = BLITZ·GUARD·ACE·RISKY·SAFE·NEUTRAL·PM. 필드: positionRef·marketType·side·leverage·marginMode·avgEntryPrice·stopLoss·targets·손익률 둘·rMultiple·손절/청산 거리·비중·`holdingHours`(openedAt~수집 시각)·`bookAgeHours`. 수량·총 자산·메모·청산가·열린 리스크는 없음. 압축(compact) 대상 아님
   - 프롬프트: 보유 작업이면 제안 역할(BLITZ·ACE·PM)은 `no-trade.md` 대신 `shared/position.md`, 검토 역할(GUARD·RISKY·SAFE·NEUTRAL)은 `shared/position-review.md`를 더한다. `PromptSet.systemPrompt/hash(role, mode, held)`, `jsonSchemaFor(role, mode, held)`는 행동 enum을 포지션 유무로 좁힌다(PM `revisedProposal` 스키마는 좁히지 않음 — 코드 검증만)
   - `/floor`: 훅은 이미 `jobs/<jobId>/` 밖 읽기를 막아 `.floor/`도 차단됨(테스트 추가). `next`가 쓰는 `inputs/<stepId>.json`에 같은 투영이 들어간다
-- 남은 일 (마무리 세션, 순서대로):
-  1. (선택) 실제 스모크 1회: 포지션 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → HOLD/ADD/REDUCE/EXIT 중 하나로 완료되는지, 호출 수·시간·비용 기록
-  2. HANDOFF 진행표 13 ✅·14 다음, "Phase 14 참고"로 옮기기. Phase 14로 넘길 것: `BIAS_NOTE`(보유 여부 모름)를 "보유 없음 확인" 분석에서만 표시하도록 문구 정리(P2-6-R3), 판정 패널·리포트의 포지션 요약·고지 문구(P2-6-R2·R3), `JobView`·리포트·zip·LAN의 `sizing`·`positionPlan` 금액/수량 마스킹(P2-5-T3, 지금 `finalDecision`에 그대로 들어 있음, 패널 notes에도 제안 수량 있음), 리포트 스키마 필드, 포지션 데모 fixture(P2-8)
-  3. ARCHITECTURE.md: 규칙 엔진·포지션 절에 `sizing.ts`·V-POS-*·`PositionInput` 투영·프롬프트 조합 추가
-  4. PR(`Close #27`) → 검사 통과 시 병합
-- 실측: 스모크 미실시
-
-## Phase 13 참고
-- 범위: P2 명세 2·3·4장 — 행동 집합 확장(HOLD/ADD/REDUCE/EXIT, 포지션 있을 때만), 스키마 v3, 규칙 엔진(V-POS-*), 코드가 계산하는 수량 제안(리스크 예산 기본 1%), 프롬프트, 역할별 입력(분석가·토론 역할은 포지션을 못 봄, 비율만 전달), `/floor` 투영
-- 쓸 API·파일: `src/core/position/{book,store,context,service}.ts`. 작업 시작 시 고정된 `record.positionContext`(`position-context/1`: 매칭 포지션(메모 제외)·`account`·`price`·`derived`·`otherMarkets`·`warnings`·`notes`)가 입력이다. `derived`의 손절 거리·청산 거리는 불리한 방향 기준 %, 음수면 이미 넘음 → V-POS-STOP-DIR에 쓴다. `createEngine({positions})`, forced_direction·데모는 컨텍스트 null
-- 남은 일·미뤄진 항목: `JobView`·리포트 금액 마스킹과 결과 패널 포지션 요약 표시(P2-6-R3)는 Phase 14. `JobView`에는 지금 `positionNotes`만 있다
-- Phase 12 통과 기준: P2-1-T1~T4·P2-5-T1 `test/core/position.test.ts`, P2-1-T5 `test/server/app.test.ts`, 입력 화면 `test/web/position.test.ts`. 브라우저 확인(필드 오류·추가/수정/삭제·모드별 보유 표시·파일 권한 0700/0600·`.bak`) 완료
-- Phase 12 결정 (유지):
-  - `validateBook(raw, isKnown)`: 빠진 선택 필드는 기본값(null·[]·''), id 없으면 UUID 부여, `schemaVersion`·`riskPerTradePercent`(1) 기본값. 현물은 side LONG·leverage/marginMode/liquidationPrice 모두 null이어야 함. 오류는 `{path: '$.positions[i].field', message}`
-  - 미국 종목 id(`US:TICKER`)는 저장 시 조회로 확인하고, 읽을 때는 형식만 본다(재시작 뒤 조회 캐시가 비어도 읽히도록)
-  - PUT 본문의 포지션은 `instrumentId` 대신 `symbol`(분석 입력과 같은 글자)을 보낼 수 있다 → `resolveWithLookup(symbol, 'algorithm')`로 해석, 실패는 `$.positions[i].symbol` 오류. `updatedAt`은 서버 시각. 응답 `BookView {status: ok|missing|invalid, book, errors, names}` (`names`: instrumentId → 표시 이름). 400 응답은 `{error:'E-INPUT', message, errors}`
-  - 저장: `.floor/` 0700, 임시 파일 0600 → 기존 파일을 `.bak`(0600)으로 복사 → rename
-  - `PositionContext`(`position-context/1`): 매칭 포지션(메모 제외), `account {currency, equity, riskPerTradePercent}`, `price`(판정 기준 소스의 mark 우선·추정 제외), `derived`, `otherMarkets`, `warnings`(`NO_EQUITY`·`STALE_BOOK`·`BOOK_INVALID`·`NO_PRICE`), `notes`(코드가 만든 한 줄: `다른 시장 보유 있음: <이름> <현물|무기한>`, `보유 정보가 N시간 전 기준`, 파일 오류). 북이 missing이어도 컨텍스트를 만든다(보유 없음 확인). forced_direction·데모는 북을 읽지 않고 null
-  - 숏 손익률은 명세의 `(평단/현재가 − 1)` 대신 `(1 − 현재가/평단)`(평단 대비 실제 손익률)로 했다. R = 단위 손익 ÷ |평단 − 손절|. 손절 거리·청산 거리는 불리한 방향 기준 %, 음수면 이미 넘음(Phase 13 V-POS-STOP-DIR에 씀). 열린 리스크는 평단 기준 손절 손실(수익권 손절이면 0). 모두 소수 둘째 자리 반올림
-  - 엔진: `createEngine({positions: () => BookRead})`, `createJob` 시작에서 한 번 읽고 스냅샷 뒤 `record.positionContext`에 기록(INSUFFICIENT_DATA도). `JobView`에는 `positionNotes`만(금액 없음), `positionContext`는 넣지 않음(마스킹은 Phase 14)
-  - 웹: 순수 함수는 `src/web/position.js`(`formToPosition`·`positionToForm`·`bookPayload`·`fieldErrors`·`summaryRows`·`holdingLabel`·`staleWarning`). 저장은 포지션 폼 저장·계좌 저장·삭제마다 즉시 PUT(북 전체 교체, 초안 없음). 기존 포지션 수정은 종목 글자를 안 바꾸면 `id`·`instrumentId`를 보내고, 바꾸면 `id`+`symbol`. 목표가는 공백·`/`·(뒤에 세 자리 숫자가 아닌) 쉼표로 나눈다. 현물이면 방향 LONG·레버리지/마진/청산가 null로 보낸다. 400이면 편집 중 포지션(번호)·계좌 오류는 필드 옆(`instrumentId` 오류는 종목 칸), 나머지는 목록
-  - 웹: 분석 버튼 옆 보유 표시는 모드로 시장을 정한다(알고리즘=현물, 그 외=무기한, 강제 방향은 "보유를 반영하지 않음"). 상단 요약 수익률은 전광판 종목과 같은 포지션만(전광판 현재가 기준). 통화는 전광판 통화, 없으면 `KR:`→KRW 그 외 USD(표시용). 오래된 보유 경고는 북 status `ok`이고 24시간 초과일 때 상단 배너. 결과 패널은 `panelModel().positionNotes`를 `#panel-position`에 한 줄씩. 입력 버튼·요약은 `client.local`이고 데모가 아닐 때만
-  - `/api/positions`는 access `local`(LAN 기기 403), PUT은 기존 Origin·Sec-Fetch-Site·JSON Content-Type 검사를 그대로 받는다. `Route.method`에 PUT 추가
+- Phase 12 결정 요약: 포지션 북 `positions/1`(`validateBook`, 미국 종목은 저장 때만 조회), 저장 `.floor/` 0700·파일 0600·`.bak`, `/api/positions`는 local 전용, `PositionContext` 파생 값(숏 손익률은 `1 − 현재가/평단`, 손절·청산 거리는 불리한 방향 %, 음수면 이미 넘음), 웹 순수 함수 `src/web/position.js`. 자세한 내용은 `docs/ARCHITECTURE.md` 포지션 절
 
 ## P1 구현 완료 후 남은 일 (개발 Phase 없음)
 구현 범위(P0·P1)는 Phase 10으로 끝났다. 아래는 사용자가 하거나 선택하는 일이다.
@@ -89,6 +76,7 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 
 ## 실측 기록
 
+- Phase 13: 모델 호출 없음(실측 없음, 스모크는 Phase 14로 미룸)
 - Phase 12: 모델 호출 없음(실측 없음)
 - 실측(haiku, TARO 1회, Phase 3): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰 → Phase 4에서 스키마 길이 축소 (narrative 1000자, claims 최대 6개)
 - 실측(sonnet, BTC scalp 5회, Phase 4 스모크): 43초, 출력 합계 6,401토큰, 보고 비용 $0.18, 재시도 0, 근거 참조 오류 0
