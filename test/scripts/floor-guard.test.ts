@@ -97,13 +97,13 @@ test('P1-5-R3 훅 실행 파일: 거부는 종료 코드 2와 이유(stderr), �
   assert.equal(run({}).status, 2); // 형식이 이상한 입력도 거부
 });
 
-test('P1-5-R3 · R4 /floor 명령 정의: 별도 문맥, 훅 등록, 웹 도구 없음, 지침 3개', () => {
+test('P1-5-R3 · R4 /floor 명령 정의: 전용 하위 에이전트(도구 3개 + 훅)에서 실행, 웹 도구 없음, 지침 3개', () => {
   const skill = readFileSync(new URL('../../.claude/skills/floor/SKILL.md', import.meta.url), 'utf8');
   const [, front = '', body = ''] = skill.split(/^---$/m);
   assert.match(front, /^name: floor$/m);
   assert.match(front, /^context: fork$/m);
+  assert.match(front, /^agent: floor-session$/m);
   assert.match(front, /^disable-model-invocation: true$/m);
-  assert.match(front, /PreToolUse:[\s\S]*matcher: "\*"[\s\S]*scripts\/floor-guard\.ts/);
   assert.doesNotMatch(front, /Web(Fetch|Search)/);
   assert.match(body, /입력 파일에 없는 수치를 쓰지 않는다/);
   assert.match(body, /JSON 스키마를 따른다/);
@@ -111,4 +111,11 @@ test('P1-5-R3 · R4 /floor 명령 정의: 별도 문맥, 훅 등록, 웹 도구 
   for (const c of ['snapshot', 'next', 'submit', 'finalize']) assert.match(body, new RegExp(`node src/cli/floor.ts ${c}`));
   assert.doesNotMatch(body, /floor\.ts (analyze|doctor)/);
   assert.match(body, /\$ARGUMENTS/);
+
+  // 스킬 frontmatter 훅은 포크된 문맥에 걸리지 않는다(2.1.284 실측). 도구 목록과 훅은 하위 에이전트 정의가 강제한다
+  const agent = readFileSync(new URL('../../.claude/agents/floor-session.md', import.meta.url), 'utf8');
+  const [, af = ''] = agent.split(/^---$/m);
+  assert.match(af, /^name: floor-session$/m);
+  assert.match(af, /^tools: Bash, Read, Write$/m);
+  assert.match(af, /PreToolUse:[\s\S]*matcher: "\*"[\s\S]*scripts\/floor-guard\.ts/);
 });

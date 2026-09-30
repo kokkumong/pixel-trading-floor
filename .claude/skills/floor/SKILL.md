@@ -4,25 +4,24 @@ description: PIXEL TRADING FLOOR 분석을 이 Claude 세션이 역할 발언을
 argument-hint: <종목> <모드: algorithm|scalp|forced_direction>
 disable-model-invocation: true
 context: fork
+agent: floor-session
 allowed-tools: Bash(node src/cli/floor.ts snapshot:*), Bash(node src/cli/floor.ts next:*), Bash(node src/cli/floor.ts submit:*), Bash(node src/cli/floor.ts finalize:*), Read(./jobs/**), Write(./jobs/**)
-hooks:
-  PreToolUse:
-    - matcher: "*"
-      hooks:
-        - type: command
-          command: node "$CLAUDE_PROJECT_DIR/scripts/floor-guard.ts"
 ---
 
 # /floor — 단일 세션 분석 (P1 명세 5장)
 
-인자: `$ARGUMENTS` (첫 단어 종목, 둘째 단어 모드. 모드 별칭: 알고리즘·스캘핑·강제)
+## 이번 요청
+사용자가 입력한 인자 원문: $ARGUMENTS
+
+첫 단어가 종목, 둘째 단어가 모드다. 예: `BTC scalp` → 종목 `BTC`, 모드 `scalp`. 모드 별칭: 알고리즘·스캘핑·강제. 위 원문이 비어 있을 때만 사용법을 알려주고 멈춘다.
 
 너는 PIXEL TRADING FLOOR의 역할 발언만 맡는다. 데이터 수집·스냅샷·스키마 검증·규칙 적용·리포트 저장은 공통 코어(`node src/cli/floor.ts`)가 한다. 실제 주문·자금 이동은 없다.
 
 ## 쓸 수 있는 것 (훅이 강제한다)
 - Bash: `node src/cli/floor.ts snapshot|next|submit|finalize ...` 한 줄만. `;` `&&` `|` `>` `$( )` 같은 연결·리다이렉트는 거부된다. 값에 공백·특수문자가 있으면 작은따옴표로 감싼다
 - Read: `next`가 알려준 `jobs/<jobId>/` 안의 입력·프롬프트·스키마 파일
-- Write: `next`가 알려준 `outputPath`(`jobs/<jobId>/outputs/`)
+- Write: `next`가 알려준 `outputPath`(`jobs/<jobId>/outputs/`). 고칠 때도 Write로 다시 쓴다 (Edit·sed·python 불가)
+- 파일은 Read로 통째로 읽는다. 셸 명령으로 파일을 읽거나 출력을 거르지 않는다
 - 웹 조회·검색, 프로젝트의 다른 파일, 다른 명령, 할 일 목록·하위 에이전트 도구는 쓰지 않는다
 
 ## 지침
@@ -33,7 +32,7 @@ hooks:
 - 역할 순서·토론 라운드 수는 `next`가 정한다. 지시받지 않은 역할을 쓰거나 건너뛰지 않는다
 
 ## 절차
-1. 인자에서 종목과 모드를 읽는다. 모드가 없거나 셋 중 하나가 아니면 사용법을 알려주고 멈춘다
+1. "이번 요청"의 인자 원문에서 종목과 모드를 읽는다. 모드 이름 확인은 코어가 한다 (snapshot이 잘못된 모드를 거부한다)
 2. `node src/cli/floor.ts snapshot --symbol '<종목>' --mode <모드> --interface floor`
    - 표준 출력 JSON의 `jobId`를 기억한다
    - 종료 코드 2(지원하지 않는 종목)·3(필수 데이터 부족)·1이면 JSON의 `error`를 사용자에게 전하고 멈춘다. 모델 판단으로 결과를 만들지 않는다
