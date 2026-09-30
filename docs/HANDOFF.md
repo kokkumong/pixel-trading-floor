@@ -23,47 +23,27 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 12 | 포지션 북 스키마·검증·저장(`.floor/positions.json`)·API, 입력 화면, 파생 값 (P2-1, P2-5-T1) | ✅ |
 | 13 | 행동 집합 확장·스키마 v3·규칙 엔진·수량 제안·프롬프트·역할별 입력·`/floor` 투영 (P2-2·3·4) | ✅ |
 | 14 | 리포트·화면 표기·고지·마스킹·LAN·데모 fixture (P2-5·6·8) | ✅ |
-| **15** | **macOS 시작 파일·시작 시 doctor·가이드 개정 (P2-7, P2-6-R5)** | **다음** |
+| 15 | macOS·Windows 시작 파일, 시작 시 doctor, 가이드 v1.6 (P2-7, P2-6-R5) → **P2 구현 끝** | ✅ |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-- Phase: 15, 이슈 #31, 브랜치 `feature/31-phase15-start-files` (push 완료, PR 아직 없음)
-- 다음 단계: 마무리 (구현 세션 문맥 19.6만 토큰으로 분리)
-- 범위: 사용자 요청으로 macOS만이 아니라 **macOS·Windows 둘 다** 같은 수준으로 맞춤 (시작 파일 4개 모두 Node 검사 + `--open --doctor`)
-- 통과 기준:
-  - P2-7-R1 ✅ `test/scripts/start-scripts.test.ts`(macOS 실행 권한·LF·bash로 실제 실행해 `--open --doctor`/`--lan` 인자 확인), `test/server/zip.test.ts`·`test/server/app.test.ts`(project.zip의 `.command` 755)
-  - P2-7-R2 ✅ `test/core/diag.test.ts`(시작 점검 항목·안내 문구), `test/server/main.test.ts`(`--doctor` 요약이 접속 주소보다 먼저, 부족해도 서버 뜸), `test/server/options.test.ts`, `test/scripts/start-scripts.test.ts`(Node 없음·20.x 거부, 4개 파일의 버전 검사식을 7개 버전으로 평가)
-  - P2-7-T1 🔶 셸 수준 수동 확인만 함: `env -i PATH=/usr/bin:/bin`(Finder 상황)으로 `start-floor.command` 실행 → node@22 찾음, 시작 점검 표시, 서버 시작, 브라우저 열림. **Finder 더블클릭 확인은 사용자에게 요청하거나 마무리 세션에서 `open start-floor.command`로 1회** (브라우저 탭이 열림)
-  - P2-6-R5 ✅ 가이드 v1.6 (`docs/PIXEL-TRADING-FLOOR-가이드-v1.6.md`)
-  - 결함 주입 5건(안내 줄 제거·`--doctor` 무시·zip 권한 0·`.command` 인자 누락·버전 검사식 22.6 허용) 모두 테스트가 잡음
-- 바꾼 파일: `start-floor.command`·`start-floor-lan.command`(신규, 100755), `start-floor.cmd`·`start-floor-lan.cmd`, `src/core/diag.ts`(`claudeChecks` 분리, `startupDoctor`·`formatStartupDoctor`), `src/server/options.ts`(`doctor`), `src/server/main.ts`(`--doctor`, `StartDeps.doctor`, 표지 "분석 도구 (실제 주문 기능 없음)"), `src/server/zip.ts`(`ZipEntry.mode`, `ZipWriter.add(name, data, mode?)`), `src/server/bundle.ts`(`bundleFileMode`, BUNDLE_INCLUDE에 `.command` 2개), `src/server/app.ts`(project.zip에 권한), `src/web/floor.js`(데모에서 `보유 포지션` 버튼 숨김), `.claude/launch.json`(`autoPort`), 테스트 `test/core/diag.test.ts`·`test/server/{main,options,zip,app}.test.ts`·`test/server/zip-reader.ts`(mode 읽기)·`test/scripts/start-scripts.test.ts`
-- 결정:
-  - 시작 점검은 서버 `--doctor` 한 곳에 두고 두 OS 시작 파일이 같이 쓴다. 항목은 Node 버전·Claude CLI·버전·로그인 4줄만(네트워크·디스크 없음, 실측 0.4초). `[정상]/[주의]/[오류]/[건너뜀]` + `→ 안내`. `[오류]`여도 서버는 켠다(데모·리포트 보기). 전체 진단은 `/diagnostics`
-  - Node 없음·22.18 미만은 서버가 TS를 못 돌리므로 시작 파일(셸)이 먼저 거른다
-  - macOS: Finder 실행은 PATH가 짧거나 오래된 node가 먼저 잡힐 수 있어, 조건(22.18+)에 맞는 첫 node를 `/opt/homebrew/bin`·`/usr/local/bin`·`~/.volta/bin`·`/opt/homebrew/opt/node*/bin`(keg-only node@22)·`/usr/local/opt/node*/bin`·nvm 순으로 찾는다. `FLOOR_NODE_SEARCH`는 테스트용 탐색 목록(설정되면 nvm도 안 봄). 서버가 오류로 끝나면 `|| pause`로 창 유지
-  - zip 유닉스 권한은 mode를 준 항목만 기록(project.zip). all.zip은 예전 형식 그대로
-  - 프롬프트 `shared/common.md`의 "분석 시뮬레이션" 문구는 모델 입력이라 그대로 둠
-- 이 세션에서 알게 된 것:
-  - 이 Mac: `/opt/homebrew/bin/node`는 18.20.8, 셸 PATH의 node는 `/opt/homebrew/opt/node@22/bin`(22.22.0). 짧은 PATH에서는 `~/.claude/local`의 오래된 claude 2.1.107이 잡혀 시작 점검이 `[오류] Claude CLI 버전`을 냄(평소 셸은 2.1.285) — 안내가 제대로 뜨는 실례
-  - 사용자가 8000번에 이전 코드 서버(`node src/server/main.ts --open`, 11:11 시작)를 켜 두고 있었음 → 미리보기는 autoPort로 다른 포트 사용
-  - 웹 확인(Phase 14에서 넘어온 일) 완료: 데모 "보유 예시"(알고리즘 모드에 `btc-reduce`만 뜸) → 판정 패널에 `사용한 포지션:` 줄, `일부 청산 검토 (50%)`, `PM 승인`, 고지 표시. 실전 화면 `보유 포지션` 입력 창 열림. 데모에서 버튼이 눌러도 반응 없던 결함은 고침
-- 남은 일 (마무리 세션, 순서대로):
-  1. (선택) P2-7-T1 Finder 더블클릭 확인
-  2. 진행표 15 ✅, P2 완료 표시 (다음 Phase 없음 → "P1 구현 완료 후 남은 일"처럼 P2 완료 뒤 남은 일 정리), 이 절을 "Phase 15 결과/이후 참고"로 옮기고 `없음`으로
-  3. `docs/ARCHITECTURE.md` 해당 절에 `startupDoctor`·`--doctor`·zip mode·시작 파일 짧게 추가
-  4. 메모리 `project-status.md`의 Phase 15 상태 갱신
-  5. PR(`Close #31`) → 검사 통과 시 병합
-- 실측: 시작 점검 0.4초(이 Mac, 호출 0회). 실제 claude 스모크는 안 함 (이번 변경은 모델 호출 경로를 건드리지 않음)
+없음
 
-## Phase 15 참고
-- 범위: P2 명세 7장과 P2-6-R5 — macOS 시작 파일 `start-floor.command`(실행 권한, 서버 시작 + `--open`), 시작 시 doctor 요약(Node 버전·`claude` 설치·로그인, 부족하면 창에 안내, P1-8 통합 진단 재사용), 가이드 개정(포지션 입력 방법, 모델로 보내는 정보(비율만)·로컬 저장 위치, 수량 제안의 의미와 한계, 주문하지 않는다는 점, 표지 "분석 시뮬레이션" → "분석 도구")
-- 통과 기준: P2-7-T1(macOS 수동 확인), P2-6-R5(가이드). `start-floor.command`는 `BUNDLE_INCLUDE`(`src/server/bundle.ts`)에도 추가
-- 쓸 API·파일: `runDiagnostics`(`src/core/diag.ts`, 이제 `positions` 옵션으로 "포지션 N건 저장됨" 한 줄), `startServer`(`src/server/main.ts`, `--open`), 기존 `start-floor.cmd`·`start-floor-lan.cmd`, 가이드 `docs/PIXEL-TRADING-FLOOR-가이드-v*.md`(개정 규칙: rename + 개정 이력). 가이드에 쓸 화면: 판정 패널의 `사용한 포지션:` 줄·고지 문구, 데모의 "보유 예시" 선택, LAN·zip의 `[masked]`
-- Phase 15로 넘어온 일:
-  - 웹 패널(포지션 요약·고지·보유 판정 행·데모 보유 예시 선택)을 브라우저로 직접 확인하지 못함 (Phase 14 세션에서 미리보기 생략). 화면 모델은 `test/web/model.test.ts`로만 확인됨 → 가이드 스크린샷을 만들 때 함께 확인
-  - (선택) 실제 스모크: 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → 포지션 행동으로 완료되는지, 호출 수·시간·비용
-- Phase 14 통과 기준: P2-5-T2·P2-5-T3·P2-6-T1·P2-6-T2·P2-6-R3·P2-2-R4 `test/core/position-report.test.ts`, P2-5-T3(LAN·SSE·리포트·all.zip·project.zip) `test/server/app.test.ts` 끝, P2-8-T1 `test/core/demo.test.ts`, P2-8-R1 `test/server/jobs.test.ts`. 결함 주입 7건(마스킹·고지·NO_TRADE 주석·LAN 보기·데모 북·진단 값·요약) 모두 테스트가 잡음
+## Phase 15 결과와 P2 이후 참고 (개발 Phase 없음)
+P2(Phase 11~15) 구현은 끝났다. 남은 것은 사용자가 하거나 선택하는 일이다.
+- 미확인: P2-7-T1 Finder 더블클릭(`start-floor.command`를 Finder에서 열어 시작 점검 표시·브라우저 열림 확인). 셸 수준 확인만 했다(`env -i PATH=/usr/bin:/bin`으로 실행 → node@22 탐색, 시작 점검, 서버 시작, 브라우저 열림). Windows 시작 파일은 Node 버전 검사식을 테스트로만 확인했고 실기 확인은 없다
+- 선택: 실제 스모크 — 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → 포지션 행동으로 완료되는지, 호출 수·시간·비용 기록. 가이드 스크린샷은 없다(가이드는 Markdown 텍스트)
+- Phase 15 결정 (유지):
+  - 시작 점검은 서버 `--doctor` 한 곳에 두고 두 OS 시작 파일이 같이 쓴다. `[오류]`여도 서버는 켠다. Node 없음·22.18 미만은 서버가 TS를 못 돌리므로 시작 파일(셸)이 먼저 거른다
+  - macOS node 탐색 순서·`FLOOR_NODE_SEARCH`·zip mode는 ARCHITECTURE.md "리포트·데모·진단·CLI" 절
+  - 표지 문구는 "분석 도구 (실제 주문 기능 없음)". 프롬프트 `shared/common.md`의 "분석 시뮬레이션"은 모델 입력이라 그대로
+  - 가이드 v1.6: 보유 포지션 입력·판정·수량 제안 한계·모델로 보내는 정보(비율만)·저장 위치, macOS 설치·시작 파일, 시작 점검
+  - 데모 화면에서는 `보유 포지션` 버튼을 숨긴다(데모는 포지션 북을 읽지 않음)
+  - `.claude/launch.json`에 `autoPort`(8000번이 사용 중이면 다른 포트)
+- 알려진 것: 짧은 PATH에서는 `~/.claude/local`의 오래된 claude가 먼저 잡혀 시작 점검이 `[오류] Claude CLI 버전`을 낸다(안내 문구가 제대로 뜨는 실례)
+- 실측: 시작 점검 0.4초(이 Mac, 모델 호출 0회). 실제 claude 스모크는 안 함
+- Phase 14 통과 기준: P2-5-T2·P2-5-T3·P2-6-T1·P2-6-T2·P2-6-R3·P2-2-R4 `test/core/position-report.test.ts`, P2-5-T3(LAN·SSE·리포트·all.zip·project.zip) `test/server/app.test.ts` 끝, P2-8-T1 `test/core/demo.test.ts`, P2-8-R1 `test/server/jobs.test.ts`
 - Phase 14 결정 (유지):
   - 표시: `panelView(d, now, pc)`의 `PanelView.position`(판정에 쓴 포지션 요약: 시장·방향·레버리지·평단·수익률(레버리지 반영)·손절·청산가·`기준 <book.updatedAt>`, 수량·총 자산 없음, `d.positionRef === pc.position.id`일 때만)과 `disclaimer`(`DISCLAIMER`, 모든 패널·리포트). NO_TRADE 주석은 북을 읽었고 보유 없음이면 `NO_POSITION_BIAS_NOTE`, 북 없음·오류·이전 작업은 `BIAS_NOTE` — 명세 P2-6-R3을 "상황에 맞는 문구"로 해석
   - 리포트 v2(`reportSchemaVersion: 2`, `positionContext?`), store는 1·2 읽음. Markdown: 제목 아래 고지, `### 보유 포지션`(요약·판정 뒤 손절/목표/청산 비율·수량 계산 조건·컨텍스트 notes), 끝줄 고지 + "이 앱에는 주문 기능이 없습니다". 총 자산·손실 한도 금액은 Markdown에 없음
@@ -96,6 +76,7 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 
 ## 실측 기록
 
+- Phase 15: 시작 점검 0.4초(이 Mac), 모델 호출 없음
 - Phase 13: 모델 호출 없음(실측 없음, 스모크는 Phase 14로 미룸)
 - Phase 12: 모델 호출 없음(실측 없음)
 - 실측(haiku, TARO 1회, Phase 3): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰 → Phase 4에서 스키마 길이 축소 (narrative 1000자, claims 최대 6개)
