@@ -341,13 +341,14 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
     if (v.json) {
       json({ jobId: r.jobId, state: r.state, demo, report: r.report, decision: decisionJson(job), usage: { modelCallCount: r.usage.modelCallCount, retryCallCount: r.usage.retryCallCount }, error: errorJson(job) });
     } else {
-      deps.out(formatSummary(job, sec().trim()));
+      deps.out(formatSummary(job, sec().trim(), clock()));
     }
     return exitForState(r.state);
   }
 }
 
-function formatSummary(job: Job, seconds: string): string {
+/** 사람용 요약. 판정 표기는 리포트·웹 패널과 같은 panelView를 쓰고, 만료는 작업 시계(데모는 데모 시계) 기준 */
+function formatSummary(job: Job, seconds: string, now: Date): string {
   const r = job.record;
   const L: string[] = [];
   if (r.demo) L.push('[DEMO · 실제 데이터 아님]');
@@ -358,11 +359,17 @@ function formatSummary(job: Job, seconds: string): string {
   if (cost > 0) L.push(`보고 비용 $${cost.toFixed(4)}`);
   const d = r.finalDecision;
   if (d && d.action && d.bias) {
-    const pv = panelView(d);
-    L.push('', `[${pv.badges.join('] [')}] ${pv.title}`.replace('[] ', ''), `  ${pv.headline}${pv.headline === actionBiasLabel(d.action, d.bias) ? '' : ` (${actionBiasLabel(d.action, d.bias)})`}${d.confidence ? ` · 확신도 ${d.confidence.band} (${CONFIDENCE_NOTE})` : ''}`);
+    const pv = panelView(d, now, r.positionContext ?? null);
+    const plan = d.positionPlan;
+    const label = actionBiasLabel(d.action, d.bias, plan?.sizeFraction ?? null);
+    L.push('', `[${pv.badges.join('] [')}] ${pv.title}`.replace('[] ', ''), `  ${pv.headline}${pv.headline === label ? '' : ` (${label})`}${d.confidence ? ` · 확신도 ${d.confidence.band} (${CONFIDENCE_NOTE})` : ''}`);
+    if (pv.position) L.push(`  ${pv.position}`); // P2-6-R3
     for (const n of pv.notes) L.push(`  · ${n}`);
-    if (d.proposal) L.push(`  진입 ${d.proposal.entry.type} ${d.proposal.entry.min ?? '-'}~${d.proposal.entry.max ?? '-'} · 손절 ${d.proposal.stopLoss ?? '-'} · 목표 ${d.proposal.targets.join(', ') || '-'}`);
+    // 보유 포지션 판정(유지·청산 검토)은 진입 대신 판정 뒤 손절·목표 (P2-2-R5, 웹 panelModel과 같은 규칙)
+    if (plan && d.action !== 'ADD') L.push(`  손절 ${plan.stopLoss ?? '-'}${plan.stopUpdated ? ' (갱신)' : ''} · 목표 ${plan.targets.join(', ') || '-'}`);
+    else if (d.proposal) L.push(`  진입 ${d.proposal.entry.type} ${d.proposal.entry.min ?? '-'}~${d.proposal.entry.max ?? '-'} · 손절 ${d.proposal.stopLoss ?? '-'} · 목표 ${d.proposal.targets.join(', ') || '-'}`);
     for (const x of d.ruleEngine.violations) L.push(`  ✗ ${x.code}: ${x.message}`);
+    L.push(`  ${pv.disclaimer}`); // P2-6-R2
   }
   if (r.report) L.push('', `리포트 ${r.report.md}`);
   return L.join('\n');
