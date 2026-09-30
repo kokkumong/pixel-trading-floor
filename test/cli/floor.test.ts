@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { EXIT, main, parseMode, type CliDeps } from '../../src/cli/floor.ts';
 import type { RoleInput } from '../../src/core/data/project.ts';
 import { budgetFor } from '../../src/core/job/budget.ts';
+import { DISCLAIMER } from '../../src/core/rules/display.ts';
 import type { Mode, Role } from '../../src/core/schema/types.ts';
 import { replayAcquirer } from '../data-helpers.ts';
 import { autoDriver, sampleOutput, sampleProposal } from '../job-helpers.ts';
@@ -251,4 +252,29 @@ test('알 수 없는 명령·옵션은 종료 코드 1과 사용법', async () =
   const o = await h.run('snapshot', '--evil');
   assert.equal(o.code, EXIT.OTHER);
   assert.match(o.err, /사용법/);
+});
+
+test('P2-6-R3 · P2-6-R2 · P2-2-R5 analyze --demo 포지션 요약: 사용한 포지션·고지·판정 뒤 손절·목표를 쓰고 데모 시계로 만료를 판단한다', async () => {
+  const h = harness('scalp');
+  const hold = await h.run('analyze', 'BTC', 'scalp', '--demo', '--scenario', 'btc-hold');
+  assert.equal(hold.code, EXIT.OK, hold.err);
+  assert.match(hold.out, /사용한 포지션: .*평단/);
+  assert.ok(hold.out.includes(DISCLAIMER), hold.out);
+  assert.doesNotMatch(hold.out, /\[만료\]/);
+  assert.doesNotMatch(hold.out, /진입 market/);
+  assert.match(hold.out, /\n {2}손절 \d[\d.]*( \(갱신\))? · 목표 /);
+
+  const exit = await h.run('analyze', 'BTC', 'scalp', '--demo', '--scenario', 'btc-exit');
+  assert.equal(exit.code, EXIT.OK, exit.err);
+  assert.doesNotMatch(exit.out, /\[만료\]|진입 market/);
+  assert.match(exit.out, /사용한 포지션: /);
+});
+
+test('P2-6-R1 analyze --demo REDUCE 헤드라인에 판정 표기를 중복해 붙이지 않는다', async () => {
+  const h = harness('algorithm');
+  const r = await h.run('analyze', 'BTC', 'algorithm', '--demo', '--scenario', 'btc-reduce');
+  assert.equal(r.code, EXIT.OK, r.err);
+  assert.match(r.out, /일부 청산 검토 \(50%\) · 확신도/);
+  assert.doesNotMatch(r.out, /\(일부 청산 검토\)|진입 market/);
+  assert.ok(r.out.includes(DISCLAIMER));
 });
