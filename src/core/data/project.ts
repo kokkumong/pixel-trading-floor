@@ -3,7 +3,7 @@
 // 애널리스트 입력에는 다른 애널리스트의 출력이 없다 (P1-10-R4).
 import type { Briefing, DebateMessage, PmOutput } from '../schema/agents.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
-import type { Mode, Role } from '../schema/types.ts';
+import type { Currency, Mode, Role } from '../schema/types.ts';
 import type { Candle } from './candles.ts';
 import type { AnalysisSnapshot, SnapshotSource } from './snapshot.ts';
 import type { CandlePayload, NewsPayload, PricePayload } from './sources.ts';
@@ -101,6 +101,17 @@ function priceBasis(s: AnalysisSnapshot): RoleInput['priceBasis'] {
   if (!src) return undefined;
   const p = src.payload as PricePayload;
   return { sourceRef: id, currency: p.currency, last: p.last, mark: p.mark };
+}
+
+/** 판정 기준 가격 한 개 (mark 우선, 없으면 last). 포지션 파생 값의 현재가 (P2 포지션 명세 3.2절). 추정 시세는 쓰지 않는다 */
+export function referencePrice(s: AnalysisSnapshot): { value: number; kind: 'mark' | 'last'; sourceRef: string; currency: Currency } | null {
+  const id = judgmentPriceSourceOf(s);
+  const src = usable(s, id);
+  if (!src || src.estimated) return null;
+  const p = src.payload as PricePayload;
+  if (p.mark !== null && p.mark > 0) return { value: p.mark, kind: 'mark', sourceRef: id, currency: p.currency };
+  if (p.last !== null && p.last > 0) return { value: p.last, kind: 'last', sourceRef: id, currency: p.currency };
+  return null;
 }
 
 function judgmentPriceSourceOf(s: AnalysisSnapshot): string {

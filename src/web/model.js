@@ -357,6 +357,8 @@ export function panelModel(job, nowMs) {
     tone: job.panel.tone,
     // 강제 방향의 근거 부족 표기는 notes 맨 앞에 온다 (panelView). 화면은 notes를 방향 표시보다 먼저 그린다
     notes: /** @type {string[]} */ (job.panel.notes),
+    // 코드가 만든 포지션 한 줄 (다른 시장 보유·오래된 보유 정보·파일 오류, P2-1-R9·R10). 금액은 없다
+    positionNotes: /** @type {string[]} */ (job.positionNotes ?? []),
     confidence: d.confidence ? d.confidence.band : null,
     confidenceNote: d.confidence ? CONFIDENCE_NOTE : null,
     rows,

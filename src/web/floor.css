@@ -217,3 +217,19 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
   .trading-body { grid-template-columns: 1fr; }
   #symbol { width: 150px; }
 }
+
+/* 보유 포지션 (P2-1-R1·R7·R9) */
+.holding { font-size: 13px; color: var(--muted); align-self: center; }
+.pos-summary { display: flex; gap: 12px; padding: 4px 16px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--line); font-size: 13px; }
+.pos-rows { display: flex; gap: 16px; flex-wrap: wrap; }
+.pos-form fieldset { border: 1px solid var(--line); margin: 8px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 12px; }
+.pos-form legend { color: var(--gold); }
+.pos-form label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.pos-form input, .pos-form select { background: var(--bg); color: var(--fg); border: 1px solid #2d3140; padding: 3px 6px; font: inherit; }
+.pos-form .dialog-actions { grid-column: 1 / -1; }
+.field-err { color: var(--red); font-size: 12px; min-height: 0; }
+.pos-list { list-style: none; padding: 0; margin: 8px 0; }
+.pos-list li { display: flex; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.pos-list li span:first-child { flex: 1; }
+.pos-errors { color: var(--red); font-size: 13px; padding-left: 18px; }
+#panel-position div { color: var(--muted); }

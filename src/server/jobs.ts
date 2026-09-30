@@ -8,7 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createBlockedNet, type NetClient } from '../core/data/net.ts';
+import { yahooUsLookup } from '../core/data/adapters.ts';
+import { createBlockedNet, createRealNet, type NetClient } from '../core/data/net.ts';
 import { normalizeSymbolInput } from '../core/data/registry.ts';
 import type { AnalysisSnapshot } from '../core/data/snapshot.ts';
 import { demoAcquirer, demoClock, demoDriver, DemoUnavailableError, loadDemo } from '../core/demo.ts';
@@ -22,6 +23,7 @@ import { realAcquirer, realClaudeCheck, realClaudeVersion, type ClaudeCheck } fr
 import { createClaudeCliDriver } from '../core/model/claude-cli.ts';
 import type { ModelDriver } from '../core/model/driver.ts';
 import { ERROR_CODES, type ErrorCode } from '../core/model/errors.ts';
+import { PositionService } from '../core/position/service.ts';
 import { ReportStore, reportSaver } from '../core/report/store.ts';
 import { MODES, type Mode, type Role } from '../core/schema/types.ts';
 import { redact } from './security.ts';
@@ -57,6 +59,8 @@ export interface JobManagerOptions {
   /** 데모 네트워크 (기본: 차단 구현). 테스트가 요청 수를 센다 */
   demoNet?: NetClient;
   log?: (line: string) => void;
+  /** 보유 포지션 북 (기본: <root>/.floor/positions.json, 미국 종목은 실제 조회) */
+  positions?: PositionService;
 }
 
 /** 저장할 때마다 알린다 (SSE) */
@@ -85,6 +89,7 @@ const rejected = (status: 400 | 503, code: string, message: string, hint?: strin
 export class JobManager {
   readonly jobs: JobStore;
   readonly reports: ReportStore;
+  readonly positions: PositionService;
   private readonly o: JobManagerOptions;
   private readonly now: () => Date;
   private readonly max: number;
@@ -108,6 +113,7 @@ export class JobManager {
     this.max = o.maxConcurrentJobs ?? MAX_CONCURRENT_JOBS;
     this.jobs = new ObservedJobStore(join(o.root, 'jobs'), (rec) => this.emit(rec.jobId, () => ({ type: 'job', job: jobView(rec, this.now(), this.home) })));
     this.reports = new ReportStore(join(o.root, 'reports'), o.tzOffsetMinutes === undefined ? {} : { tzOffsetMinutes: o.tzOffsetMinutes });
+    this.positions = o.positions ?? new PositionService({ root: o.root, now: this.now, lookup: (t) => yahooUsLookup(createRealNet())(t) });
   }
 
   /**
@@ -180,7 +186,7 @@ export class JobManager {
         version = () => (this.version ??= (this.o.claudeVersion ?? (() => realClaudeVersion(this.o.env)))());
       }
 
-      const engine = createEngine({ store: this.jobs, now: clock });
+      const engine = createEngine({ store: this.jobs, now: clock, positions: () => this.positions.read() });
       const jobId = randomUUID();
       const ac = new AbortController();
       // createJob은 첫 await 전에 작업 기록을 만든다: 여기서 돌려주는 jobId는 바로 조회할 수 있다

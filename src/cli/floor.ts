@@ -23,6 +23,7 @@ import { createClaudeCliDriver, type ClaudeExecutable } from '../core/model/clau
 import { needsDiagnostics, realAcquirer, realClaudeCheck, realClaudeVersion, type ClaudeCheck } from '../core/live.ts';
 import type { ModelDriver } from '../core/model/driver.ts';
 import { ERROR_CODES } from '../core/model/errors.ts';
+import { PositionService } from '../core/position/service.ts';
 import { ReportStore, reportSaver } from '../core/report/store.ts';
 import { actionBiasLabel, CONFIDENCE_NOTE, panelView } from '../core/rules/display.ts';
 import { MODES, type Mode } from '../core/schema/types.ts';
@@ -131,6 +132,8 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   const now = deps.now ?? (() => new Date());
   const jobs = new JobStore(join(deps.root, 'jobs'));
   const reports = new ReportStore(join(deps.root, 'reports'), deps.tzOffsetMinutes === undefined ? {} : { tzOffsetMinutes: deps.tzOffsetMinutes });
+  // 보유 포지션은 작업 시작 때 한 번 읽어 고정한다 (P2-1-R8). 모델 입력 투영은 Phase 13
+  const positions = new PositionService({ root: deps.root, now });
 
   const symbolMode = (): { symbol: string; mode: Mode } | string => {
     const symbol = str('symbol') ?? args.positionals[0];
@@ -159,7 +162,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
       if (typeof sm === 'string') return fail(sm);
       const iface = str('interface') ?? 'floor';
       if (iface !== 'floor' && iface !== 'web') return fail(`--interface는 floor 또는 web`);
-      const engine = createEngine({ store: jobs, now });
+      const engine = createEngine({ store: jobs, now, positions: () => positions.read() });
       engine.sweepAbandoned();
       const acq = (deps.acquirer ?? realAcquirer)(sm.symbol, sm.mode);
       const job = await engine.createJob({ idempotencyKey: `cli-${randomUUID()}`, mode: sm.mode, symbolInput: sm.symbol, interface: iface }, acq);
@@ -299,7 +302,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
       if (!check.ok) return fail(`${check.code}: ${ERROR_CODES[check.code].message} (${check.detail})\n${DIAG_HINT}`);
       acq = (deps.acquirer ?? realAcquirer)(sm.symbol, sm.mode);
     }
-    const engine = createEngine({ store: jobs, now: clock });
+    const engine = createEngine({ store: jobs, now: clock, positions: () => positions.read() });
     engine.sweepAbandoned();
     const t0 = Date.now();
     const sec = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);

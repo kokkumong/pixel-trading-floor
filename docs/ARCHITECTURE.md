@@ -63,6 +63,12 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
 - `scripts/measure-budget.ts`(P1-11 도구): `run <종목> <모드> --count N`이 `analyze`를 반복 실행하고 `report [--interface floor]`가 job.json에서 백분위·산출값·명세 부록 표를 만든다. 본 측정(조합별 10회 이상)은 아직 안 함 (HANDOFF)
 - 시작 스크립트 `start-floor.cmd`·`start-floor-lan.cmd`(P0-7.6): `node src\server\main.ts [--lan] --open`, 서버 출력을 파일로 남기지 않는다(LAN 토큰). `*.cmd`는 `.gitattributes`로 CRLF 고정
 
+## 포지션 (src/core/position, P2)
+- `book.ts`: 포지션 북 스키마(`positions/1`, 최대 50개, 레버리지 20 이하, 메모 200자)와 `validateBook(raw, isKnown)`(기본값 채움·id 부여, 오류는 `{path, message}`), `equityFor(book, currency)`
+- `store.ts`: `.floor/positions.json` 읽기(`BookRead`: ok·missing·invalid)·쓰기(`.floor/` 0700, 임시 0600 → `.bak` 복사 → rename)
+- `context.ts`: `buildPositionContext(read, snapshot, now)` → `position-context/1`(매칭 포지션 메모 제외·계좌·판정 기준 가격·`derive()` 파생 값·다른 시장 보유·경고·한 줄 notes). 작업 시작 때 한 번 만들어 `record.positionContext`에 고정. forced_direction·데모는 null
+- `service.ts` `PositionService`: `GET/PUT /api/positions`의 뒷단. PUT은 북 전체 교체, `symbol`을 `resolveWithLookup`으로 해석, 응답 `BookView {status, book, errors, names}`
+
 ## HTTP 서버 (src/server, src/web)
 - `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음
   - `startServer(argv, env, out, deps)`: `manager.recover()`(web 작업만 INTERRUPTED, 리포트 repair, 임시 파일 정리) → `app.listen()` → 안내 출력. 로컬 토큰 주소(`localUrl()`)와 LAN 토큰 주소는 서버 창에만 한 번. 서버 창 `l`+Enter 로컬 토큰 재발급, `r`+Enter LAN 토큰 재발급, Ctrl+C는 실행 중 분석 취소 뒤 종료. `--open`은 로컬 토큰 주소로 기본 브라우저를 연다(`openBrowser`, 셸 없이: macOS `open`, Windows `rundll32 url.dll,FileProtocolHandler`, 그 밖 `xdg-open`)
@@ -81,4 +87,5 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - 모든 글자는 `textContent`로만 넣는다. `innerHTML`·`insertAdjacentHTML`·`eval` 등은 테스트가 파일을 읽어 금지한다(P1-7-T2). 링크는 서버가 준 경로(`reportUrl`, `/diagnostics`)만
   - 강제 방향: URL·저장값으로 모드를 고르지 않는다(`initialMode`는 항상 algorithm). 확인 여부만 `sessionStorage`(`floor.forcedConfirmed`), `localStorage`는 쓰지 않는다
   - API가 401이면 상단에 "서버 창에 표시된 주소로 다시 여세요" (이슈 #11의 로컬 토큰 도입 대비)
+- `/api/positions`(GET·PUT): access `local`(LAN 기기 403), PUT은 기존 Origin·Sec-Fetch-Site·JSON Content-Type 검사. 웹 `position.js`(순수: 폼 ↔ 포지션 변환·필드 오류·상단 요약·보유 표시·오래된 보유 경고, `test/web/position.test.ts`)
 - 테스트 도구: `test/server/server-helpers.ts`의 `manager()`(녹화 데이터 + autoDriver), `test/server/zip-reader.ts`의 `readZip`

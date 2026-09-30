@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PositionService } from '../../src/core/position/service.ts';
 import type { Mode } from '../../src/core/schema/types.ts';
 import { JobManager, type JobManagerOptions } from '../../src/server/jobs.ts';
 import { replayAcquirer } from '../data-helpers.ts';
@@ -21,6 +22,7 @@ export function manager(over: Partial<JobManagerOptions> & { root?: string } = {
     checkClaude: async () => ({ ok: true }),
     claudeVersion: async () => '2.1.284 (Claude Code)',
     demoDelayMs: 0,
+    positions: new PositionService({ root, now: () => at }),
     ...over,
   });
   return { m, root };

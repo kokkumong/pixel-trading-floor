@@ -33,6 +33,8 @@ export const CSP = "default-src 'self'; script-src 'self'; img-src 'self' data:;
 /** P1-7-R15 */
 export const ALL_ZIP_MAX_BYTES = 200 * 1024 * 1024;
 const MAX_BODY_BYTES = 16 * 1024;
+/** 포지션 50건 + 메모 */
+const POSITIONS_MAX_BYTES = 64 * 1024;
 const SSE_PING_MS = 15_000;
 /** 자원 상한 (보안 재검토): 동시 연결, SSE 연결(IP당·전체), 요청 헤더·본문 수신 시간 */
 export const LIMITS = { maxConnections: 256, ssePerIp: 8, sseTotal: 64, headersTimeoutMs: 15_000, requestTimeoutMs: 30_000 } as const;
@@ -73,7 +75,7 @@ interface Ctx {
 }
 
 interface Route {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   path: RegExp;
   access: Access;
   /** 요청 횟수 분류 (P0-7-R7) */
@@ -157,22 +159,22 @@ export function createApp(o: AppOptions): App {
     else htmlPage(c.res, e.status, e.code, messagePage(String(e.status), clean(e.message)));
   };
 
-  async function readBody(req: IncomingMessage): Promise<Buffer> {
+  async function readBody(req: IncomingMessage, max = MAX_BODY_BYTES): Promise<Buffer> {
     const chunks: Buffer[] = [];
     let size = 0;
     for await (const chunk of req) {
       size += (chunk as Buffer).length;
-      if (size > MAX_BODY_BYTES) throw new HttpError(413, 'E-INPUT', '요청 본문이 너무 큽니다');
+      if (size > max) throw new HttpError(413, 'E-INPUT', '요청 본문이 너무 큽니다');
       chunks.push(chunk as Buffer);
     }
     return Buffer.concat(chunks);
   }
 
-  async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  async function readJsonBody(req: IncomingMessage, max = MAX_BODY_BYTES): Promise<Record<string, unknown>> {
     const type = String(req.headers['content-type'] ?? '');
     if (!type.startsWith('application/json')) throw new HttpError(415, 'E-INPUT', 'Content-Type은 application/json이어야 합니다');
     try {
-      const v = JSON.parse((await readBody(req)).toString('utf8'));
+      const v = JSON.parse((await readBody(req, max)).toString('utf8'));
       if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
     } catch { /* 아래 */ }
     throw new HttpError(400, 'E-INPUT', '요청 본문은 JSON 객체여야 합니다');
@@ -278,6 +280,16 @@ export function createApp(o: AppOptions): App {
         if (r.kind === 'started') return json(c.res, r.existing ? 200 : 202, { jobId: r.jobId, existing: r.existing, job: m.view(r.jobId) });
         if (r.kind === 'busy') return json(c.res, 409, { error: 'E-BUSY', message: '실행 중인 분석이 있습니다', running: r.runningJobId ? m.view(r.runningJobId) : null });
         json(c.res, r.status, { error: r.code, message: clean(r.message), ...(r.hint ? { hint: r.hint } : {}) });
+      },
+    },
+    // P2-1-R11: 포지션 북은 이 PC의 로컬 세션만 (LAN 기기는 403)
+    { method: 'GET', path: /^\/api\/positions$/, access: 'local', handle: (c) => json(c.res, 200, m.positions.view()) },
+    {
+      method: 'PUT', path: /^\/api\/positions$/, access: 'local',
+      handle: async (c) => {
+        const r = await m.positions.put(await readJsonBody(c.req, POSITIONS_MAX_BYTES));
+        if (r.ok) return json(c.res, 200, r.view);
+        json(c.res, 400, { error: 'E-INPUT', message: '포지션 입력에 오류가 있어 저장하지 않았습니다', errors: r.errors });
       },
     },
     {

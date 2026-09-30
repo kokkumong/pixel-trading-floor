@@ -10,6 +10,7 @@
 <body>
 <div id="lan" class="banner warn" hidden></div>
 <div id="reauth" class="banner err" hidden>접속 인증이 만료되었거나 없습니다. 서버 창에 표시된 주소로 다시 여세요.</div>
+<div id="pos-stale" class="banner warn" hidden></div>
 <div id="watermark" class="watermark" aria-hidden="true" hidden>DEMO · 실제 데이터 아님</div>
 
 <header class="bar">
@@ -23,8 +24,10 @@
     </div>
     <button type="submit" id="go" class="go">▶ ANALYZE</button>
     <button type="button" id="cancel" class="cancel" hidden>■ 취소</button>
+    <span id="holding" class="holding" hidden></span>
   </form>
   <nav class="links">
+    <button type="button" id="open-positions" class="link" hidden>보유 포지션</button>
     <button type="button" id="open-data-flow" class="link">데이터가 오가는 곳</button>
     <a href="/reports">리포트</a>
     <a href="/diagnostics" id="diag-link" hidden>진단</a>
@@ -38,6 +41,13 @@
   <span id="readonly" class="warn-text" hidden>LAN 기기에서는 보기만 할 수 있습니다. 분석은 서버 PC에서 실행하세요.</span>
   <span id="status" class="status"></span>
 </div>
+
+<section id="pos-summary" class="pos-summary" hidden aria-label="보유 포지션 요약">
+  <span class="gold">◆ 보유 ◆</span>
+  <span id="pos-rows" class="pos-rows"></span>
+  <span class="grow"></span>
+  <span id="pos-updated" class="muted small"></span>
+</section>
 
 <section class="board" aria-label="전광판">
   <div class="quote">
@@ -71,6 +81,7 @@
           <div id="panel-badges" class="badges"></div>
           <div id="panel-title" class="panel-title"></div>
           <div id="panel-notes" class="panel-notes"></div>
+          <div id="panel-position" class="panel-notes"></div>
           <div id="panel-headline" class="panel-headline"></div>
           <div id="panel-conf" class="panel-conf"></div>
           <dl id="panel-rows" class="panel-rows"></dl>
@@ -104,6 +115,46 @@
     <button type="button" id="forced-cancel" class="small-btn"></button>
     <button type="button" id="forced-accept" class="go forced"></button>
   </div>
+</dialog>
+<dialog id="positions-dialog" class="dialog wide">
+  <h3>보유 포지션 입력</h3>
+  <p class="muted small">이 PC의 <code>.floor/positions.json</code>에만 저장됩니다. 모델에는 평단 대비 비율만 보내고 금액·수량·총 자산·메모는 보내지 않습니다. 이 앱은 주문하지 않습니다.</p>
+  <div id="pos-file-error" class="warn-text" hidden></div>
+  <form id="account-form" class="pos-form" autocomplete="off">
+    <fieldset>
+      <legend>계좌 (통화별 총 자산 · 환율 환산 없음)</legend>
+      <label>KRW <input name="KRW" inputmode="decimal"><span class="field-err" data-for="KRW"></span></label>
+      <label>USD <input name="USD" inputmode="decimal"><span class="field-err" data-for="USD"></span></label>
+      <label>USDT <input name="USDT" inputmode="decimal"><span class="field-err" data-for="USDT"></span></label>
+      <label>1회 손실 한도 % <input name="risk" inputmode="decimal" placeholder="1"><span class="field-err" data-for="risk"></span></label>
+      <button type="submit" class="small-btn">계좌 저장</button>
+    </fieldset>
+  </form>
+  <ul id="pos-list" class="pos-list"></ul>
+  <button type="button" id="pos-add" class="small-btn">＋ 포지션 추가</button>
+  <form id="position-form" class="pos-form" autocomplete="off" hidden>
+    <fieldset>
+      <legend id="pos-form-title">포지션</legend>
+      <label>종목 <input name="symbol" maxlength="32" placeholder="BTC, 삼성전자, AAPL…"><span class="field-err" data-for="symbol"></span></label>
+      <label>시장 <select name="marketType"><option value="spot">현물</option><option value="perpetual">무기한</option></select><span class="field-err" data-for="marketType"></span></label>
+      <label class="perp">방향 <select name="side"><option value="LONG">롱</option><option value="SHORT">숏</option></select><span class="field-err" data-for="side"></span></label>
+      <label>평단 <input name="avgEntryPrice" inputmode="decimal"><span class="field-err" data-for="avgEntryPrice"></span></label>
+      <label>수량 <input name="quantity" inputmode="decimal"><span class="field-err" data-for="quantity"></span></label>
+      <label class="perp">레버리지 <input name="leverage" inputmode="numeric" placeholder="1~20"><span class="field-err" data-for="leverage"></span></label>
+      <label class="perp">마진 <select name="marginMode"><option value="">모름</option><option value="isolated">격리</option><option value="cross">교차</option></select><span class="field-err" data-for="marginMode"></span></label>
+      <label class="perp">청산가 (거래소 화면 값) <input name="liquidationPrice" inputmode="decimal"><span class="field-err" data-for="liquidationPrice"></span></label>
+      <label>손절 <input name="stopLoss" inputmode="decimal"><span class="field-err" data-for="stopLoss"></span></label>
+      <label>목표 (최대 3개, 공백·/로 구분) <input name="targets"><span class="field-err" data-for="targets"></span></label>
+      <label>메모 (모델에 보내지 않음) <input name="note" maxlength="200"><span class="field-err" data-for="note"></span></label>
+      <div class="dialog-actions">
+        <button type="button" id="pos-form-cancel" class="small-btn">취소</button>
+        <button type="submit" class="small-btn">저장</button>
+      </div>
+    </fieldset>
+  </form>
+  <ul id="pos-errors" class="pos-errors"></ul>
+  <div id="pos-saved" class="muted small"></div>
+  <div class="dialog-actions"><button type="button" class="small-btn" data-close>닫기</button></div>
 </dialog>
 <dialog id="flow-dialog" class="dialog">
   <h3 id="flow-title"></h3>
