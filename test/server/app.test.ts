@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiagResult } from '../../src/core/diag.ts';
@@ -690,6 +690,68 @@ test('P0-7-R6 폼 POST가 실제 Origin을 싣도록 Referrer-Policy는 same-ori
     // no-referrer 페이지의 폼 제출처럼 Origin: null이면 거부된다 (정책이 바뀌면 진단·ZIP 버튼이 모두 403이 됨)
     assert.equal((await h.req('/diagnostics', { method: 'POST', origin: 'null' })).status, 403);
     assert.equal((await h.req('/diagnostics', { method: 'POST' })).status, 200);
+  } finally {
+    await h.app.close();
+  }
+});
+
+const btcPerp = (over: Record<string, unknown> = {}) => ({
+  symbol: 'BTC', marketType: 'perpetual', side: 'LONG', avgEntryPrice: 80000, quantity: 0.1, leverage: 10, marginMode: 'isolated',
+  liquidationPrice: 72500, stopLoss: 78000, targets: [90000], note: '메모', ...over,
+});
+
+test('P2-1-T5 LAN 세션은 GET/PUT /api/positions에 403, 서버 PC는 읽고 쓴다', async () => {
+  const l = await lan();
+  try {
+    const cookie = await l.login();
+    assert.equal((await l.remote('/api/positions', { cookie })).status, 403);
+    assert.equal((await l.remote('/api/positions', { cookie, method: 'PUT', body: { positions: [] } })).status, 403);
+    assert.equal((await l.req('/api/positions')).status, 200);
+    assert.equal((await l.req('/api/positions', { method: 'PUT', body: { positions: [btcPerp()] } })).status, 200);
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P2-1-R1·R2 PUT /api/positions: 종목 글자를 instrumentId로 저장, 오류는 필드별 400이고 저장하지 않음', async () => {
+  const h = await start();
+  try {
+    const empty = await h.req('/api/positions');
+    assert.deepEqual([empty.json.status, empty.json.book.positions], ['missing', []]);
+
+    const ok = await h.req('/api/positions', { method: 'PUT', body: { account: { equity: { USDT: 1000 } }, positions: [btcPerp()] } });
+    assert.equal(ok.status, 200);
+    const p = ok.json.book.positions[0];
+    assert.deepEqual([p.instrumentId, 'symbol' in p, ok.json.names['CRYPTO:BTC']], ['CRYPTO:BTC', false, '비트코인 (BTC)']);
+    const saved = readFileSync(join(h.root, '.floor', 'positions.json'), 'utf8');
+
+    const bad = await h.req('/api/positions', { method: 'PUT', body: { positions: [btcPerp({ quantity: -1 }), btcPerp({ symbol: '없는종목', marketType: 'spot' })] } });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(bad.json.errors.map((e: { path: string }) => e.path).sort(), ['$.positions[0].quantity', '$.positions[1].symbol']);
+    assert.equal(readFileSync(join(h.root, '.floor', 'positions.json'), 'utf8'), saved);
+
+    // 교차 출처·잘못된 형식은 부작용 전에 거부
+    assert.equal((await h.req('/api/positions', { method: 'PUT', body: { positions: [] }, origin: 'http://evil.example' })).status, 403);
+    assert.equal((await h.req('/api/positions', { method: 'PUT', body: 'positions=', type: 'application/x-www-form-urlencoded' })).status, 415);
+    assert.equal(readFileSync(join(h.root, '.floor', 'positions.json'), 'utf8'), saved);
+  } finally {
+    await h.app.close();
+  }
+});
+
+test('P2-1-R8·R10 화면 분석은 시작 때 포지션 북을 고정하고, 다른 시장 보유는 한 줄로 보인다', async () => {
+  const h = await start();
+  try {
+    await h.req('/api/positions', { method: 'PUT', body: { positions: [btcPerp()] } });
+    const r = await h.req('/api/analyze', { body: analyzeBody({ mode: 'algorithm' }) }); // BTC 현물 분석
+    assert.equal(r.status, 202);
+    await h.m.idle();
+    const v = (await h.req(`/api/jobs/${r.json.jobId}`)).json;
+    assert.deepEqual(v.positionNotes, ['다른 시장 보유 있음: 비트코인 (BTC) 무기한']);
+    assert.equal('positionContext' in v, false);
+    const rec = h.m.jobs.load(r.json.jobId);
+    assert.equal(rec.positionContext?.position, null);
+    assert.equal(rec.positionContext?.otherMarkets.length, 1);
   } finally {
     await h.app.close();
   }

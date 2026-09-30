@@ -33,6 +33,8 @@ export interface JobView {
   outputs: JobRecord['outputs'];
   warnings: string[];
   evidenceAudit: JobRecord['evidenceAudit'];
+  /** 코드가 만든 보유 정보 문구 (다른 시장 보유, 오래된 보유 정보 등, P2-1-R9·R10). 금액·수량 없음 */
+  positionNotes: string[];
   finalDecision: JobRecord['finalDecision'];
   panel: PanelView | null;
   reportUrl: string | null;
@@ -51,7 +53,7 @@ export function jobView(r: JobRecord, now: Date, home: string = homedir()): JobV
       modelCallCount: r.usage.modelCallCount, retryCallCount: r.usage.retryCallCount,
       calls: r.usage.calls.map((c) => ({ role: c.role, startedAt: c.startedAt, durationSeconds: c.durationSeconds, outcome: c.outcome, retried: c.retried, modelId: c.modelId })),
     },
-    debate: r.debate, outputs: r.outputs, warnings: r.warnings.map(clean), evidenceAudit: r.evidenceAudit ?? [], finalDecision: d,
+    debate: r.debate, outputs: r.outputs, warnings: r.warnings.map(clean), evidenceAudit: r.evidenceAudit ?? [], positionNotes: r.positionContext?.notes ?? [], finalDecision: d,
     panel: d && d.action && d.bias ? panelView(d, now) : null,
     reportUrl: r.report ? `/reports/${r.jobId}` : null,
   };
