@@ -265,7 +265,7 @@
           "kind": "interpretation",
           "text": "ACE는 1.5ATR(약 3,400) 손절 때문에 손익비가 불리하다고 보지만, 눌림 진입이나 돌파 확인 시 목표를 20봉 고점 너머로 잡으면 손익비를 개선할 수 있습니다. 근거가 상승 쪽인데 완전 관망은 다소 방어적입니다.",
           "evidenceRefs": [
-            "brief:ACE#rationale",
+            
             "derived:atr14",
             "derived:recentHigh20"
           ]
@@ -340,7 +340,7 @@
         {
           "claimId": "c5",
           "kind": "observation",
-          "text": "sources가 비어 있어 ACE가 인용한 현재가 84,186을 검증할 수 없습니다.",
+          "text": "sources가 비어 있어 ACE가 인용한 현재가를 검증할 수 없습니다.",
           "evidenceRefs": [
             "derived:lastClose"
           ]
