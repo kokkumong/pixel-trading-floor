@@ -264,6 +264,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
         ...(deps.executable !== undefined ? { executable: deps.executable } : {}),
         claudeTest: v['claude-test'] === true,
         server: { port: parsePort(deps.env.PORT) ?? DEFAULT_PORT, mode: deps.env.FLOOR_LAN === '1' ? 'lan' : 'local', running: false },
+        positions: () => positions.read(),
       });
       if (v.json) json(r);
       else deps.out(formatChecks(r.checks));

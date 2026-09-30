@@ -51,11 +51,11 @@ export async function replaySnapshot(name: string, opts: ReplayOptions = {}): Pr
 }
 
 /** 작업 엔진용 데이터 획득기: 녹화된 응답으로 종목 해석과 소스 수집을 한다. symbol을 주면 녹화 종목 대신 그 입력을 해석한다 */
-export function replayAcquirer(name: string, opts: ReplayOptions & { symbol?: string } = {}): { acquirer: Acquirer; at: Date; mode: Mode; symbol: string } {
+export function replayAcquirer(name: string, opts: ReplayOptions & { symbol?: string } = {}): { acquirer: Acquirer; at: Date; mode: Mode; symbol: string; net: ReturnType<typeof replayNet>['net'] } {
   const { rec, net, at } = replayNet(name, opts);
   const symbol = opts.symbol ?? rec.symbol;
   return {
-    at, mode: rec.mode, symbol,
+    at, mode: rec.mode, symbol, net,
     acquirer: {
       registryVersion: registry.version,
       resolve: () => registry.resolveWithLookup(symbol, rec.mode, yahooUsLookup(net)),

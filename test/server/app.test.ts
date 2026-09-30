@@ -790,6 +790,9 @@ test('P2-5-T3 LAN 응답(작업·SSE·리포트)은 금액·수량·총 자산�
     for (const ext of ['.json', '.md', '']) clean(`report${ext}`, (await l.remote(`/reports/${id}${ext}`, { cookie })).text);
     // 서버 PC는 저장된 원본 그대로
     assert.ok((await l.req(`/reports/${id}.json`)).text.includes(String(EQUITY)));
+    // P2-5-T2: 서버 로그(LAN 요청 줄 포함)에 포지션 값이 없다
+    assert.ok(l.logs.length > 0);
+    for (const s of [String(EQUITY), '0.123457', '메모', '80000']) assert.ok(!l.logs.join('\n').includes(s), `log: ${s}`);
   } finally {
     await l.app.close();
   }

@@ -77,5 +77,5 @@ export async function runWithBook(mode: Mode, overrides: Partial<Record<Role, Ov
   const job = await engine.createJob({ idempotencyKey: `k-${Math.random()}`, mode, symbolInput: r.symbol, interface: 'web' }, r.acquirer);
   const driver = autoDriver(overrides);
   if (job.record.state !== 'INSUFFICIENT_DATA') await runJob(engine, job, driver, new AbortController().signal, { sleep: noSleep });
-  return { engine, job, store, root, driver, rec: job.record, d: job.record.finalDecision };
+  return { engine, job, store, root, driver, rec: job.record, d: job.record.finalDecision, requests: r.net.requests };
 }

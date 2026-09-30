@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import {
   BIAS_NOTE, DISCLAIMER, NO_POSITION_BIAS_NOTE, panelView, positionSummary,
 } from '../../src/core/rules/display.ts';
+import { positionCheck, runDiagnostics } from '../../src/core/diag.ts';
+import { createBlockedNet } from '../../src/core/data/net.ts';
 import { MASK, maskDecision, maskPositionContext, maskReport } from '../../src/core/position/mask.ts';
 import { renderMarkdown } from '../../src/core/report/markdown.ts';
 import { buildReport, type Report } from '../../src/core/report/report.ts';
@@ -151,4 +153,36 @@ test('P2-5-T3 maskReport: 금액·수량·총 자산은 [masked], 가격·비율
   assert.ok(!JSON.stringify(hr).includes(String(SECRET.quantity)));
   assert.equal(maskDecision(null), null);
   assert.equal(maskPositionContext(null), null);
+});
+
+// ── P2-5-R2·R3 로그·진단·외부 요청 ──
+
+/** 포지션 값 문자열 (평단·손절·목표 가격, 수량, 총 자산, 메모) */
+const POSITION_VALUES = [String(SECRET.quantity), String(SECRET.equity), SECRET.note, '80000', '78000', '90000'];
+
+test('P2-5-T2 진단은 포지션 건수만 쓰고 값·오류 내용을 넣지 않는다', async () => {
+  assert.deepEqual(positionCheck(bookRead('perpetual')), { id: 'positions', label: '포지션 북', status: 'ok', detail: '포지션 1건 저장됨' });
+  assert.equal(positionCheck({ status: 'missing', book: null }).detail, '저장된 포지션 없음');
+  const bad = positionCheck({ status: 'invalid', book: null, errors: [{ path: '$.positions[0].quantity', message: `${SECRET.quantity} 음수` }] });
+  assert.equal(bad.status, 'warn');
+  assert.ok(!JSON.stringify(bad).includes(String(SECRET.quantity)));
+  const r = await runDiagnostics({ net: createBlockedNet(), dirs: [], env: {}, executable: null, positions: () => bookRead('perpetual') });
+  assert.equal(r.checks.find((c) => c.id === 'positions')?.detail, '포지션 1건 저장됨');
+  const text = JSON.stringify(r);
+  for (const v of POSITION_VALUES) assert.ok(!text.includes(v), v);
+});
+
+test('P2-5-T2 포지션이 있는 작업의 외부 요청 URL·작업 경고·오류에 포지션 값이 없다', async () => {
+  for (const mode of ['scalp', 'algorithm'] as const) {
+    const { rec, requests } = await runWithBook(mode);
+    assert.equal(rec.state, 'COMPLETED', mode);
+    assert.ok(rec.positionContext?.position, mode);
+    assert.ok(requests.length > 0);
+    // NetClient는 get(url, expect)뿐이라 요청에 실을 수 있는 값은 URL이 전부다. 헤더는 net.ts가 고정한다
+    const sent = requests.join('\n');
+    for (const v of [String(SECRET.quantity), String(SECRET.equity), SECRET.note]) assert.ok(!sent.includes(v), `${mode} 요청: ${v}`);
+    assert.ok(!requests.some((u) => /[?&](qty|quantity|equity|avg|entry|note)=/i.test(u)), mode);
+    const msgs = JSON.stringify([rec.warnings, rec.error]);
+    for (const v of POSITION_VALUES) assert.ok(!msgs.includes(v), `${mode} 경고: ${v}`);
+  }
 });

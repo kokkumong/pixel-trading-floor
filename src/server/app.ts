@@ -128,7 +128,7 @@ export function createApp(o: AppOptions): App {
   const runDiag = o.diagnostics ?? ((claudeTest: boolean) => runDiagnostics({
     net: createRealNet(), env: process.env, claudeTest,
     dirs: [{ label: 'reports/', path: m.reports.dir }, { label: 'jobs/', path: m.jobs.root }],
-    server: { port, mode: o.mode, running: true },
+    server: { port, mode: o.mode, running: true }, positions: () => m.positions.read(),
   }));
   /** 진단 결과의 경로에서 사용자 이름을 가린다 (P1-7-R13) */
   const diagnostics = async (claudeTest: boolean): Promise<DiagResult> => {

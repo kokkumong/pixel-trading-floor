@@ -9,6 +9,7 @@ import { createClockProbe, judgeClock } from './data/clock.ts';
 import type { Expect, NetClient } from './data/net.ts';
 import { createClaudeCliDriver, findClaudeExecutable, runClaudeCommand, type ClaudeExecutable } from './model/claude-cli.ts';
 import type { ErrorCode } from './model/errors.ts';
+import type { BookRead } from './position/store.ts';
 
 export const MIN_NODE_VERSION = '22.18.0';
 /**
@@ -64,6 +65,16 @@ export interface DiagOptions {
   claudeTest?: boolean;
   /** 포트·서버 모드 검사. running이면 이 서버가 그 포트를 쓰는 중이다 */
   server?: { port: number; mode: 'local' | 'lan'; running: boolean };
+  /** 포지션 북 읽기. 결과에는 건수만 쓰고 값은 넣지 않는다 (P2-5-R2) */
+  positions?: () => BookRead;
+}
+
+/** 포지션 북 진단 한 줄: 건수만 (종목·가격·수량·총 자산·메모·오류 내용 없음) */
+export function positionCheck(read: BookRead): Check {
+  const base = { id: 'positions', label: '포지션 북' };
+  if (read.status === 'missing') return { ...base, status: 'ok', detail: '저장된 포지션 없음' };
+  if (read.status === 'invalid') return { ...base, status: 'warn', detail: '파일 오류 — 보유 정보 없이 분석함', hint: '화면의 포지션 입력에서 확인하고 다시 저장하세요' };
+  return { ...base, status: 'ok', detail: `포지션 ${read.book.positions.length}건 저장됨` };
 }
 
 export const LAN_WARNING = 'LAN 공유 중 · 암호화되지 않음';
@@ -196,6 +207,8 @@ export async function runDiagnostics(o: DiagOptions): Promise<DiagResult> {
       add({ id: `dir:${d.label}`, label: `${d.label} 쓰기`, status: 'error', code: 'E-DISK', detail: (e as Error).message, hint: '폴더 권한과 디스크 공간을 확인하세요' });
     }
   }
+
+  if (o.positions) add(positionCheck(o.positions()));
 
   // 포트와 서버 모드
   if (o.server) {
