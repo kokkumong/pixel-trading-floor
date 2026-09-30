@@ -2,6 +2,7 @@
   "fixtureVersion": "v1",
   "scenarios": {
     "algorithm": "btc-algorithm",
-    "scalp": "btc-scalp"
+    "scalp": "btc-scalp",
+    "forced_direction": "btc-forced"
   }
 }

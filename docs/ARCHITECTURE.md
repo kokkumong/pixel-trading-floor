@@ -54,7 +54,7 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - 같은 프로세스에서 MD 단계가 실패하면 JSON도 지우고 E-DISK. 프로세스가 죽으면 JSON만 남을 수 있고 `repair()`가 MD를 다시 만든다. `cleanupTmp(now)`는 1시간 지난 `.tmp-*` 삭제
   - `list(tab)`: `analysis`(기본, 데모 제외) · `simulation` · `lightweight` · `demo`. `get(jobId)`: 파일명의 jobId 앞 8자로 찾고 내용으로 확인
 - 데모: `fixtures/demo/v1/manifest.json`(모드 → 시나리오), `<이름>.snapshot.json`(수집 직후 SourceRecord + 시각), `<이름>.responses.json`(역할별 원래 모델 출력, 스냅샷 ID는 `{{snapshotId}}`). `demoAcquirer`(BlockedNet 연결) + `demoDriver` + `demoClock`(녹화 시각 + 실제 경과). 재조립한 스냅샷 해시가 원본과 같다
-  - 새 데모: 실전 작업 뒤 `node scripts/make-demo.ts <jobId> <이름>` → manifest에 추가. 지금은 algorithm(PM 기각), scalp(ACE 관망)만 있고 forced_direction 데모는 없다
+  - 새 데모: 실전 작업 뒤 `node scripts/make-demo.ts <jobId> <이름>` → manifest에 추가. 지금은 algorithm(PM 기각), scalp(ACE 관망), forced_direction(scalp 녹화를 바탕으로 ACE 응답만 롱·`unforcedAction: NO_TRADE`로 손으로 쓴 fixture)이 있다. 데모 fixture는 근거 검사 경고 0건이어야 한다 (P1-10-T2)
 - 진단: `runDiagnostics({net, dirs, env, executable, claudeTest})` → Node(`nodeCheck`: 최소 버전, `NODE_SECURITY_BASELINE` 보안 릴리스·지원 종료 경고. 새 보안 릴리스가 나오면 표 갱신)·Claude CLI(존재, 버전 ≥ 2.1.280, `auth status`의 loggedIn·authMethod)·API 키 환경변수·공급자 9곳·시계 오차·달력·쓰기 권한·선택 시험 호출(haiku 1회). 이메일·키 값은 결과에 넣지 않는다
 - CLI `node src/cli/floor.ts <analyze|snapshot|next|submit|finalize|doctor>`: `main(argv, deps)`로 테스트한다(의존성 주입). 루트는 `FLOOR_HOME` 또는 프로젝트 폴더. 종료 코드 `EXIT`(P1-5.1: 0, 1 기타, 2 종목, 3 데이터, 4 스키마, 5 예산, 10 단계 없음)
   - `next`는 `inputs/<단계>.json`, `prompts/<단계>.md`, `schemas/<단계>.json`, 출력 자리 `outputs/<단계>.json`을 준다. `submit --file`은 작업 디렉터리 안 파일만

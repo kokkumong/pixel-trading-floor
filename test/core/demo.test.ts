@@ -92,3 +92,23 @@ test('데모 알고리즘 재생 결과는 녹화된 실전 작업(Phase 5 스�
   assert.deepEqual(r.finalDecision?.reasonCodes, ['PM_REJECTED']);
   assert.equal(r.finalDecision?.ruleEngine.verdict, 'PASS');
 });
+
+test('P1-10-T2 데모 fixture는 근거 검사 경고가 0건이다 (모든 데모 모드)', async () => {
+  for (const mode of demoModes()) {
+    const { job } = await runDemo(loadDemo(mode));
+    assert.equal(job.record.state, 'COMPLETED', mode);
+    assert.deepEqual(job.record.evidenceAudit, [], `${mode}: ${JSON.stringify(job.record.evidenceAudit)}`);
+  }
+});
+
+test('P1-8-T1 강제 방향 데모: 신호 없이도 롱/숏 중 하나를 고르고 unforcedAction을 남긴다', async () => {
+  const { job } = await runDemo(loadDemo('forced_direction'));
+  const d = job.record.finalDecision!;
+  assert.equal(job.record.state, 'COMPLETED');
+  assert.equal(d.forcedDirection, true);
+  assert.equal(d.finalDecisionMaker, 'ACE');
+  assert.ok(d.action === 'ENTER_LONG' || d.action === 'ENTER_SHORT', String(d.action));
+  assert.ok(d.unforcedAction !== null);
+  assert.equal(d.ruleEngine.verdict, 'PASS', JSON.stringify(d.ruleEngine.violations));
+  assert.equal(job.record.usage.calls.length, 5);
+});
