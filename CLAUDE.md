@@ -8,7 +8,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - `docs/PIXEL-TRADING-FLOOR-구조-보완안-v*.md` — 목표 구조, 우선순위(5장), P2
 - 문서 버전은 수시로 올라간다. 파일명을 외우지 말고 `ls docs/`로 최신 파일을 찾는다
 - 구현 범위: P0와 P1 전체. `/floor`는 처음부터 공통 코어 구조로 만든다 (과도기 `lightweight`는 스키마에만 존재)
-- `docs/PIXEL-TRADING-FLOOR-가이드-v1.2.pdf` — 사용자용 화면·기능 설명 (구현 대상 UI의 모습)
+- `docs/PIXEL-TRADING-FLOOR-가이드-v*.md` — 사용자용 설치·화면·기능 설명 (개정 규칙은 명세와 같다)
 - 명세 안의 `[코드 확인 필요]`는 신규 프로젝트이므로 "구현 시 결정할 것"으로 읽는다
 - 문서 개정: 파일 하나를 새 버전명으로 rename하고 개정 이력에 한 줄 추가. 이전 버전 사본을 남기지 않는다
 - `docs/HANDOFF.md` — 진행표, 다음 세션 인계, 실측 기록. `docs/ARCHITECTURE.md` — 계층별 상세(모듈·함수·결정). 둘 다 버전 이름 없이 제자리에서 고친다
@@ -70,7 +70,6 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - 한 번 읽은 파일은 다시 읽지 않는다. 편집 뒤 확인용 재읽기를 하지 않는다
 - **긴 출력 줄이기**: 검증은 `npm run -s verify:quiet`. 출력이 길 수 있는 명령은 `| tail -n 40` 또는 파일로 받아 `grep`. CI 실패는 `gh run view <id> --log-failed | tail -n 80`
 - **브라우저**: `read_page`(`filter: interactive`)·`find`·`get_page_text`·`javascript_tool`로 텍스트 확인이 기본. 스크린샷은 모양 확인에 꼭 필요할 때만 `scale: 0.5`로, 증빙은 마지막 1장. 이미지는 세션 끝까지 문맥에 남는다
-- **PDF**: 가이드 PDF를 Read로 열지 않는다. `pdftotext -f <쪽> -l <쪽> -layout <파일> -`로 필요한 쪽만
 - **세션 나누기**: 세션 문맥이 20만 토큰을 넘으면(`get_usage`) 작업 단위를 끝내고 `docs/HANDOFF.md` "진행 중" 절에 인계를 쓰고 멈춘다. 새 세션의 `/next-phase`가 이어받는다
 - **모델**: 설계·구현은 Opus, 인계 문서·PR·병합·단순 수정은 Sonnet
 
