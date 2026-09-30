@@ -40,17 +40,22 @@ export interface AuditInput {
 }
 
 const MISMATCH = 0.005; // P1-10-R3 상대 오차 0.5%
-const NEAR = 0.1; // 참조 값의 ±10% 안에 있는 숫자만 그 값을 옮겨 적은 것으로 본다 (다른 숫자는 비교하지 않는다)
+// 참조 값을 옮겨 적었다고 볼 범위 ±1%. 주장에는 지지·저항·손절처럼 참조 값 근처의 다른 가격이 흔해서
+// 더 넓히면 오탐이 많다 (Phase 9 데모 fixture 확인). 그보다 크게 틀린 값은 잡지 못한다
+const NEAR = 0.01;
+const APPROX = 0.05; // '약 84,000', '84,000대', '20여' 같은 어림수의 허용 오차
 
 export interface TextNumber {
   text: string;
   /** 단위 해석 후보. tolerance는 표기 자릿수의 반올림 폭 */
   candidates: { value: number; tolerance: number }[];
   significant: boolean;
+  /** 어림수: 일치 판정만 느슨하게 하고 불일치·새 수치로 보지 않는다 */
+  approx: boolean;
 }
 
 // 식별자 속 숫자(rsi14, ma50, c2)는 뺀다. 부호는 무시하고 절댓값으로 비교한다
-const NUM = /(?<![A-Za-z\d_.,])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(%|만|억|[kK](?![A-Za-z]))?/g;
+const NUM = /(?<![A-Za-z\d_.,])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(%|만|억|[kK](?![A-Za-z]))?(대|여)?/g;
 
 export function extractNumbers(text: string): TextNumber[] {
   const out: TextNumber[] = [];
@@ -61,15 +66,17 @@ export function extractNumbers(text: string): TextNumber[] {
     const scale = unit === '만' ? 1e4 : unit === '억' ? 1e8 : unit === 'k' || unit === 'K' ? 1e3 : 1;
     const candidates = [{ value: raw * scale, tolerance: half * scale }];
     if (unit === '%') candidates.push({ value: raw / 100, tolerance: half / 100 }); // 비율을 소수로 저장한 값 (펀딩비 등)
+    const approx = Boolean(m[4]) || /약\s*$/.test(text.slice(0, m.index));
     // 한 자리 정수(라운드 수, 봉 개수 등)는 새 수치로 보지 않는다
-    out.push({ text: m[0], candidates, significant: Boolean(m[2] || unit) || raw >= 10 });
+    out.push({ text: m[0], candidates, significant: !approx && (Boolean(m[2] || unit) || raw >= 10), approx });
   }
   return out;
 }
 
 const diff = (c: { value: number }, v: number) => Math.abs(c.value - Math.abs(v));
-const matches = (n: TextNumber, v: number) => n.candidates.some((c) => diff(c, v) <= c.tolerance || diff(c, v) < MISMATCH * Math.abs(v));
-const near = (n: TextNumber, v: number) => v !== 0 && n.candidates.some((c) => diff(c, v) <= NEAR * Math.abs(v));
+const matches = (n: TextNumber, v: number) =>
+  n.candidates.some((c) => diff(c, v) <= c.tolerance || diff(c, v) < (n.approx ? APPROX : MISMATCH) * Math.abs(v));
+const gap = (n: TextNumber, v: number) => Math.min(...n.candidates.map((c) => diff(c, v)));
 
 /** 참조 값의 숫자: 스칼라, 또는 객체·배열의 한 단계 숫자 필드 */
 function numbers(v: unknown): number[] {
@@ -90,13 +97,22 @@ export function auditEvidence(input: AuditInput, index: EvidenceIndex): Evidence
     for (const c of b.claims) {
       unresolved(b.role, c.evidenceRefs, { claimId: c.claimId });
       if (c.kind !== 'observation') continue;
-      const refValues = c.evidenceRefs.flatMap((ref) => numbers(index.value(ref)).map((value) => ({ ref, value })));
-      if (refValues.length === 0) continue;
-      for (const n of extractNumbers(c.text)) {
-        const close = refValues.filter((r) => near(n, r.value));
-        if (close.length === 0 || refValues.some((r) => matches(n, r.value))) continue;
-        const best = close.reduce((a, r) => (Math.abs(r.value - n.candidates[0]!.value) < Math.abs(a.value - n.candidates[0]!.value) ? r : a));
-        issue('VALUE_MISMATCH', b.role, { claimId: c.claimId }, best.ref, `텍스트 ${n.text} ↔ 참조 값 ${best.value}`);
+      // 참조마다: 본문 숫자 중 하나라도 참조 값과 맞으면 옮겨 적은 것이 맞다. 맞는 숫자 없이 ±1% 안의 숫자만 있으면 잘못 옮긴 것으로 본다
+      // 다른 참조 값과 이미 맞는 숫자는 후보에서 뺀다 (sma20처럼 수치 없이 비교에만 인용한 참조가 흔하다)
+      const nums = extractNumbers(c.text);
+      const all = c.evidenceRefs.flatMap((ref) => numbers(index.value(ref)));
+      const loose = nums.filter((n) => !n.approx && !all.some((v) => matches(n, v)));
+      for (const ref of c.evidenceRefs) {
+        const values = numbers(index.value(ref));
+        if (values.some((v) => nums.some((n) => matches(n, v)))) continue;
+        let best: { n: TextNumber; v: number } | null = null;
+        for (const v of values) {
+          for (const n of loose) {
+            if (v === 0 || gap(n, v) > NEAR * Math.abs(v)) continue;
+            if (!best || gap(n, v) / Math.abs(v) < gap(best.n, best.v) / Math.abs(best.v)) best = { n, v };
+          }
+        }
+        if (best) issue('VALUE_MISMATCH', b.role, { claimId: c.claimId }, ref, `텍스트 ${best.n.text} ↔ 참조 값 ${Number(best.v.toPrecision(10))}`);
       }
     }
   }
