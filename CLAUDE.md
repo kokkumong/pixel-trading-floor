@@ -60,6 +60,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 | 데이터: 레지스트리·수집·스냅샷·역할 입력 | `src/core/data` | 데이터 계층 |
 | claude 호출 규약·드라이버·예산·재시도 | `src/core/model`, `src/core/job/budget.ts`·`retry.ts` | claude -p 호출 규약, 모델 호출 계층 |
 | 작업 엔진·프롬프트 | `src/core/job`, `src/core/prompts` | 작업 엔진 |
+| 포지션 북·포지션 컨텍스트 (P2) | `src/core/position` | 포지션 |
 | 리포트·데모·진단·CLI | `src/core/report`, `demo.ts`, `diag.ts`, `src/cli` | 리포트·데모·진단·CLI |
 | HTTP 서버·보안·픽셀 UI | `src/server`, `src/web` | HTTP 서버 |
 
