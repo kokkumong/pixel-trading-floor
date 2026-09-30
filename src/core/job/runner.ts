@@ -19,12 +19,13 @@ export async function runJob(engine: Engine, job: Job, driver: ModelDriver, sign
   budget.modelCallCount = r.usage.modelCallCount;
   budget.retryCallCount = r.usage.retryCallCount;
   budget.calls.push(...r.usage.calls);
+  if (opts.claudeCliVersion) r.claudeCliVersion ??= opts.claudeCliVersion; // 다음 저장에 함께 기록된다 (P1-11-R3)
 
   for (;;) {
     const n = engine.next(job);
     if (n.kind === 'done') return job;
     if (n.kind === 'finalize') {
-      engine.finalize(job, opts.save ? { save: opts.save } : {});
+      engine.finalize(job, opts);
       return job;
     }
 

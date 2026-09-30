@@ -400,8 +400,31 @@ test('녹화된 모든 종목·모드로 정상 작업이 끝나고, 입력이 �
     assert.equal(job.record.state, 'COMPLETED', `${name}: ${job.record.error?.detail}`);
     assert.equal(d?.ruleEngine.verdict, 'PASS', `${name}: ${JSON.stringify(d?.ruleEngine)}`);
     assert.deepEqual(d?.ruleEngine.warnings.filter((w) => w.startsWith('근거 확인 불가')), [], name);
+    assert.deepEqual(job.record.evidenceAudit, [], name);
     for (const c of driver.calls) assert.ok(c.systemPrompt.length + c.input.length <= 20_000, `${name} ${c.role} ${c.input.length}`);
   }
+});
+
+test('P1-10-R1 제출된 브리핑·토론의 근거 검사 결과가 작업 기록에 남고, 판정은 바뀌지 않는다', async () => {
+  const r = replayAcquirer('btc-algorithm');
+  const t = tempEngine(r.at);
+  const job = await t.engine.createJob({ idempotencyKey: 'audit', mode: 'algorithm', symbolInput: r.symbol, interface: 'web' }, r.acquirer);
+  const driver = autoDriver({
+    NOVA: (input) => {
+      const out = sampleOutput('NOVA', input) as { claims: { evidenceRefs: string[] }[] };
+      out.claims[0]!.evidenceRefs = ['snap:binance.perp.price#/nope'];
+      return { output: out };
+    },
+    BEAR: () => ({ output: { steelman: 'BULL 요지', evidenceRefs: ['derived:rsi14'], openIssues: [], summary: '요약', narrative: '반박' } }),
+  });
+  await runJob(t.engine, job, driver, new AbortController().signal, { sleep: noSleep, claudeCliVersion: '9.9.9' });
+  const rec = t.store.load(job.record.jobId);
+  assert.equal(rec.state, 'COMPLETED');
+  assert.equal(rec.claudeCliVersion, '9.9.9'); // P1-11-R3
+  const got = rec.evidenceAudit.map((x) => `${x.label}:${x.role}:${x.claimId ?? x.round}:${x.ref ?? ''}`);
+  assert.ok(got.includes('근거 확인 불가:NOVA:c1:snap:binance.perp.price#/nope'), got.join(' / '));
+  assert.ok(got.includes('브리핑 인용 없음:BEAR:1:'), got.join(' / '));
+  assert.equal(rec.finalDecision?.ruleEngine.verdict, 'PASS');
 });
 
 test('P1-1-R5 서버 시작 복구 대상을 고를 수 있다: web 작업만 INTERRUPTED, 진행 중 /floor 작업은 그대로', async () => {

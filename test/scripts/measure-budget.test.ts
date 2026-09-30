@@ -23,6 +23,7 @@ function job(mode: JobRecord['mode'], state: JobRecord['state'], calls: [CallRec
     createdAt: new Date(start).toISOString(), history: [{ state: 'QUEUED', at: new Date(start).toISOString() }, { state, at: new Date(t).toISOString() }],
     usage: { modelCallCount: recs.length, retryCallCount: 0, roleTurnCount: null, calls: recs },
     promptHashes: { TARO: 'aaa', ACE: 'bbb' },
+    claudeCliVersion: '2.1.284',
     ...extra,
   } as JobRecord;
 }
@@ -85,6 +86,19 @@ test('P1-11-R3 표본에 모델·프롬프트가 섞여 있으면 재측정 대�
   assert.deepEqual(m.derived.inputOverLimit, ['ACE']);
   assert.equal(m.derived.maxInputChars.ACE, 20000); // 상한은 올리지 않는다
   assert.match(m.notes.join(), /표본 3건/); // 10건 미만
+});
+
+test('P1-11-R3 표본에 CLI 버전이 섞이거나 기록이 없으면 재측정 대상으로 표시하고, 부록 표에 표본의 CLI 버전을 적는다', () => {
+  const same = summarize(Array.from({ length: 10 }, (_, i) => scalp(i))).modes.scalp!;
+  assert.deepEqual(same.cliVersions, ['2.1.284']);
+  assert.equal(same.final, true);
+  const mixed = summarize([...Array.from({ length: 9 }, (_, i) => scalp(i)), { ...scalp(9), claudeCliVersion: '2.2.0' }]).modes.scalp!;
+  assert.equal(mixed.final, false);
+  assert.match(mixed.notes.join(), /CLI 버전이 섞임 \(2\.1\.284, 2\.2\.0\)/);
+  const old = summarize([...Array.from({ length: 9 }, (_, i) => scalp(i)), { ...scalp(9), claudeCliVersion: undefined } as unknown as JobRecord]).modes.scalp!;
+  assert.match(old.notes.join(), /CLI 버전 미기록 1건/);
+  const md = toMarkdown(summarize([...Array.from({ length: 9 }, (_, i) => scalp(i)), { ...scalp(9), claudeCliVersion: '2.2.0' }]), { measuredAt: '2026-09-30', environment: 'macOS', claudeCliVersion: '2.3.0' });
+  assert.match(md, /\| 2\.1\.284, 2\.2\.0 \|/);
 });
 
 test('데모·다른 인터페이스 작업은 기본 표본에서 빠지고, /floor는 호출 기록 없이 작업 시간만 센다', () => {

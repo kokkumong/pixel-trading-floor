@@ -1,4 +1,5 @@
 // 작업 기록 jobs/<jobId>/job.json의 형식 (P1 명세 1.3 R2). 역할 출력과 호출 기록을 함께 남긴다 (P1-1-R4 부분 결과).
+import type { EvidenceIssue } from '../rules/audit.ts';
 import type { Briefing, BriefingRole, DebateMessage, PmOutput } from '../schema/agents.ts';
 import type { FinalDecision } from '../schema/decision.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
@@ -54,6 +55,10 @@ export interface JobRecord {
   /** 역할별 프롬프트 내용 해시 (P1-6-R3) */
   promptHashes: Partial<Record<Role, string>>;
   warnings: string[];
+  /** 역할 출력의 근거 인용 검사 결과. 제출마다 다시 계산한다 (P1-10-R1·R3·R5) */
+  evidenceAudit: EvidenceIssue[];
+  /** 실행한 Claude CLI 버전. 예산 실측의 버전 혼재 확인용 (P1-11-R3). 데모는 'none' */
+  claudeCliVersion: string | null;
   finalDecision: FinalDecision | null;
   /** 저장된 리포트 경로 (COMPLETED만, P1-6) */
   report: { json: string; md: string } | null;
@@ -97,6 +102,8 @@ export function newJobRecord(req: JobRequest, now: Date): JobRecord {
     outputs: { briefings: {}, debate: [], blitzPlan: null, proposal: null, reviews: [], pm: null },
     promptHashes: {},
     warnings: [],
+    evidenceAudit: [],
+    claudeCliVersion: null,
     finalDecision: null,
     report: null,
     pids: [],

@@ -15,7 +15,7 @@ import type { SchemaError } from '../schema/dsl.ts';
 import type { FinalDecision } from '../schema/decision.ts';
 import type { MarketType, Role } from '../schema/types.ts';
 import { budgetFor, modelFor, type JobBudget } from './budget.ts';
-import { buildDecision, insufficientDecision } from './decide.ts';
+import { auditJob, buildDecision, insufficientDecision } from './decide.ts';
 import { newJobRecord, type JobRecord, type JobRequest } from './record.ts';
 import type { Validation } from './retry.ts';
 import { isTerminal, transition, type JobState, type TerminalState } from './state.ts';
@@ -62,6 +62,8 @@ export interface EngineOptions {
 export interface FinalizeOptions {
   /** SAVING 단계에서 리포트를 저장한다 (Phase 5). 실패하면 E-DISK */
   save?: (job: Job) => void;
+  /** 작업 기록에 남길 Claude CLI 버전 (P1-11-R3). 이미 기록돼 있으면 덮어쓰지 않는다 */
+  claudeCliVersion?: string;
 }
 
 export type NewJobRequest = Omit<JobRequest, 'jobId'> & { jobId?: string };
@@ -276,6 +278,7 @@ export function createEngine(opts: EngineOptions): Engine {
         return { ok: false, kind: 'schema', errors: c.errors, summary, terminal };
       }
       c.apply(r);
+      r.evidenceAudit = auditJob(r, snapshotOf(job));
       save(job);
       return { ok: true };
     },
@@ -299,6 +302,7 @@ export function createEngine(opts: EngineOptions): Engine {
       const pending = pendingSteps(r);
       if (pending.length > 0) throw new EngineError(`남은 단계가 있음: ${pending.map((s) => s.stepId).join(', ')}`);
       const snap = snapshotOf(job);
+      if (fopts.claudeCliVersion) r.claudeCliVersion ??= fopts.claudeCliVersion;
 
       // P0-F-R5: /floor는 세션 안의 사용량을 강제할 수 없으므로 끝에서 출력 수와 경과 시간을 검사한다
       if (r.executionBackend === 'single_session') {

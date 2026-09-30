@@ -242,7 +242,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
       }
       const claudeCliVersion = await (deps.claudeVersion ?? (() => realClaudeVersion(deps.env)))();
       try {
-        engine.finalize(job, { save: reportSaver(reports, { claudeCliVersion }, now) });
+        engine.finalize(job, { save: reportSaver(reports, { claudeCliVersion }, now), claudeCliVersion });
       } catch (e) {
         if (e instanceof EngineError) return fail(e.message);
         throw e;
@@ -325,7 +325,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
       deps.signal?.addEventListener('abort', onSig, { once: true });
       const claudeCliVersion = scenario ? 'none' : await (deps.claudeVersion ?? (() => realClaudeVersion(deps.env)))();
       try {
-        await runJob(engine, job, driver, ac.signal, { save: reportSaver(reports, { claudeCliVersion }, clock) });
+        await runJob(engine, job, driver, ac.signal, { save: reportSaver(reports, { claudeCliVersion }, clock), claudeCliVersion });
       } finally {
         process.removeListener('SIGINT', onSig);
       }
