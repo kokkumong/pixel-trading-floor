@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { JobManager } from '../../src/server/jobs.ts';
 import type { JobView } from '../../src/server/view.ts';
 import {
-  bubbles, confidenceBand, consoleEntries, DATA_FLOW, errorView, floorPlan, initialMode, MARGIN_LABEL, multiRows, needsForcedConfirm, panelModel, planLabel,
+  bubbles, confidenceBand, consoleEntries, DATA_FLOW, demoScenarioOptions, DISCLAIMER, errorView, floorPlan, initialMode, MARGIN_LABEL, multiRows, needsForcedConfirm, panelModel, planLabel,
 } from '../../src/web/model.js';
 import { buildBoard, collectBoardSources } from '../../src/core/board.ts';
 import { autoDriver, sampleOutput } from '../job-helpers.ts';
@@ -223,4 +223,15 @@ test('P0-F-R6 /floor(단일 세션) 결과 패널에 단일 세션 분석을 표
   assert.equal(panelModel(view, Date.now())!.badges.includes('단일 세션 분석'), false);
   const single = { ...view, finalDecision: { ...view.finalDecision!, executionBackend: 'single_session' as const } };
   assert.ok(panelModel(single, Date.now())!.badges.includes('단일 세션 분석'));
+});
+
+test('P2-8 데모 포지션 예시 선택지: 기본(포지션 없음) + 현재 모드의 시나리오만', () => {
+  const list = [{ name: 'btc-hold', mode: 'scalp', label: 'A' }, { name: 'btc-reduce', mode: 'algorithm', label: 'B' }];
+  assert.deepEqual(demoScenarioOptions(list, 'scalp'), [{ value: '', label: '보유 포지션 없음' }, { value: 'btc-hold', label: '보유 예시: A' }]);
+  assert.deepEqual(demoScenarioOptions(undefined, 'forced_direction'), [{ value: '', label: '보유 포지션 없음' }]);
+});
+
+test('P2-6-T1 화면 패널 모델은 고지 문구를 항상 싣고, 서버 고지와 같은 문구다', async () => {
+  const { DISCLAIMER: server } = await import('../../src/core/rules/display.ts');
+  assert.equal(DISCLAIMER, server);
 });

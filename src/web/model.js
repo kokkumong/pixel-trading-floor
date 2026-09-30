@@ -68,6 +68,15 @@ export function isDemo(search) {
   return new URLSearchParams(search).get('demo') === '1';
 }
 
+/**
+ * 데모 포지션 예시 선택지 (P2-8). 첫 항목은 포지션 없는 기본 데모. 현재 모드의 시나리오만
+ * @param {{ name: string; mode: string; label: string }[] | undefined} scenarios /api/status의 demoScenarios
+ * @param {Mode} mode
+ */
+export function demoScenarioOptions(scenarios, mode) {
+  return [{ value: '', label: '보유 포지션 없음' }, ...(scenarios ?? []).filter((s) => s.mode === mode).map((s) => ({ value: s.name, label: `보유 예시: ${s.label}` }))];
+}
+
 export const FORCED_CONFIRM = {
   title: '강제 방향 시뮬레이션',
   body: [

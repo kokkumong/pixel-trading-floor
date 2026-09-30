@@ -1,5 +1,5 @@
 // 공통 코어 CLI (P1 명세 5.1). 브라우저 경로와 /floor가 같은 엔진 함수를 쓴다 (P1-5-R1).
-//   node src/cli/floor.ts analyze <종목> <모드> [--demo] [--json]      드라이버로 끝까지 실행 (실전: claude -p, 데모: fixture)
+//   node src/cli/floor.ts analyze <종목> <모드> [--demo [--scenario <포지션 데모>]] [--json]      드라이버로 끝까지 실행 (실전: claude -p, 데모: fixture)
 //   node src/cli/floor.ts snapshot --symbol <종목> --mode <모드>        /floor 1단계: 스냅샷과 작업 생성
 //   node src/cli/floor.ts next --job <jobId>                             다음 역할과 입력·프롬프트·스키마 파일
 //   node src/cli/floor.ts submit --job <jobId> --role <단계> --file <출력 JSON>
@@ -12,7 +12,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createRealNet, type NetClient } from '../core/data/net.ts';
-import { demoAcquirer, demoClock, demoDriver, DemoUnavailableError, loadDemo, type DemoScenario } from '../core/demo.ts';
+import { demoAcquirer, demoClock, demoDriver, demoPositions, DemoUnavailableError, loadDemo, type DemoScenario } from '../core/demo.ts';
 import { runDiagnostics, type Check } from '../core/diag.ts';
 import { EngineError, createEngine, type Acquirer, type Engine, type Job } from '../core/job/engine.ts';
 import { runJob } from '../core/job/runner.ts';
@@ -121,7 +121,7 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
       args: rest, allowPositionals: true, strict: true,
       options: {
         symbol: { type: 'string' }, mode: { type: 'string' }, job: { type: 'string' }, role: { type: 'string' }, file: { type: 'string' },
-        interface: { type: 'string' }, demo: { type: 'boolean' }, json: { type: 'boolean' }, 'claude-test': { type: 'boolean' },
+        interface: { type: 'string' }, demo: { type: 'boolean' }, scenario: { type: 'string' }, json: { type: 'boolean' }, 'claude-test': { type: 'boolean' },
       },
     });
   } catch (e) {
@@ -285,12 +285,13 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
     const sm = symbolMode();
     if (typeof sm === 'string') return fail(sm);
     const demo = v.demo === true;
+    if (v.scenario !== undefined && !demo) return fail('--scenario는 --demo와 함께만 씁니다');
     let scenario: DemoScenario | null = null;
     let clock = now;
     let acq: Acquirer;
     if (demo) {
       try {
-        scenario = loadDemo(sm.mode, deps.demoDir);
+        scenario = loadDemo(sm.mode, deps.demoDir, typeof v.scenario === 'string' ? v.scenario : undefined);
       } catch (e) {
         if (e instanceof DemoUnavailableError) return fail(e.message);
         throw e;
@@ -303,7 +304,8 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
       if (!check.ok) return fail(`${check.code}: ${ERROR_CODES[check.code].message} (${check.detail})\n${DIAG_HINT}`);
       acq = (deps.acquirer ?? realAcquirer)(sm.symbol, sm.mode);
     }
-    const engine = createEngine({ store: jobs, now: clock, positions: () => positions.read() });
+    const demoBook = scenario;
+    const engine = createEngine({ store: jobs, now: clock, positions: () => positions.read(), ...(demoBook ? { demoPositions: () => demoPositions(demoBook) } : {}) });
     engine.sweepAbandoned();
     const t0 = Date.now();
     const sec = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
@@ -373,7 +375,7 @@ function formatChecks(checks: Check[]): string {
 }
 
 const USAGE = `사용법:
-  node src/cli/floor.ts analyze <종목> <모드> [--demo] [--json]
+  node src/cli/floor.ts analyze <종목> <모드> [--demo [--scenario <포지션 데모>]] [--json]
   node src/cli/floor.ts snapshot --symbol <종목> --mode <모드> [--interface floor|web]
   node src/cli/floor.ts next --job <jobId>
   node src/cli/floor.ts submit --job <jobId> --role <단계> --file <출력 JSON>

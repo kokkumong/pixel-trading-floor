@@ -12,7 +12,8 @@ import { yahooUsLookup } from '../core/data/adapters.ts';
 import { createBlockedNet, createRealNet, type NetClient } from '../core/data/net.ts';
 import { normalizeSymbolInput } from '../core/data/registry.ts';
 import type { AnalysisSnapshot } from '../core/data/snapshot.ts';
-import { demoAcquirer, demoClock, demoDriver, DemoUnavailableError, loadDemo } from '../core/demo.ts';
+import { demoAcquirer, demoClock, demoDriver, demoPositions, DemoUnavailableError, loadDemo } from '../core/demo.ts';
+import type { BookRead } from '../core/position/store.ts';
 import { MAX_CONCURRENT_JOBS } from '../core/job/budget.ts';
 import { createEngine, type Acquirer, type Engine, type Job } from '../core/job/engine.ts';
 import type { JobRecord } from '../core/job/record.ts';
@@ -130,7 +131,7 @@ export class JobManager {
     return [...this.active.keys()];
   }
 
-  async start(req: { symbol?: unknown; mode?: unknown; idempotencyKey?: unknown; demo?: unknown }): Promise<StartResult> {
+  async start(req: { symbol?: unknown; mode?: unknown; idempotencyKey?: unknown; demo?: unknown; demoScenario?: unknown }): Promise<StartResult> {
     const sym = normalizeSymbolInput(req.symbol);
     if (!sym.ok) return rejected(400, 'E-INPUT', sym.message);
     const mode = MODES.find((m) => m === req.mode);
@@ -139,6 +140,10 @@ export class JobManager {
     if (typeof key !== 'string' || !IDEMPOTENCY_KEY.test(key)) return rejected(400, 'E-INPUT', 'idempotencyKey가 필요합니다 (영문·숫자·-·_ 8~64자)');
     if (req.demo !== undefined && typeof req.demo !== 'boolean') return rejected(400, 'E-INPUT', 'demo는 true/false');
     const demo = req.demo === true;
+    if (req.demoScenario !== undefined && (!demo || typeof req.demoScenario !== 'string' || !/^[a-z0-9-]{1,40}$/.test(req.demoScenario))) {
+      return rejected(400, 'E-INPUT', 'demoScenario는 데모에서만 쓰는 시나리오 이름입니다');
+    }
+    const scenario = req.demoScenario as string | undefined;
 
     const pending = this.inflight.get(key);
     if (pending) return pending.then((r) => (r.kind === 'started' ? { ...r, existing: true } : r));
@@ -147,14 +152,14 @@ export class JobManager {
     if (this.active.size + this.reserved >= this.max) return { kind: 'busy', runningJobId: this.running()[0] ?? null };
 
     this.reserved++;
-    const p = this.launch(req.symbol as string, sym.normalized, mode, key, demo);
+    const p = this.launch(req.symbol as string, sym.normalized, mode, key, demo, scenario);
     this.inflight.set(key, p);
     const r = await p;
     if (r.kind !== 'started') this.inflight.delete(key);
     return r;
   }
 
-  private async launch(symbolInput: string, normalized: string, mode: Mode, key: string, demo: boolean): Promise<StartResult> {
+  private async launch(symbolInput: string, normalized: string, mode: Mode, key: string, demo: boolean, scenario?: string): Promise<StartResult> {
     let released = false;
     const release = () => {
       if (!released) this.reserved--;
@@ -165,10 +170,11 @@ export class JobManager {
       let clock = this.now;
       let driverFor: (engine: Engine, job: Job) => ModelDriver;
       let version: () => Promise<string>;
+      let demoBook: (() => BookRead | null) | undefined;
       if (demo) {
         let s: ReturnType<typeof loadDemo>;
         try {
-          s = loadDemo(mode, this.o.demoDir);
+          s = loadDemo(mode, this.o.demoDir, scenario);
         } catch (e) {
           if (e instanceof DemoUnavailableError) return rejected(400, 'E-DEMO', e.message);
           throw e;
@@ -177,6 +183,7 @@ export class JobManager {
         clock = demoClock(s);
         acq = demoAcquirer(s, this.o.demoNet ?? createBlockedNet());
         driverFor = (_e, job) => demoDriver(s, job.snapshot!.snapshotId, this.o.demoDelayMs ?? 1200);
+        demoBook = () => demoPositions(s);
         version = async () => 'none';
       } else {
         const c = await (this.o.checkClaude ?? (() => realClaudeCheck(this.o.env)))();
@@ -186,7 +193,7 @@ export class JobManager {
         version = () => (this.version ??= (this.o.claudeVersion ?? (() => realClaudeVersion(this.o.env)))());
       }
 
-      const engine = createEngine({ store: this.jobs, now: clock, positions: () => this.positions.read() });
+      const engine = createEngine({ store: this.jobs, now: clock, positions: () => this.positions.read(), ...(demoBook ? { demoPositions: demoBook } : {}) });
       const jobId = randomUUID();
       const ac = new AbortController();
       // createJob은 첫 await 전에 작업 기록을 만든다: 여기서 돌려주는 jobId는 바로 조회할 수 있다

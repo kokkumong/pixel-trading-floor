@@ -7,7 +7,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { homedir } from 'node:os';
 import { basename, extname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { demoModes } from '../core/demo.ts';
+import { demoModes, positionDemos } from '../core/demo.ts';
 import { LAN_WARNING, runDiagnostics, type DiagResult } from '../core/diag.ts';
 import { createRealNet } from '../core/data/net.ts';
 import { maskReport } from '../core/position/mask.ts';
@@ -268,6 +268,7 @@ export function createApp(o: AppOptions): App {
         client: { local: c.isLocal, canAnalyze: canAnalyze(c.isLocal), readOnly: !canAnalyze(c.isLocal) },
         running: m.running(),
         demoModes: safeDemoModes(),
+        demoScenarios: safePositionDemos(),
         projectZip: o.enableProjectZip === true && c.isLocal,
         plans,
       }),
@@ -405,6 +406,9 @@ export function createApp(o: AppOptions): App {
 
   function safeDemoModes(): string[] {
     try { return demoModes(); } catch { return []; }
+  }
+  function safePositionDemos(): { name: string; mode: string; label: string }[] {
+    try { return positionDemos().map(({ name, mode, label }) => ({ name, mode, label })); } catch { return []; }
   }
 
   function projectZipEnabled() {
