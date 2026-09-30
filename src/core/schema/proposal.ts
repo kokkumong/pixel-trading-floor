@@ -1,8 +1,8 @@
 // TradeProposal (P0 명세 3.3). 모델은 ProposalOutput만 쓰고, schemaVersion·jobId·author는 시스템이 붙인다.
 import { arr, en, int, nul, num, obj, parse, parseJsonText, str, type Infer, type SchemaError } from './dsl.ts';
 import {
-  ACTIONS, ALLOWED_ACTIONS, BIASES, CURRENCIES, ENTRY_TYPES, MARKET_TYPES, TIMEFRAMES,
-  type MarketType, type Mode,
+  ACTIONS, ALLOWED_ACTIONS, BIASES, CURRENCIES, ENTRY_TYPES, MARKET_TYPES, POSITION_ACTIONS, SIZE_FRACTIONS, TIMEFRAMES,
+  type Action, type MarketType, type Mode,
 } from './types.ts';
 
 const price = () => num({ exclusiveMin: 0, code: 'V-POSITIVE' });
@@ -34,13 +34,16 @@ export const ProposalOutputSchema = obj({
   evidenceRefs: arr(str({ maxLength: 200 }), { maxItems: 20 }),
   invalidationConditions: arr(str({ maxLength: 300 }), { maxItems: 5 }),
   warnings: arr(str({ maxLength: 300 }), { maxItems: 5 }),
+  positionRef: nul(str({ maxLength: 64 }), { description: '입력 position.positionRef를 그대로 복사. 포지션 없음이면 null' }),
+  sizeFraction: nul(num({ min: 0.25, max: 0.75 }), { description: 'REDUCE에서만 0.25·0.5·0.75 중 하나, 그 외 null' }),
 });
 
 export type ProposalOutput = Infer<typeof ProposalOutputSchema>;
 export type ProposalAuthor = 'ACE' | 'BLITZ' | 'PM';
 
+/** proposal/2(포지션 필드 없음)는 이전 작업·리포트 읽기용이다 (P2-2-R4) */
 export interface TradeProposal extends ProposalOutput {
-  schemaVersion: 'proposal/2';
+  schemaVersion: 'proposal/3';
   jobId: string;
   author: ProposalAuthor;
 }
@@ -52,13 +55,17 @@ export interface ProposalContext {
   instrumentId: string;
   marketType: MarketType;
   author: ProposalAuthor;
+  /** 작업에 고정된 포지션 id (강제 방향·포지션 없음은 null) */
+  positionId: string | null;
 }
+
+export const isPositionAction = (a: Action): boolean => (POSITION_ACTIONS as readonly string[]).includes(a);
 
 export type ProposalCheck = { ok: true; proposal: TradeProposal } | { ok: false; errors: SchemaError[] };
 
 /**
  * 모델 출력(문자열 또는 객체)을 TradeProposal로 확정한다. 여기서 나는 오류는 모두 SCHEMA_ERROR 계열이다
- * (V-PARSE, V-POSITIVE, V-CONF, V-INSTRUMENT, V-ENTRY, V-UNFORCED, V-ACTION).
+ * (V-PARSE, V-POSITIVE, V-CONF, V-INSTRUMENT, V-ENTRY, V-UNFORCED, V-ACTION, V-POS-STATE).
  */
 export function checkProposal(raw: unknown, ctx: ProposalContext): ProposalCheck {
   let value = raw;
@@ -97,8 +104,19 @@ export function checkProposal(raw: unknown, ctx: ProposalContext): ProposalCheck
   }
   if (!ALLOWED_ACTIONS[ctx.mode].includes(p.action)) err('V-ACTION', '$.action', `${ctx.mode} 모드에서 허용되지 않는 행동`);
 
+  // V-POS-STATE (P2-2-R1·R5): 포지션 유무와 행동, 참조 id, REDUCE 비율
+  const held = ctx.positionId !== null;
+  if (held !== isPositionAction(p.action)) {
+    err('V-POS-STATE', '$.action', held ? '보유 포지션이 있으면 HOLD·ADD·REDUCE·EXIT 중 하나 (반대 방향은 EXIT 후 재분석)' : '보유 포지션이 없으면 HOLD·ADD·REDUCE·EXIT 불가');
+  } else if (p.positionRef !== ctx.positionId) {
+    err('V-POS-STATE', '$.positionRef', held ? '입력 position.positionRef와 다름' : '포지션 없음이면 null');
+  }
+  if (p.action === 'REDUCE' ? !(SIZE_FRACTIONS as readonly number[]).includes(p.sizeFraction ?? -1) : p.sizeFraction !== null) {
+    err('V-POS-STATE', '$.sizeFraction', p.action === 'REDUCE' ? 'REDUCE는 0.25·0.5·0.75 중 하나' : 'REDUCE가 아니면 null');
+  }
+
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, proposal: { schemaVersion: 'proposal/2', jobId: ctx.jobId, author: ctx.author, ...p } };
+  return { ok: true, proposal: { schemaVersion: 'proposal/3', jobId: ctx.jobId, author: ctx.author, ...p } };
 }
 
 /** 두 제안서에서 값이 다른 최상위 필드 이름 (PM MODIFY의 modifiedFields 산출용, P0-2-R3). */

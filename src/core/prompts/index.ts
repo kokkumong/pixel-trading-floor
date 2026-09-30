@@ -1,5 +1,6 @@
 // 역할별 시스템 프롬프트와 출력 스키마 (P0-4-R7, P0-3-R4, P0-5-R6). 프롬프트 버전은 내용 해시로 자동 계산한다 (P1-6-R3).
 // 구성: shared/common + (브리핑 역할: shared/briefing | 제안 역할: shared/proposal + no-trade 또는 forced) + roles/<역할>
+// 보유 포지션이 있는 작업: 제안 역할은 no-trade 대신 shared/position, 포지션을 보는 검토 역할은 shared/position-review를 붙인다 (P2-4-R3)
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,26 +8,29 @@ import { fileURLToPath } from 'node:url';
 import { BriefingOutputSchema, DebateOutputSchema, PmOutputSchema } from '../schema/agents.ts';
 import { en, toJsonSchema } from '../schema/dsl.ts';
 import { ProposalOutputSchema } from '../schema/proposal.ts';
-import { ALLOWED_ACTIONS, type Mode, type Role } from '../schema/types.ts';
+import { ALLOWED_ACTIONS, ENTRY_ACTIONS, POSITION_ACTIONS, type Mode, type Role } from '../schema/types.ts';
 
 export const PROMPT_DIR = new URL('./', import.meta.url);
 
 const BRIEFING_ROLES: readonly Role[] = ['TARO', 'DIANA', 'NOVA', 'VIBE', 'GUARD', 'RISKY', 'SAFE', 'NEUTRAL'];
+const REVIEW_ROLES: readonly Role[] = ['GUARD', 'RISKY', 'SAFE', 'NEUTRAL'];
 
-function parts(role: Role, mode: Mode): string[] {
+/** held: 작업에 보유 포지션이 있음 (강제 방향은 항상 false) */
+function parts(role: Role, mode: Mode, held: boolean): string[] {
   const out = ['shared/common.md'];
   if (BRIEFING_ROLES.includes(role)) out.push('shared/briefing.md');
+  if (held && REVIEW_ROLES.includes(role)) out.push('shared/position-review.md');
   if (role === 'ACE' || role === 'BLITZ' || role === 'PM') {
-    out.push('shared/proposal.md', mode === 'forced_direction' && role !== 'PM' ? 'shared/forced.md' : 'shared/no-trade.md');
+    out.push('shared/proposal.md', mode === 'forced_direction' && role !== 'PM' ? 'shared/forced.md' : held ? 'shared/position.md' : 'shared/no-trade.md');
   }
   out.push(`roles/${role}.md`);
   return out;
 }
 
 export interface PromptSet {
-  systemPrompt(role: Role, mode: Mode): string;
+  systemPrompt(role: Role, mode: Mode, held?: boolean): string;
   /** 실제로 쓰는 프롬프트 전체의 sha256 앞 12자 */
-  hash(role: Role, mode: Mode): string;
+  hash(role: Role, mode: Mode, held?: boolean): string;
 }
 
 export function createPromptSet(dir: string | URL = PROMPT_DIR): PromptSet {
@@ -40,23 +44,26 @@ export function createPromptSet(dir: string | URL = PROMPT_DIR): PromptSet {
     }
     return t;
   };
-  const systemPrompt = (role: Role, mode: Mode) => parts(role, mode).map(read).join('\n');
+  const systemPrompt = (role: Role, mode: Mode, held = false) => parts(role, mode, held && mode !== 'forced_direction').map(read).join('\n');
   return {
     systemPrompt,
-    hash: (role, mode) => createHash('sha256').update(systemPrompt(role, mode)).digest('hex').slice(0, 12),
+    hash: (role, mode, held) => createHash('sha256').update(systemPrompt(role, mode, held)).digest('hex').slice(0, 12),
   };
 }
 
 export const prompts: PromptSet = createPromptSet();
 
-/** 강제 방향 모드는 CLI 스키마 단계에서 NO_TRADE를 막는다 (검증 코드 V-ACTION은 그대로 적용) */
-const ForcedProposalSchema = {
+const withActions = (actions: readonly string[], description: string) => ({
   ...ProposalOutputSchema,
-  props: { ...ProposalOutputSchema.props, action: en(ALLOWED_ACTIONS.forced_direction, { description: 'forced_direction: ENTER_LONG 또는 ENTER_SHORT만' }) },
-};
+  props: { ...ProposalOutputSchema.props, action: en(actions, { description }) },
+});
+/** CLI 스키마 단계에서 모드·포지션 유무에 맞지 않는 행동을 막는다 (검증 코드 V-ACTION·V-POS-STATE는 그대로 적용) */
+const ForcedProposalSchema = withActions(ALLOWED_ACTIONS.forced_direction, 'forced_direction: ENTER_LONG 또는 ENTER_SHORT만');
+const EntryProposalSchema = withActions(ENTRY_ACTIONS, '보유 포지션 없음: 근거가 약하면 NO_TRADE 선택 가능');
+const HeldProposalSchema = withActions(POSITION_ACTIONS, '보유 포지션 있음: HOLD·ADD·REDUCE·EXIT 중 하나');
 
-/** claude --json-schema에 넘길 역할별 출력 스키마 */
-export function jsonSchemaFor(role: Role, mode: Mode): Record<string, unknown> {
+/** claude --json-schema에 넘길 역할별 출력 스키마. held: 작업에 보유 포지션이 있음 */
+export function jsonSchemaFor(role: Role, mode: Mode, held = false): Record<string, unknown> {
   switch (role) {
     case 'BULL':
     case 'BEAR':
@@ -65,7 +72,7 @@ export function jsonSchemaFor(role: Role, mode: Mode): Record<string, unknown> {
       return toJsonSchema(PmOutputSchema);
     case 'ACE':
     case 'BLITZ':
-      return toJsonSchema(mode === 'forced_direction' ? ForcedProposalSchema : ProposalOutputSchema);
+      return toJsonSchema(mode === 'forced_direction' ? ForcedProposalSchema : held ? HeldProposalSchema : EntryProposalSchema);
     default:
       return toJsonSchema(BriefingOutputSchema);
   }

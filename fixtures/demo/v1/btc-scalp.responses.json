@@ -235,7 +235,9 @@
         "RSI 약 70으로 과열, 눌림이 오지 않으면 진입 미체결",
         "VIBE는 중립이며 뉴스 톤은 약세",
         "호가·청산 데이터 없음"
-      ]
+      ],
+      "positionRef": null,
+      "sizeFraction": null
     }
   ],
   "ACE": [
@@ -278,7 +280,9 @@
         "현재가 83733과 lastClose 83858.2가 달라 기준 가격이 불분명하다",
         "호가·청산 데이터 없음",
         "BLITZ 1차 목표의 보상 대 위험이 약 1.2배로 얇다"
-      ]
+      ],
+      "positionRef": null,
+      "sizeFraction": null
     }
   ]
 }

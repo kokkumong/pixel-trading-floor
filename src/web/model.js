@@ -192,7 +192,9 @@ export function bubbles(job) {
 
 /** @param {string} action */
 export function actionText(action) {
-  return action === 'ENTER_LONG' ? '롱 진입' : action === 'ENTER_SHORT' ? '숏 진입' : '관망';
+  return {
+    ENTER_LONG: '롱 진입', ENTER_SHORT: '숏 진입', HOLD: '유지', ADD: '추가 진입 검토', REDUCE: '일부 청산 검토', EXIT: '전량 청산 검토',
+  }[action] ?? '관망';
 }
 
 /** @param {string} s */

@@ -21,9 +21,10 @@ export function parseRequestInput(text: string): RoleInput {
   return JSON.parse(text.split('\n\n[이전 응답 오류]')[0]!) as RoleInput;
 }
 
-/** 기준 가격에서 1% 손절, 2%·3% 목표인 롱 제안 (20배 증거금 소진 거리 안) */
+/** 기준 가격에서 1% 손절, 2%·3% 목표인 롱 제안 (20배 증거금 소진 거리 안). 보유 포지션이 있으면 기존 값 유지 HOLD */
 export function sampleProposal(input: RoleInput, over: Partial<ProposalOutput> = {}): ProposalOutput {
   const pb = input.priceBasis!;
+  const pos = input.position;
   const px = pb.last!;
   const perp = input.marketType === 'perpetual';
   return {
@@ -46,6 +47,9 @@ export function sampleProposal(input: RoleInput, over: Partial<ProposalOutput> =
     evidenceRefs: ['derived:rsi14', `snap:${pb.sourceRef}#/last`],
     invalidationConditions: ['손절가 이탈'],
     warnings: [],
+    positionRef: null,
+    sizeFraction: null,
+    ...(pos ? { action: 'HOLD', positionRef: pos.positionRef, entry: { type: 'market', min: null, max: null }, stopLoss: null, targets: [], leverage: pos.leverage } : {}),
     ...over,
   };
 }

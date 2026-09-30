@@ -3,8 +3,15 @@
 export const MODES = ['algorithm', 'scalp', 'forced_direction'] as const;
 export type Mode = (typeof MODES)[number];
 
-export const ACTIONS = ['ENTER_LONG', 'ENTER_SHORT', 'NO_TRADE'] as const;
+/** 포지션 없음(ENTRY)과 있음(POSITION)의 행동 (P2 포지션 명세 2.1) */
+export const ENTRY_ACTIONS = ['ENTER_LONG', 'ENTER_SHORT', 'NO_TRADE'] as const;
+export const POSITION_ACTIONS = ['HOLD', 'ADD', 'REDUCE', 'EXIT'] as const;
+export const ACTIONS = [...ENTRY_ACTIONS, ...POSITION_ACTIONS] as const;
 export type Action = (typeof ACTIONS)[number];
+export type PositionAction = (typeof POSITION_ACTIONS)[number];
+
+/** REDUCE의 청산 비율 (P2-2-R5) */
+export const SIZE_FRACTIONS = [0.25, 0.5, 0.75] as const;
 
 export const BIASES = ['BULLISH', 'BEARISH', 'NEUTRAL'] as const;
 export type Bias = (typeof BIASES)[number];
@@ -57,7 +64,7 @@ export type ExecutionBackend = (typeof EXECUTION_BACKENDS)[number];
 export const DATA_QUALITY_STATUSES = ['OK', 'PARTIAL_DATA', 'INSUFFICIENT_DATA'] as const;
 export type DataQualityStatus = (typeof DATA_QUALITY_STATUSES)[number];
 
-/** 모드별 허용 행동 (P0 명세 2.2) */
+/** 모드별 허용 행동 (P0 명세 2.2). 포지션 유무에 따른 제한은 V-POS-STATE가 따로 본다 */
 export const ALLOWED_ACTIONS: Record<Mode, readonly Action[]> = {
   algorithm: ACTIONS,
   scalp: ACTIONS,
