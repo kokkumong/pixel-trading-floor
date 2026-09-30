@@ -21,7 +21,25 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-없음
+- Phase: 8, 이슈 #17, 브랜치 `feature/17-phase8-floor-command`
+- 다음 단계: 구현 계속 (가이드 v1.3만 남음) → 같은 세션에서 마무리 가능
+- 통과 기준: P1-5-R3·P0-F-T4 ✅ `test/scripts/floor-guard.test.ts` + 실제 스모크 / P1-5-R4 ✅ 같은 파일 / P0-F-R4 ✅ 같은 파일(값에 붙은 메타문자까지) / P0-7.6 ✅ `test/scripts/start-scripts.test.ts` / P1-11 도구 ✅ `test/scripts/measure-budget.test.ts` + 소표본 / 가이드 v1.3 ⬜
+- 바꾼 파일: `.claude/skills/floor/SKILL.md`, `.claude/agents/floor-session.md`, `scripts/floor-guard.ts`, `scripts/measure-budget.ts`, `start-floor.cmd`, `start-floor-lan.cmd`, `.gitattributes`(`*.cmd` CRLF), 테스트 3개(`test/scripts/`)
+- 결정:
+  - `/floor`는 스킬(`context: fork`, `agent: floor-session`, `disable-model-invocation: true`)로 만든다. **스킬 frontmatter의 `hooks`는 포크된 문맥에 걸리지 않았다**(Claude Code 2.1.284 스모크: 세션이 `cd … && sed`, `python3 -c`, `| grep`을 그대로 실행). 그래서 도구 제한은 하위 에이전트 정의가 한다: `tools: Bash, Read, Write`(웹 도구는 목록에 없음) + 에이전트 frontmatter의 PreToolUse 훅(`scripts/floor-guard.ts`). 탐침으로 훅 차단 확인(`PreToolUse:Bash hook error: … 공통 코어 CLI만`)
+  - 훅 규칙: Bash는 `node src/cli/floor.ts snapshot|next|submit|finalize`와 명령별 허용 옵션만(`--interface`는 floor만), 따옴표 밖 셸 메타문자 전부 거부(작은따옴표 안은 그대로 — Windows 경로), 큰따옴표 안 `$ \` ! 거부. Read는 `jobs/<id>/{inputs,prompts,schemas,outputs}/`, Write·Edit는 `outputs/`만(스냅샷 원본·job.json 접근 불가, P0-F-R3). 그 밖의 도구 전부 거부
+  - `$ARGUMENTS`를 인용부호 안에 넣었더니 모델이 "인자가 없다"고 멈췄다 → "이번 요청" 절에 원문을 따로 두고 예시를 붙임
+  - 시작 스크립트: `chcp 65001` → `cd /d "%~dp0"` → `where node` 확인 → `node src\server\main.ts --open`(LAN은 `--lan --open` + 신뢰 Wi-Fi·읽기 전용·2시간·개인 네트워크 방화벽 안내) → `pause`. 리다이렉트·로그 파일 없음
+  - P1-11: 사용자 결정(2026-09-30)으로 도구 + 소표본만. 본 측정(조합별 10회 이상, 시간대 분산, Windows)과 명세 부록 기록(P1-11-R1·T1·T2)은 남은 일. 산출은 `node scripts/measure-budget.ts report [--interface floor]`, 실행은 `run <종목> <모드> --count N`
+  - 가이드 v1.3: 사용자 결정(2026-09-30)으로 **Markdown으로 전환하고 PDF는 삭제**(이미지는 빼거나 설명으로 대체)
+- 남은 일 (순서대로):
+  1. 가이드 v1.3 작성: `pdftotext -layout docs/PIXEL-TRADING-FLOOR-가이드-v1.2.pdf -`를 쪽 단위로 읽어 `docs/PIXEL-TRADING-FLOOR-가이드-v1.3.md`로 옮기고, P0 명세 12장 표 전 항목 + "Phase 8 참고"의 화면 변경 + `/floor` 사용법(스킬, 단일 세션 분석, 도구 제한, `lightweight` 아님)을 반영. 개정 이력 절에 v1.3 한 줄. `git rm` v1.2 PDF
+  2. CLAUDE.md의 가이드 줄(`가이드-v1.2.pdf`)과 "PDF" 토큰 절약 규칙을 Markdown 가이드에 맞게 고친다. ARCHITECTURE.md "리포트·데모·진단·CLI" 절에 `/floor` 스킬·에이전트·훅과 `measure-budget.ts` 한두 줄
+  3. 마무리(인계 갱신 → PR → 병합). 진행표 8 ✅, 다음 Phase는 진행표에 없으므로 "P1 잔여(P1-11 본 측정, P1-10-R1·R3 근거 경고 등)"를 새 행으로 제안
+- 실측:
+  - `/floor BTC scalp` (sonnet, `claude -p`, 2회째): 78초, 보고 비용 $0.39, 도구 Bash 12(전부 코어 명령)·Read 15·Write 5, 웹 도구 0건, 훅 거부 0건, 결과 ACE 관망(NO_EDGE). 1회째(훅 미적용 상태) 101초 $0.50
+  - 브라우저 경로 소표본(sonnet, BTC, 2026-09-30): algorithm 2건 86~90초 호출 13·재시도 0, scalp 5건 36~43초. 호출 하나 4~16초로 임시 호출 제한(90·120초)보다 훨씬 짧다. 산출(표본 부족, 미확정): algorithm maxDuration 111초·callTimeout 최대 19초, scalp 66초·24초. 표본이 작으면 p99×1.5가 너무 빡빡하므로 10건 이상 전에는 적용하지 않는다
+  - Claude Code가 세션 중 2.1.284 → 2.1.285로 자동 갱신됨. job.json에는 CLI 버전이 없어 `measure-budget`이 CLI 버전 혼재를 못 잡는다(리포트 메타에는 있음) — 본 측정 전 보완 후보
 
 ## Phase 8 참고 (다음 세션)
 - 범위: `/floor` 명령 정의(P1-5, P0-F-R1~R6·T4 도구 제한), 시작 스크립트 `start-floor.cmd`·`start-floor-lan.cmd`(P0-7.6, **서버 출력을 파일로 남기지 않는다** — LAN 토큰이 서버 창에 찍힘), 가이드 v1.3(P0 명세 12장 목록 + 아래 화면 변경), P1-11 예산 상한 실측 보정
