@@ -28,7 +28,26 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-없음
+- Phase: 13, 이슈 #27, 브랜치 `feature/27-phase13-position-decisions`
+- 다음 단계: 마무리 (구현·`verify:quiet` 통과·push 완료)
+- 통과 기준: P2-2-T1·T2·T3 ✅, P2-3-T1~T6 ✅, P2-4-T1~T4 ✅ 모두 `test/core/position-decision.test.ts` (15개, 추가로 P2-2-R7 PM 기각 → HOLD). 결함 주입 10건(STOP-WIDEN·V-POS-STATE·투영 역할·수량 누출·LIQ-NEAR·STOP-DIR·RISK-BUDGET·NO_STOP·HOLD 무효화·PM 기각) 모두 테스트가 잡음
+- 바꾼 파일: `src/core/schema/{types,proposal,decision}.ts`, `src/core/rules/{engine,display}.ts`, `src/core/rules/sizing.ts`(신규), `src/core/job/{decide,steps,engine,record}.ts`, `src/core/data/project.ts`, `src/core/prompts/index.ts`, `src/core/prompts/shared/{position,position-review}.md`(신규)·`proposal.md`, `src/web/{model.js,floor.css}`, `scripts/inspect.ts`, `fixtures/demo/v1/*.responses.json`(제안서에 `positionRef`·`sizeFraction` null 추가), 테스트 헬퍼 `test/{helpers,job-helpers}.ts`, `test/core/{display,schema}.test.ts`
+- 결정:
+  - 행동: `ENTRY_ACTIONS`(ENTER_LONG·ENTER_SHORT·NO_TRADE) + `POSITION_ACTIONS`(HOLD·ADD·REDUCE·EXIT) = `ACTIONS`. `ALLOWED_ACTIONS`는 모드만 보고(algorithm·scalp 7개, forced 2개), 포지션 유무는 `checkProposal`의 V-POS-STATE(행동·`positionRef`·`sizeFraction`)가 본다. `ProposalContext.positionId` 추가. 보유 판정은 `heldPosition(record)`(`record.ts`, forced는 항상 null)
+  - `proposal/3`: `positionRef`(null 허용 문자열), `sizeFraction`(0.25~0.75 숫자, 정확한 값은 V-POS-STATE). `decision/3`: `positionRef`·`positionPlan{positionRef, side, stopLoss, targets, stopUpdated, sizeFraction}`·`sizing`. 이전 버전은 타입만 3이고 읽기는 런타임에서 필드가 없을 뿐(화면은 `d.positionRef` 등 falsy 처리)
+  - 규칙(`rules/2`): 보유 중 강등은 HOLD(편 `bias` 유지), 강등 시 계획은 기존 손절·목표로 되돌리고 수량 제안 없음. ADD는 보유 방향 ENTER로 바꿔 진입 규칙(V-BIAS·V-STOP-REQUIRED·V-DIR·V-LIQ-BUFFER·근거)을 그대로 적용. 청산가를 입력한 포지션은 단순 V-LIQ-BUFFER 대신 V-POS-LIQ-BUFFER(손절 거리 ≤ 0.5 × 현재가~청산가, ADD 차단·HOLD 경고). V-POS-LIQ-NEAR(청산 거리 < 2×ATR)는 ADD만 막고 `LIQUIDATION_NEAR` 사유. HOLD는 유효 근거 2개 + `invalidationConditions` 필수(V-EVIDENCE-REF·V-HOLD-INVALIDATION, 위반이면 DOWNGRADED로 표시)
+  - 수량(`rules/sizing.ts`): 진입 기준가는 market이면 현재가(포지션 컨텍스트 가격 mark 우선), 그 외 롱 max·숏 min. 코인은 소수 6자리, 주식은 1주 단위 내림. ADD의 기존 리스크는 저장된 손절이 있을 때만 계산하고 값은 적용 손절(좁힌 값) 기준. ENTER의 수량 0은 경고만(강등 안 함), ADD의 0은 V-RISK-BUDGET → HOLD. 총 자산 없으면 제안 없음. `MARGIN_HEAVY`는 사유 코드+경고
+  - 사유 코드 추가: `STOP_ALREADY_HIT`·`LIQUIDATION_NEAR`(강한 경고, 패널 notes 맨 앞), `STOP_WIDEN_IGNORED`·`NO_STOP_ON_POSITION`·`RISK_BUDGET_FULL`·`MARGIN_HEAVY`
+  - 표시(`panelView`): 유지 / 추가 진입 검토 / 일부 청산 검토 (N%) / 전량 청산 검토. 새 톤 `caution`(주황, REDUCE·EXIT·경고 있는 롱). 강제 방향은 notes에 `포지션 무시 시뮬레이션`, 데이터 부족 + 보유는 `포지션은 그대로이며 판정이 없음`, EXIT는 리버설 안내, 보유 중 강등은 `규칙에 의해 모델 제안이 조정됨: <코드>`, 수량 제안은 가정과 함께 한 줄. PM 기각 제목은 보유면 `PM 기각 → 유지`
+  - 모델 입력: `RoleInput.position`(`PositionInput`) 별도 블록, `POSITION_ROLES` = BLITZ·GUARD·ACE·RISKY·SAFE·NEUTRAL·PM. 필드: positionRef·marketType·side·leverage·marginMode·avgEntryPrice·stopLoss·targets·손익률 둘·rMultiple·손절/청산 거리·비중·`holdingHours`(openedAt~수집 시각)·`bookAgeHours`. 수량·총 자산·메모·청산가·열린 리스크는 없음. 압축(compact) 대상 아님
+  - 프롬프트: 보유 작업이면 제안 역할(BLITZ·ACE·PM)은 `no-trade.md` 대신 `shared/position.md`, 검토 역할(GUARD·RISKY·SAFE·NEUTRAL)은 `shared/position-review.md`를 더한다. `PromptSet.systemPrompt/hash(role, mode, held)`, `jsonSchemaFor(role, mode, held)`는 행동 enum을 포지션 유무로 좁힌다(PM `revisedProposal` 스키마는 좁히지 않음 — 코드 검증만)
+  - `/floor`: 훅은 이미 `jobs/<jobId>/` 밖 읽기를 막아 `.floor/`도 차단됨(테스트 추가). `next`가 쓰는 `inputs/<stepId>.json`에 같은 투영이 들어간다
+- 남은 일 (마무리 세션, 순서대로):
+  1. (선택) 실제 스모크 1회: 포지션 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → HOLD/ADD/REDUCE/EXIT 중 하나로 완료되는지, 호출 수·시간·비용 기록
+  2. HANDOFF 진행표 13 ✅·14 다음, "Phase 14 참고"로 옮기기. Phase 14로 넘길 것: `BIAS_NOTE`(보유 여부 모름)를 "보유 없음 확인" 분석에서만 표시하도록 문구 정리(P2-6-R3), 판정 패널·리포트의 포지션 요약·고지 문구(P2-6-R2·R3), `JobView`·리포트·zip·LAN의 `sizing`·`positionPlan` 금액/수량 마스킹(P2-5-T3, 지금 `finalDecision`에 그대로 들어 있음, 패널 notes에도 제안 수량 있음), 리포트 스키마 필드, 포지션 데모 fixture(P2-8)
+  3. ARCHITECTURE.md: 규칙 엔진·포지션 절에 `sizing.ts`·V-POS-*·`PositionInput` 투영·프롬프트 조합 추가
+  4. PR(`Close #27`) → 검사 통과 시 병합
+- 실측: 스모크 미실시
 
 ## Phase 13 참고
 - 범위: P2 명세 2·3·4장 — 행동 집합 확장(HOLD/ADD/REDUCE/EXIT, 포지션 있을 때만), 스키마 v3, 규칙 엔진(V-POS-*), 코드가 계산하는 수량 제안(리스크 예산 기본 1%), 프롬프트, 역할별 입력(분석가·토론 역할은 포지션을 못 봄, 비율만 전달), `/floor` 투영
