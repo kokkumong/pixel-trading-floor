@@ -22,7 +22,24 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-없음
+- Phase: 9, 이슈 #19, 브랜치 `feature/19-phase9-evidence-audit` (push 완료, PR 없음)
+- 다음 단계: 마무리
+- 통과 기준: P1-10-R1 ✅ `test/core/evidence-audit.test.ts`·`test/core/job/engine.test.ts` / P1-10-T2 ✅ `evidence-audit.test.ts`·`test/core/report/report.test.ts`·`test/web/model.test.ts` / P1-10-R3 ✅ `evidence-audit.test.ts` / P1-10-R5 ✅ `evidence-audit.test.ts` / P1-11-R3 ✅ `test/scripts/measure-budget.test.ts`·`engine.test.ts` / verify ✅
+- 바꾼 파일: `src/core/rules/audit.ts`(신규), `src/core/rules/evidence.ts`(`value()`), `src/core/job/{record,engine,decide,runner}.ts`, `src/core/report/{report,markdown}.ts`, `src/server/{view,jobs}.ts`, `src/cli/floor.ts`, `src/web/model.js`, `scripts/measure-budget.ts`, `src/core/prompts/shared/common.md`
+- 결정:
+  - 범위(사용자가 "phase 9 진행"만 지시, 세션이 정함): P1-10 잔여(R1 모든 역할 근거 검사·화면/리포트 표시, R3, R5) + P1-11-R3(job.json CLI 버전). P1-11 본 측정은 실제 claude 반복 실행이라 사용자 몫으로 남김
+  - `auditEvidence`는 **경고만** 남기고 판정은 바꾸지 않는다(P1-10-R2 강등은 기존 규칙 엔진 V-EVIDENCE-REF). 결과는 `job.json evidenceAudit`(제출마다 전체 재계산) → `JobView.evidenceAudit` → 리포트 JSON `evidenceAudit`(스키마 버전은 그대로, 필드 추가) → Markdown 주장 꼬리표 `⚠ 근거 확인 불가` + "## 근거 검사" 절, 화면 콘솔 주장 옆 꼬리표·토론/제안/PM 아래 `⚠ <이름>: <내용>` 줄
+  - 종류 4개: `UNRESOLVED_REF` 근거 확인 불가, `VALUE_MISMATCH` 수치 불일치, `NO_BRIEF_REF` 브리핑 인용 없음, `UNSOURCED_NUMBER` 근거 없는 새 수치
+  - R3 오탐 줄이기(데모 fixture로 확인): 참조별로 검사해 본문 숫자 중 하나라도 참조 값과 0.5%(또는 표기 자릿수 반올림) 안이면 통과. 불일치 후보는 다른 참조와도 안 맞는 숫자 중 참조 값 ±1% 안의 것. 어림수(`약 N`, `N대`, `N여`)는 느슨하게(5%) 일치만 보고 불일치·새 수치로 보지 않는다. ±1%보다 크게 틀린 값은 못 잡는다(한계)
+  - R5: 한 자리 정수는 새 수치로 보지 않는다. 발언에 유효한 `snap:`·`derived:` 참조가 있으면 새 수치 검사를 건너뛴다. 수치 풀은 애널리스트·GUARD 브리핑 본문 숫자 + 그 브리핑들이 인용한 참조 값
+  - `claudeCliVersion`: `RunOptions`/`FinalizeOptions`로 넘기고 `??=`로 처음 값만 기록. /floor는 finalize 때 기록(중간 실패 작업은 null). 실측 요약은 버전 혼재·미기록을 재측정 대상으로 표시하고 부록 표에 `CLI` 열 추가
+  - 공통 프롬프트에 "제안서(ACE·BLITZ·PM)는 `brief:` 참조 대상이 아님" 추가 → 모든 역할 프롬프트 해시가 바뀜(본 측정 전이라 무방)
+- 남은 일 (마무리 세션):
+  1. `docs/ARCHITECTURE.md`에 `src/core/rules/audit.ts` 짧은 설명 (규칙 엔진 계층은 "(코드 참조)"라 어디에 둘지 판단 — 작업 엔진 절에 evidenceAudit 흐름 한 단락이 무난)
+  2. 가이드(`docs/PIXEL-TRADING-FLOOR-가이드-v1.3.md`) 화면 설명에 `⚠ 근거 확인 불가`·`⚠ 수치 불일치` 표시 한두 줄 → 파일 rename v1.4 + 개정 이력 한 줄
+  3. 진행표·"Phase 10 참고" 갱신(아래 미뤄진 항목 이전), 실측 기록 한 줄, "진행 중"을 `없음`으로 → PR → 검사 통과 시 병합
+  - 미뤄진 항목(다음 Phase 후보): P1-11 본 측정(사용자 실행, `node scripts/measure-budget.ts run …` → `report`), 데모 fixture의 RISKY `brief:ACE#rationale`(데모 화면에 근거 확인 불가 1건 표시됨 — 둘지 고칠지 결정), 강제 방향 데모 fixture, 하단 시세 흐름 띠, CoinGecko 403, Windows 미검증 항목(P0-8-R6, P1-7-R4, `--open`)
+- 실측: sonnet BTC algorithm 실전 스모크 1회(프롬프트 수정 전) 86초·호출 13·재시도 0·비용 $0.345·PM 기각(NO_TRADE)·CLI `2.1.285`. evidenceAudit 1건(RISKY `brief:ACE#c1` → 프롬프트 보완). 데모 fixture: algorithm 2건(RISKY 잘못된 참조, SAFE가 ACE 가격 84,186을 lastClose 83,500 참조와 함께 씀 — 둘 다 실제 문제), scalp 0건
 
 ## Phase 9 참고 (다음 세션)
 - 제안 범위(P1 잔여):
