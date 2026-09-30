@@ -1,15 +1,20 @@
 // @ts-check
-// 픽셀 화면 (가이드 v1.2 4장). 서버 API: /api/status, /api/board, /api/analyze, /api/jobs/<id>/events(SSE)·snapshot·cancel.
+// 픽셀 화면 (가이드 v1.2 4장). 서버 API: /api/status, /api/board, /api/analyze, /api/jobs/<id>/events(SSE)·snapshot·cancel, /api/positions(로컬 전용).
 // 모델 출력과 외부 텍스트는 textContent로만 넣는다 (P1-7-R11). HTML 문자열을 해석하는 API는 쓰지 않는다 (test/web/model.test.ts가 검사).
 import { drawChart } from './chart.js';
 import {
   bubbles, consoleEntries, DATA_FLOW, errorView, fmtChange, fmtClock, fmtPrice, FORCED_CONFIRM, floorPlan, initialMode, isDemo,
   MODES, multiRows, needsForcedConfirm, panelModel, planLabel, roleStatus, ROLES, stateLabel, WORLD_CLOCKS,
 } from './model.js';
+import {
+  accountToForm, bookPayload, emptyForm, fieldErrors, formToPosition, holdingLabel, positionToForm, staleWarning, summaryRows,
+} from './position.js';
 import { drawCharacter, repaint } from './sprites.js';
 
 /** @typedef {import('./model.js').Mode} Mode */
 /** @typedef {import('./model.js').ConsoleEntry} ConsoleEntry */
+/** @typedef {import('./position.js').PositionForm} PositionForm */
+/** @typedef {import('./position.js').AccountForm} AccountForm */
 
 const BOARD_REFRESH_MS = 15_000;
 const FORCED_KEY = 'floor.forcedConfirmed'; // 탭(세션)마다 한 번 (P0-5-R1). 모드 자체는 저장하지 않는다 (P0-5-R2)
@@ -40,6 +45,8 @@ const state = {
   /** @type {string} */ boardSymbol: '',
   /** @type {number | undefined} */ boardTimer: undefined,
   /** @type {any} */ board: null,
+  /** @type {any} /api/positions 응답 (로컬 접속만. LAN이면 null) */ positions: null,
+  /** @type {number | null} 편집 중인 포지션 번호 (추가면 목록 길이) */ editIndex: null,
   /** @type {Map<string, { seat: HTMLElement; canvas: HTMLCanvasElement; bubble: HTMLElement }>} */ seats: new Map(),
   frame: 0,
 };
@@ -91,7 +98,9 @@ async function init() {
     $('go').hidden = true;
   }
   $('diag-link').hidden = !body.client.local;
+  $('open-positions').hidden = !body.client.local; // 포지션 북 API는 로컬 전용 (P2-1-R11)
   renderMode();
+  if (body.client.local && !demo) void loadPositions();
   if (body.running.length > 0) watch(body.running[0]);
 }
 
@@ -127,6 +136,7 @@ function bindControls() {
   }
   renderTabs();
   $('open-data-flow').addEventListener('click', () => openDataFlow());
+  bindPositions();
   for (const b of document.querySelectorAll('[data-close]')) {
     b.addEventListener('click', () => /** @type {HTMLDialogElement} */ (b.closest('dialog')).close());
   }
@@ -145,6 +155,7 @@ function renderMode() {
   $('go').classList.toggle('forced', state.mode === 'forced_direction');
   $('plan').textContent = `${MODES[state.mode].label} · ${planLabel(state.mode, state.status?.plans)}`;
   if (demo && state.status && !state.status.demoModes.includes(state.mode)) $('plan').textContent += ' · 이 모드의 데모는 없습니다';
+  renderHolding();
 }
 
 function renderTabs() {
@@ -187,13 +198,16 @@ async function loadBoard(raw) {
     resolved.classList.add('err');
     const cands = (body?.candidates ?? []).map((/** @type {any} */ c) => c.displayName).join(', ');
     resolved.textContent = `${body?.message ?? `시세를 읽지 못함 (${res.status})`}${cands ? ` · 혹시: ${cands}` : ''}`;
+    state.board = null;
     renderBoard(null);
+    renderHolding();
     return;
   }
   resolved.classList.remove('err');
   resolved.textContent = `분석 대상: ${body.description}`; // P1-2-R4
   state.board = body;
   renderBoard(body);
+  renderPositions();
   if (!demo) state.boardTimer = window.setTimeout(() => void loadBoard(symbol), BOARD_REFRESH_MS);
 }
 
@@ -465,6 +479,7 @@ function renderPanel() {
   $('panel-badges').replaceChildren(...p.badges.map((b) => el('span', `badge ${b === '강제 방향 시뮬레이션' ? 'sim' : b.startsWith('DEMO') ? 'demo' : b === '규칙 차단' ? 'block' : ''}`, b)));
   $('panel-title').textContent = `최종 판정 · ${p.title}`;
   $('panel-notes').replaceChildren(...p.notes.map((n, i) => el('div', i === 0 && p.simulation ? 'first-sim' : '', n)));
+  $('panel-position').replaceChildren(...p.positionNotes.map((n) => el('div', '', n)));
   $('panel-headline').textContent = p.headline;
   const conf = $('panel-conf');
   conf.replaceChildren();
@@ -482,6 +497,186 @@ function renderPanel() {
     rep.target = '_blank';
     rep.rel = 'noopener noreferrer';
   }
+}
+
+// ---------- 보유 포지션 (P2-1-R1·R7·R9, 로컬 전용) ----------
+
+async function loadPositions() {
+  const { res, body } = await api('/api/positions');
+  if (!res.ok || !body) return;
+  state.positions = body;
+  renderPositions();
+}
+
+/** 상단 요약·분석 버튼 옆 표시·오래된 보유 경고 */
+function renderPositions() {
+  const v = state.positions;
+  if (!v) return;
+  const s = summaryRows(v, state.board, Date.now());
+  $('pos-summary').hidden = false;
+  $('pos-rows').replaceChildren(...(s.rows.length ? s.rows.map((r) => el('span', r.tone, r.text)) : [el('span', 'muted', s.empty)]));
+  $('pos-updated').textContent = s.updated;
+  const stale = staleWarning(v, Date.now());
+  $('pos-stale').hidden = !stale;
+  $('pos-stale').textContent = stale ? `${stale} · 보유 포지션을 확인하세요 (분석은 그대로 진행됩니다)` : '';
+  renderHolding();
+}
+
+function renderHolding() {
+  const t = holdingLabel(state.positions, state.board, state.mode);
+  $('holding').hidden = !t;
+  $('holding').textContent = t;
+}
+
+const posForm = () => /** @type {HTMLFormElement} */ ($('position-form'));
+const acctForm = () => /** @type {HTMLFormElement} */ ($('account-form'));
+
+/** @param {HTMLFormElement} form @param {Record<string, string>} values */
+function fillForm(form, values) {
+  for (const [k, v] of Object.entries(values)) {
+    const f = /** @type {HTMLInputElement | null} */ (form.elements.namedItem(k));
+    if (f) f.value = v;
+  }
+}
+
+/** @param {HTMLFormElement} form @param {string[]} keys */
+function readForm(form, keys) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const k of keys) out[k] = /** @type {HTMLInputElement} */ (form.elements.namedItem(k)).value;
+  return out;
+}
+
+function syncPerpFields() {
+  const perp = /** @type {HTMLSelectElement} */ (posForm().elements.namedItem('marketType')).value === 'perpetual';
+  for (const l of posForm().querySelectorAll('.perp')) /** @type {HTMLElement} */ (l).hidden = !perp;
+}
+
+/** @param {Record<string, string>} fields @param {string[]} other */
+function showErrors(fields, other) {
+  for (const s of document.querySelectorAll('#positions-dialog .field-err')) s.textContent = fields[/** @type {HTMLElement} */ (s).dataset.for ?? ''] ?? '';
+  $('pos-errors').replaceChildren(...other.map((m) => el('li', '', m)));
+}
+
+function openPositions() {
+  const v = state.positions;
+  if (!v) return;
+  fillForm(acctForm(), accountToForm(v.book));
+  $('pos-file-error').hidden = v.status !== 'invalid';
+  $('pos-file-error').textContent = v.status === 'invalid'
+    ? `포지션 파일에 오류가 있어 읽지 못했습니다. 저장하면 빈 목록에서 새로 시작하고 기존 파일은 .bak으로 남습니다. (${v.errors.map((/** @type {any} */ e) => `${e.path}: ${e.message}`).join(' · ')})`
+    : '';
+  closePositionForm();
+  showErrors({}, []);
+  $('pos-saved').textContent = '';
+  renderPositionList();
+  /** @type {HTMLDialogElement} */ ($('positions-dialog')).showModal();
+}
+
+function renderPositionList() {
+  const v = state.positions;
+  const rows = summaryRows(v, state.board, Date.now()).rows;
+  $('pos-list').replaceChildren(...v.book.positions.map((/** @type {any} */ p, /** @type {number} */ i) => {
+    const li = el('li');
+    const edit = el('button', 'small-btn', '수정');
+    edit.setAttribute('type', 'button');
+    edit.addEventListener('click', () => editPosition(i));
+    const del = el('button', 'small-btn', '삭제');
+    del.setAttribute('type', 'button');
+    del.addEventListener('click', () => void deletePosition(i));
+    li.append(el('span', '', `${i + 1}. ${rows[i].text} · 수량 ${p.quantity}${p.note ? ` · ${p.note}` : ''}`), edit, del);
+    return li;
+  }));
+}
+
+/** @param {number} i */
+function editPosition(i) {
+  const v = state.positions;
+  const p = v.book.positions[i];
+  state.editIndex = i;
+  showPositionForm(p ? positionToForm(p, v.names[p.instrumentId] ?? p.instrumentId) : emptyForm(), p ? `${i + 1}번 포지션 수정` : '새 포지션');
+}
+
+/** @param {PositionForm} f @param {string} title */
+function showPositionForm(f, title) {
+  const form = posForm();
+  fillForm(form, /** @type {any} */ (f));
+  form.dataset.origSymbol = f.origSymbol;
+  $('pos-form-title').textContent = title;
+  form.hidden = false;
+  syncPerpFields();
+  showErrors({}, []);
+  /** @type {HTMLInputElement} */ (form.elements.namedItem('symbol')).focus();
+}
+
+function closePositionForm() {
+  posForm().hidden = true;
+  state.editIndex = null;
+}
+
+const FORM_KEYS = ['symbol', 'marketType', 'side', 'avgEntryPrice', 'quantity', 'leverage', 'marginMode', 'liquidationPrice', 'stopLoss', 'targets', 'note'];
+
+async function submitPosition() {
+  const v = state.positions;
+  const i = state.editIndex;
+  if (!v || i === null) return;
+  const f = /** @type {PositionForm} */ ({ ...readForm(posForm(), FORM_KEYS), origSymbol: posForm().dataset.origSymbol ?? '' });
+  const list = v.book.positions.slice();
+  list[i] = formToPosition(f, v.book.positions[i] ?? null);
+  await savePositions(bookPayload(v.book, accountToForm(v.book), list), i);
+}
+
+/** @param {number} i */
+async function deletePosition(i) {
+  const v = state.positions;
+  const name = v.names[v.book.positions[i].instrumentId] ?? '';
+  if (!window.confirm(`${i + 1}번 포지션(${name})을 목록에서 지울까요? (직전 파일은 .bak으로 남습니다)`)) return;
+  closePositionForm();
+  await savePositions(bookPayload(v.book, accountToForm(v.book), v.book.positions.filter((/** @type {any} */ _p, /** @type {number} */ k) => k !== i)), null);
+}
+
+async function submitAccount() {
+  const v = state.positions;
+  if (!v) return;
+  const a = /** @type {AccountForm} */ (/** @type {any} */ (readForm(acctForm(), ['KRW', 'USD', 'USDT', 'risk'])));
+  await savePositions(bookPayload(v.book, a, v.book.positions), null);
+}
+
+/** 북 전체 교체 (PUT). 400이면 errors[].path를 필드 옆에 표시 @param {any} payload @param {number | null} index */
+async function savePositions(payload, index) {
+  const { res, body } = await api('/api/positions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (res.ok && body) {
+    state.positions = body;
+    closePositionForm();
+    showErrors({}, []);
+    $('pos-file-error').hidden = true;
+    fillForm(acctForm(), accountToForm(body.book));
+    $('pos-saved').textContent = `저장됨 ${new Date().toLocaleTimeString()}`;
+    renderPositionList();
+    renderPositions();
+    return;
+  }
+  if (res.status === 400 && Array.isArray(body?.errors)) {
+    const r = fieldErrors(body.errors, index);
+    showErrors(r.fields, r.other);
+    return;
+  }
+  showErrors({}, [`저장하지 못함 (${res.status}) ${body?.message ?? ''}`]);
+}
+
+function bindPositions() {
+  $('open-positions').addEventListener('click', () => openPositions());
+  $('pos-add').addEventListener('click', () => editPosition(state.positions?.book.positions.length ?? 0));
+  $('pos-form-cancel').addEventListener('click', () => closePositionForm());
+  /** @type {HTMLSelectElement} */ (posForm().elements.namedItem('marketType')).addEventListener('change', syncPerpFields);
+  posForm().addEventListener('submit', (e) => {
+    e.preventDefault();
+    void submitPosition();
+  });
+  acctForm().addEventListener('submit', (e) => {
+    e.preventDefault();
+    void submitAccount();
+  });
 }
 
 // ---------- 콘솔 ----------
