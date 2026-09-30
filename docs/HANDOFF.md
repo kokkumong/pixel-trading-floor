@@ -23,21 +23,27 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 12 | 포지션 북 스키마·검증·저장(`.floor/positions.json`)·API, 입력 화면, 파생 값 (P2-1, P2-5-T1) | ✅ |
 | 13 | 행동 집합 확장·스키마 v3·규칙 엔진·수량 제안·프롬프트·역할별 입력·`/floor` 투영 (P2-2·3·4) | ✅ |
 | 14 | 리포트·화면 표기·고지·마스킹·LAN·데모 fixture (P2-5·6·8) | ✅ |
-| **15** | **macOS 시작 파일·시작 시 doctor·가이드 개정 (P2-7, P2-6-R5)** | **다음** |
+| 15 | macOS·Windows 시작 파일, 시작 시 doctor, 가이드 v1.6 (P2-7, P2-6-R5) → **P2 구현 끝** | ✅ |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
 없음
 
-## Phase 15 참고
-- 범위: P2 명세 7장과 P2-6-R5 — macOS 시작 파일 `start-floor.command`(실행 권한, 서버 시작 + `--open`), 시작 시 doctor 요약(Node 버전·`claude` 설치·로그인, 부족하면 창에 안내, P1-8 통합 진단 재사용), 가이드 개정(포지션 입력 방법, 모델로 보내는 정보(비율만)·로컬 저장 위치, 수량 제안의 의미와 한계, 주문하지 않는다는 점, 표지 "분석 시뮬레이션" → "분석 도구")
-- 통과 기준: P2-7-T1(macOS 수동 확인), P2-6-R5(가이드). `start-floor.command`는 `BUNDLE_INCLUDE`(`src/server/bundle.ts`)에도 추가
-- 쓸 API·파일: `runDiagnostics`(`src/core/diag.ts`, 이제 `positions` 옵션으로 "포지션 N건 저장됨" 한 줄), `startServer`(`src/server/main.ts`, `--open`), 기존 `start-floor.cmd`·`start-floor-lan.cmd`, 가이드 `docs/PIXEL-TRADING-FLOOR-가이드-v*.md`(개정 규칙: rename + 개정 이력). 가이드에 쓸 화면: 판정 패널의 `사용한 포지션:` 줄·고지 문구, 데모의 "보유 예시" 선택, LAN·zip의 `[masked]`
-- Phase 15로 넘어온 일:
-  - 웹 패널(포지션 요약·고지·보유 판정 행·데모 보유 예시 선택)을 브라우저로 직접 확인하지 못함 (Phase 14 세션에서 미리보기 생략). 화면 모델은 `test/web/model.test.ts`로만 확인됨 → 가이드 스크린샷을 만들 때 함께 확인
-  - (선택) 실제 스모크: 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → 포지션 행동으로 완료되는지, 호출 수·시간·비용
-- Phase 14 통과 기준: P2-5-T2·P2-5-T3·P2-6-T1·P2-6-T2·P2-6-R3·P2-2-R4 `test/core/position-report.test.ts`, P2-5-T3(LAN·SSE·리포트·all.zip·project.zip) `test/server/app.test.ts` 끝, P2-8-T1 `test/core/demo.test.ts`, P2-8-R1 `test/server/jobs.test.ts`. 결함 주입 7건(마스킹·고지·NO_TRADE 주석·LAN 보기·데모 북·진단 값·요약) 모두 테스트가 잡음
+## Phase 15 결과와 P2 이후 참고 (개발 Phase 없음)
+P2(Phase 11~15) 구현은 끝났다. 남은 것은 사용자가 하거나 선택하는 일이다.
+- 미확인: P2-7-T1 Finder 더블클릭(`start-floor.command`를 Finder에서 열어 시작 점검 표시·브라우저 열림 확인). 셸 수준 확인만 했다(`env -i PATH=/usr/bin:/bin`으로 실행 → node@22 탐색, 시작 점검, 서버 시작, 브라우저 열림). Windows 시작 파일은 Node 버전 검사식을 테스트로만 확인했고 실기 확인은 없다
+- 선택: 실제 스모크 — 북에 BTC 무기한 보유를 넣고 `node src/cli/floor.ts analyze BTC scalp` → 포지션 행동으로 완료되는지, 호출 수·시간·비용 기록. 가이드 스크린샷은 없다(가이드는 Markdown 텍스트)
+- Phase 15 결정 (유지):
+  - 시작 점검은 서버 `--doctor` 한 곳에 두고 두 OS 시작 파일이 같이 쓴다. `[오류]`여도 서버는 켠다. Node 없음·22.18 미만은 서버가 TS를 못 돌리므로 시작 파일(셸)이 먼저 거른다
+  - macOS node 탐색 순서·`FLOOR_NODE_SEARCH`·zip mode는 ARCHITECTURE.md "리포트·데모·진단·CLI" 절
+  - 표지 문구는 "분석 도구 (실제 주문 기능 없음)". 프롬프트 `shared/common.md`의 "분석 시뮬레이션"은 모델 입력이라 그대로
+  - 가이드 v1.6: 보유 포지션 입력·판정·수량 제안 한계·모델로 보내는 정보(비율만)·저장 위치, macOS 설치·시작 파일, 시작 점검
+  - 데모 화면에서는 `보유 포지션` 버튼을 숨긴다(데모는 포지션 북을 읽지 않음)
+  - `.claude/launch.json`에 `autoPort`(8000번이 사용 중이면 다른 포트)
+- 알려진 것: 짧은 PATH에서는 `~/.claude/local`의 오래된 claude가 먼저 잡혀 시작 점검이 `[오류] Claude CLI 버전`을 낸다(안내 문구가 제대로 뜨는 실례)
+- 실측: 시작 점검 0.4초(이 Mac, 모델 호출 0회). 실제 claude 스모크는 안 함
+- Phase 14 통과 기준: P2-5-T2·P2-5-T3·P2-6-T1·P2-6-T2·P2-6-R3·P2-2-R4 `test/core/position-report.test.ts`, P2-5-T3(LAN·SSE·리포트·all.zip·project.zip) `test/server/app.test.ts` 끝, P2-8-T1 `test/core/demo.test.ts`, P2-8-R1 `test/server/jobs.test.ts`
 - Phase 14 결정 (유지):
   - 표시: `panelView(d, now, pc)`의 `PanelView.position`(판정에 쓴 포지션 요약: 시장·방향·레버리지·평단·수익률(레버리지 반영)·손절·청산가·`기준 <book.updatedAt>`, 수량·총 자산 없음, `d.positionRef === pc.position.id`일 때만)과 `disclaimer`(`DISCLAIMER`, 모든 패널·리포트). NO_TRADE 주석은 북을 읽었고 보유 없음이면 `NO_POSITION_BIAS_NOTE`, 북 없음·오류·이전 작업은 `BIAS_NOTE` — 명세 P2-6-R3을 "상황에 맞는 문구"로 해석
   - 리포트 v2(`reportSchemaVersion: 2`, `positionContext?`), store는 1·2 읽음. Markdown: 제목 아래 고지, `### 보유 포지션`(요약·판정 뒤 손절/목표/청산 비율·수량 계산 조건·컨텍스트 notes), 끝줄 고지 + "이 앱에는 주문 기능이 없습니다". 총 자산·손실 한도 금액은 Markdown에 없음
@@ -70,6 +76,7 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 
 ## 실측 기록
 
+- Phase 15: 시작 점검 0.4초(이 Mac), 모델 호출 없음
 - Phase 13: 모델 호출 없음(실측 없음, 스모크는 Phase 14로 미룸)
 - Phase 12: 모델 호출 없음(실측 없음)
 - 실측(haiku, TARO 1회, Phase 3): 기본 68.7초·출력 7,638토큰, `--effort low` 54.4초·5,143토큰 → Phase 4에서 스키마 길이 축소 (narrative 1000자, claims 최대 6개)

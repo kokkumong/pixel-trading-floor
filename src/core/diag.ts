@@ -94,6 +94,68 @@ export interface DiagResult {
   clockSkewMs: number | null;
 }
 
+/** Claude CLI 검사 3줄: 존재·실행 방식 → 버전 → 로그인 (통합 진단과 시작 점검이 같이 쓴다) */
+async function claudeChecks(exe: ClaudeExecutable | null, env: NodeJS.ProcessEnv): Promise<Check[]> {
+  const checks: Check[] = [];
+  const add = (c: Check) => checks.push(c);
+  if (!exe) {
+    add({ id: 'claude-cli', label: 'Claude CLI', status: 'error', code: 'E-CLI-MISSING', detail: '실행 파일을 찾지 못함', hint: 'Claude Code 네이티브 설치 후 터미널을 다시 여세요 (https://claude.com/claude-code)' });
+    add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'skip', detail: 'CLI 없음' });
+    add({ id: 'claude-auth', label: '인증 방식', status: 'skip', detail: 'CLI 없음' });
+  } else {
+    add({ id: 'claude-cli', label: 'Claude CLI', status: 'ok', detail: exe.kind === 'native' ? '실행 파일 직접 실행' : 'Node + cli.js 직접 실행 (npm 설치)' });
+    const v = await runClaudeCommand(exe, ['--version'], { env, timeoutMs: 15_000 });
+    const ver = /(\d+\.\d+\.\d+)/.exec(v.stdout)?.[1] ?? null;
+    if (!ver) add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'error', code: 'E-CLI-MISSING', detail: v.timedOut ? '응답 없음' : '버전을 읽지 못함', hint: 'claude --version이 동작하는지 확인하세요' });
+    else if (compareVersions(ver, MIN_CLAUDE_VERSION) < 0) add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'error', detail: `${ver} (필요: ${MIN_CLAUDE_VERSION} 이상)`, hint: 'claude update로 업데이트하세요' });
+    else add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'ok', detail: ver });
+
+    const a = await runClaudeCommand(exe, ['auth', 'status', '--json'], { env, timeoutMs: 15_000 });
+    const auth = authMethodLabel(a.stdout);
+    if (auth.loggedIn === false) add({ id: 'claude-auth', label: '인증 방식', status: 'error', code: 'E-AUTH', detail: '로그인되어 있지 않음', hint: '터미널에서 claude를 실행해 로그인하세요' });
+    else if (auth.label === '확인 불가') add({ id: 'claude-auth', label: '인증 방식', status: 'warn', detail: '확인 불가', hint: a.timedOut ? 'claude auth status가 응답하지 않습니다' : '터미널에서 claude auth status로 확인하세요' });
+    else add({ id: 'claude-auth', label: '인증 방식', status: 'ok', detail: auth.label });
+  }
+  return checks;
+}
+
+export interface StartupDoctorOptions {
+  env?: NodeJS.ProcessEnv;
+  nodeVersion?: string;
+  now?: () => Date;
+  /** undefined면 PATH에서 찾는다 */
+  executable?: ClaudeExecutable | null;
+}
+
+/**
+ * 시작 점검 (P2-7-R2): 시작 파일이 서버를 켤 때(--doctor) Node 버전·Claude 설치·로그인만 본다.
+ * 네트워크·디스크를 쓰지 않아 몇 초 안에 끝난다. 전체 진단은 /diagnostics
+ */
+export async function startupDoctor(o: StartupDoctorOptions = {}): Promise<Check[]> {
+  const env = o.env ?? process.env;
+  const exe = o.executable === undefined ? findClaudeExecutable(env) : o.executable;
+  return [nodeCheck(o.nodeVersion ?? process.versions.node, (o.now ?? (() => new Date()))()), ...await claudeChecks(exe, env)];
+}
+
+const STATUS_TAG: Record<CheckStatus, string> = { ok: '[정상]', warn: '[주의]', error: '[오류]', skip: '[건너뜀]' };
+
+/** 시작 점검 결과를 서버 창에 쓸 줄로. 부족하면 항목마다 안내(→)와 마지막 줄에 할 일을 쓴다 */
+export function formatStartupDoctor(checks: readonly Check[]): string[] {
+  const lines = ['시작 점검 (Node.js·Claude)'];
+  for (const c of checks) {
+    lines.push(`  ${STATUS_TAG[c.status]} ${c.label}: ${c.detail}`);
+    if (c.hint && (c.status === 'error' || c.status === 'warn')) lines.push(`         → ${c.hint}`);
+  }
+  if (checks.some((c) => c.status === 'error')) {
+    lines.push('  ⚠ 분석을 실행하려면 위 [오류] 항목을 먼저 해결하고 이 창을 닫았다가 다시 여세요. 데모와 지난 리포트 보기는 지금도 쓸 수 있습니다.');
+  } else if (checks.some((c) => c.status === 'warn')) {
+    lines.push('  분석을 실행할 수 있습니다. [주의] 항목은 분석을 막지 않지만 확인해 보세요.');
+  } else {
+    lines.push('  분석을 실행할 수 있습니다.');
+  }
+  return lines;
+}
+
 /** 공급자별 가벼운 요청. required는 해당 시장 분석의 필수 소스 공급자 (P0-4.3) */
 export const PROVIDER_PROBES: readonly { id: string; label: string; url: string; expect: Expect; required: boolean }[] = [
   { id: 'binance-spot', label: 'Binance 현물', url: 'https://api.binance.com/api/v3/ping', expect: 'json', required: true },
@@ -144,24 +206,7 @@ export async function runDiagnostics(o: DiagOptions): Promise<DiagResult> {
 
   // Claude CLI: 존재·실행 방식 → 버전 → 인증
   const exe = o.executable === undefined ? findClaudeExecutable(env) : o.executable;
-  if (!exe) {
-    add({ id: 'claude-cli', label: 'Claude CLI', status: 'error', code: 'E-CLI-MISSING', detail: '실행 파일을 찾지 못함', hint: 'Claude Code 네이티브 설치 후 터미널을 다시 여세요 (https://claude.com/claude-code)' });
-    add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'skip', detail: 'CLI 없음' });
-    add({ id: 'claude-auth', label: '인증 방식', status: 'skip', detail: 'CLI 없음' });
-  } else {
-    add({ id: 'claude-cli', label: 'Claude CLI', status: 'ok', detail: exe.kind === 'native' ? '실행 파일 직접 실행' : 'Node + cli.js 직접 실행 (npm 설치)' });
-    const v = await runClaudeCommand(exe, ['--version'], { env, timeoutMs: 15_000 });
-    const ver = /(\d+\.\d+\.\d+)/.exec(v.stdout)?.[1] ?? null;
-    if (!ver) add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'error', code: 'E-CLI-MISSING', detail: v.timedOut ? '응답 없음' : '버전을 읽지 못함', hint: 'claude --version이 동작하는지 확인하세요' });
-    else if (compareVersions(ver, MIN_CLAUDE_VERSION) < 0) add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'error', detail: `${ver} (필요: ${MIN_CLAUDE_VERSION} 이상)`, hint: 'claude update로 업데이트하세요' });
-    else add({ id: 'claude-version', label: 'Claude CLI 버전', status: 'ok', detail: ver });
-
-    const a = await runClaudeCommand(exe, ['auth', 'status', '--json'], { env, timeoutMs: 15_000 });
-    const auth = authMethodLabel(a.stdout);
-    if (auth.loggedIn === false) add({ id: 'claude-auth', label: '인증 방식', status: 'error', code: 'E-AUTH', detail: '로그인되어 있지 않음', hint: '터미널에서 claude를 실행해 로그인하세요' });
-    else if (auth.label === '확인 불가') add({ id: 'claude-auth', label: '인증 방식', status: 'warn', detail: '확인 불가', hint: a.timedOut ? 'claude auth status가 응답하지 않습니다' : '터미널에서 claude auth status로 확인하세요' });
-    else add({ id: 'claude-auth', label: '인증 방식', status: 'ok', detail: auth.label });
-  }
+  checks.push(...await claudeChecks(exe, env));
 
   // API 키 환경변수 (P1-7-R6): 값은 표시하지 않는다
   if (env.ANTHROPIC_API_KEY) {

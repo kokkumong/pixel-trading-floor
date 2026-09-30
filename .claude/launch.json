@@ -4,8 +4,11 @@
     {
       "name": "floor",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["src/server/main.ts"],
-      "port": 8000
+      "runtimeArgs": [
+        "src/server/main.ts"
+      ],
+      "port": 8000,
+      "autoPort": true
     }
   ]
 }

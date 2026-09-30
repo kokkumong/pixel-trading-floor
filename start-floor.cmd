@@ -9,6 +9,12 @@ where node >nul 2>nul || (
   pause
   exit /b 1
 )
+node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)" >nul 2>nul || (
+  echo 설치된 Node.js는 이 앱을 실행할 수 없습니다. https://nodejs.org 에서 22.18 이상 LTS를 설치한 뒤 다시 실행하세요.
+  node -v
+  pause
+  exit /b 1
+)
 echo PIXEL TRADING FLOOR를 시작합니다. 이 창을 닫으면 서버가 꺼집니다.
-node src\server\main.ts --open
+node src\server\main.ts --open --doctor
 pause

@@ -407,7 +407,7 @@ test('P1-7-R15 all.zip은 분석 탭 리포트만 담고, 상한을 넘으면 �
 
 test('P1-7-T5, P1-7-R14 project.zip: 기본 비활성, 켜면 목록 확인 뒤 같은 목록일 때만 만들고 인증 정보는 빠진다', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'floor-proj-'));
-  for (const [rel, text] of [['package.json', '{}'], ['src/a.ts', 'x'], ['.claude/settings.local.json', 'secret'], ['.credentials.json', 'secret'], ['.env', 'K=1']] as const) {
+  for (const [rel, text] of [['package.json', '{}'], ['start-floor.command', '#!/bin/bash\n'], ['src/a.ts', 'x'], ['.claude/settings.local.json', 'secret'], ['.credentials.json', 'secret'], ['.env', 'K=1']] as const) {
     mkdirSync(join(projectRoot, rel, '..'), { recursive: true });
     writeFileSync(join(projectRoot, rel), text);
   }
@@ -433,8 +433,10 @@ test('P1-7-T5, P1-7-R14 project.zip: 기본 비활성, 켜면 목록 확인 뒤 
     assert.equal((await h.req('/project.zip', { body: { confirm: files.json.listHash } })).status, 415);
     const z = await form(files.json.listHash);
     assert.equal(z.status, 200);
-    const names = readZip(z.body).map((e) => e.name);
-    assert.deepEqual(names.sort(), ['pixel-trading-floor/package.json', 'pixel-trading-floor/src/a.ts']);
+    const entries = readZip(z.body);
+    const names = entries.map((e) => e.name);
+    assert.deepEqual(names.sort(), ['pixel-trading-floor/package.json', 'pixel-trading-floor/src/a.ts', 'pixel-trading-floor/start-floor.command']);
+    assert.equal(entries.find((e) => e.name.endsWith('start-floor.command'))?.mode, 0o755, 'P2-7-R1 macOS 시작 파일은 실행 권한 유지');
     assert.equal(names.some((x) => x.includes('.claude/') || x.includes('credentials') || x.includes('.env')), false);
   } finally {
     await h.app.close();

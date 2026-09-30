@@ -7,6 +7,8 @@ import { crc32, deflateRaw, deflateRawSync } from 'node:zlib';
 export interface ZipEntry {
   name: string;
   data: Buffer;
+  /** 유닉스 권한 비트 (예: 0o755). 주면 만든 OS를 유닉스로 기록해 macOS·Linux에서 풀 때 권한이 남는다. 없으면 기록하지 않는다 */
+  mode?: number;
 }
 
 const deflateRawAsync = promisify(deflateRaw);
@@ -25,11 +27,12 @@ interface Encoded {
   size: number;
   body: Buffer;
   stored: boolean;
+  mode: number | undefined;
 }
 
 function encode(e: ZipEntry, deflated: Buffer): Encoded {
   const stored = deflated.length >= e.data.length;
-  return { name: Buffer.from(e.name.replace(/\\/g, '/'), 'utf8'), crc: crc32(e.data), size: e.data.length, body: stored ? e.data : deflated, stored };
+  return { name: Buffer.from(e.name.replace(/\\/g, '/'), 'utf8'), crc: crc32(e.data), size: e.data.length, body: stored ? e.data : deflated, stored, mode: e.mode };
 }
 
 function localHeader(x: Encoded, t: { time: number; date: number }): Buffer {
@@ -50,7 +53,7 @@ function localHeader(x: Encoded, t: { time: number; date: number }): Buffer {
 function centralHeader(x: Encoded, t: { time: number; date: number }, offset: number): Buffer {
   const c = Buffer.alloc(46);
   c.writeUInt32LE(0x02014b50, 0);
-  c.writeUInt16LE(20, 4); // 만든 버전
+  c.writeUInt16LE(x.mode === undefined ? 20 : (3 << 8) | 20, 4); // 만든 버전 (상위 바이트 3 = 유닉스)
   c.writeUInt16LE(20, 6);
   c.writeUInt16LE(0x0800, 8);
   c.writeUInt16LE(x.stored ? 0 : 8, 10);
@@ -60,6 +63,7 @@ function centralHeader(x: Encoded, t: { time: number; date: number }, offset: nu
   c.writeUInt32LE(x.body.length, 20);
   c.writeUInt32LE(x.size, 24);
   c.writeUInt16LE(x.name.length, 28);
+  if (x.mode !== undefined) c.writeUInt32LE(((0o100000 | (x.mode & 0o777)) << 16) >>> 0, 38); // 외부 속성: 일반 파일 + 권한
   c.writeUInt32LE(offset, 42);
   return Buffer.concat([c, x.name]);
 }
@@ -87,8 +91,8 @@ export class ZipWriter {
     this.t = dosDateTime(mtime);
   }
 
-  async add(name: string, data: Buffer): Promise<void> {
-    const x = encode({ name, data }, await deflateRawAsync(data));
+  async add(name: string, data: Buffer, mode?: number): Promise<void> {
+    const x = encode({ name, data, ...(mode === undefined ? {} : { mode }) }, await deflateRawAsync(data));
     const head = localHeader(x, this.t);
     this.central.push(centralHeader(x, this.t, this.offset));
     await this.write(head);

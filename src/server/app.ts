@@ -17,7 +17,7 @@ import { budgetFor } from '../core/job/budget.ts';
 import { PLANNED_CALLS } from '../core/job/state.ts';
 import { MODES } from '../core/schema/types.ts';
 import { BoardService } from './board.ts';
-import { listBundleFiles } from './bundle.ts';
+import { bundleFileMode, listBundleFiles } from './bundle.ts';
 import type { JobManager } from './jobs.ts';
 import { diagnosticsPage, messagePage, page, projectZipPage, reportPage, reportsPage, type Raw } from './pages.ts';
 import {
@@ -390,7 +390,7 @@ export function createApp(o: AppOptions): App {
         const confirm = (await readFormBody(c.req)).get('confirm');
         const list = listBundleFiles(projectRoot);
         if (confirm !== list.listHash) throw new HttpError(409, 'E-CHANGED', '확인한 뒤 파일 목록이 바뀌었습니다. 목록을 다시 확인하세요');
-        return streamZip(c, 'pixel-trading-floor.zip', list.files.map((f) => ({ name: `pixel-trading-floor/${f.path}`, path: join(projectRoot, f.path) })));
+        return streamZip(c, 'pixel-trading-floor.zip', list.files.map((f) => ({ name: `pixel-trading-floor/${f.path}`, path: join(projectRoot, f.path), mode: bundleFileMode(f.path) })));
       },
     },
     {
@@ -418,7 +418,7 @@ export function createApp(o: AppOptions): App {
   let zipping = false;
 
   /** 한 번에 하나만, 파일을 하나씩 읽어 흘려 쓴다 (전체를 메모리에 모으지 않음) */
-  async function streamZip(c: Ctx, filename: string, files: ({ name: string; path: string } | { name: string; data: Buffer })[]) {
+  async function streamZip(c: Ctx, filename: string, files: ({ name: string; path: string; mode?: number } | { name: string; data: Buffer })[]) {
     if (zipping) throw new HttpError(503, 'E-BUSY', '다른 ZIP을 만드는 중입니다. 잠시 뒤 다시 시도하세요');
     zipping = true;
     try {
@@ -430,7 +430,7 @@ export function createApp(o: AppOptions): App {
         c.res.once('close', gone);
       }));
       const zip = new ZipWriter(write);
-      for (const f of files) await zip.add(f.name, 'data' in f ? f.data : await readFile(f.path));
+      for (const f of files) await zip.add(f.name, 'data' in f ? f.data : await readFile(f.path), 'mode' in f ? f.mode : undefined);
       await zip.finish();
       c.res.end();
     } finally {

@@ -64,6 +64,35 @@ test('--open: 시작한 뒤 로컬 토큰 주소로 브라우저를 연다 (주�
   }
 });
 
+test('P2-7-R2 --doctor: 시작 전에 Node·Claude 점검 요약을 서버 창에 표시하고, 부족해도 서버는 뜬다 (데모·리포트용)', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'floor-home-'));
+  const lines: string[] = [];
+  let calls = 0;
+  const doctor = async () => {
+    calls++;
+    return [
+      { id: 'node', label: 'Node.js 버전', status: 'ok' as const, detail: '22.23.2' },
+      { id: 'claude-auth', label: '인증 방식', status: 'error' as const, detail: '로그인되어 있지 않음', hint: '터미널에서 claude를 실행해 로그인하세요' },
+    ];
+  };
+  const s = await startServer(['--port', '0', '--doctor'], { FLOOR_HOME: home }, (l) => lines.push(l), { doctor });
+  assert.ok(!('error' in s));
+  try {
+    assert.equal(calls, 1);
+    const text = lines.join('\n');
+    assert.match(text, /\[오류\] 인증 방식: 로그인되어 있지 않음/);
+    assert.match(text, /→ 터미널에서 claude를 실행해 로그인하세요/);
+    // 점검 요약이 접속 주소보다 먼저 나온다 (주소가 창 아래쪽에 남게)
+    assert.ok(text.indexOf('시작 점검') < text.indexOf('이 PC 접속 주소'));
+  } finally {
+    await s.shutdown();
+  }
+  const s2 = await startServer(['--port', '0'], { FLOOR_HOME: home }, () => {}, { doctor });
+  assert.ok(!('error' in s2));
+  await s2.shutdown();
+  assert.equal(calls, 1, '--doctor 없이는 점검하지 않는다');
+});
+
 test('P0-7-R1, R4 LAN 시작: 경고와 토큰 주소를 서버 창에 한 번 표시하고, 재발급하면 새 토큰을 표시한다', async () => {
   const home = mkdtempSync(join(tmpdir(), 'floor-home-'));
   const lines: string[] = [];

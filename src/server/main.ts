@@ -1,12 +1,13 @@
-// 서버 시작: node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze] [--open]  (npm start)
+// 서버 시작: node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze] [--open] [--doctor]  (npm start)
 // 순서: 시작 정리(중단 작업·리포트 수리·임시 파일, P1-1-R5·P1-6-R7) → 바인딩(로컬 127.0.0.1 / LAN 0.0.0.0) → 안내 출력.
 // 이 PC 접속도 로컬 토큰 주소(/?t=)로 연다. 토큰은 서버 창에 한 번만 표시하고 파일로 남기지 않는다. --open은 그 주소로 기본 브라우저를 연다.
+// --doctor는 시작 전에 Node·Claude 점검 요약을 쓴다 (시작 파일 start-floor.command·.cmd, P2-7-R2). 부족해도 서버는 켠다 (데모·리포트 보기).
 // 서버 창에서 l + Enter: 로컬 토큰 재발급, r + Enter: LAN 토큰 재발급(P0-7-R2), q + Enter 또는 Ctrl+C: 실행 중 분석을 취소하고 종료.
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { LAN_WARNING } from '../core/diag.ts';
+import { formatStartupDoctor, LAN_WARNING, startupDoctor, type Check } from '../core/diag.ts';
 import { createApp, PROJECT_ROOT, type App } from './app.ts';
 import { JobManager } from './jobs.ts';
 import { parseServerOptions } from './options.ts';
@@ -32,6 +33,8 @@ export interface StartDeps {
   interfaces?: () => string[];
   /** --open의 브라우저 열기 (테스트용, 기본: openBrowser) */
   openBrowser?: (url: string) => void;
+  /** --doctor의 시작 점검 (테스트용, 기본: startupDoctor) */
+  doctor?: () => Promise<Check[]>;
 }
 
 /** 기본 브라우저로 주소를 연다. 셸 없이 인자 배열로 실행한다 (주소가 명령으로 해석되지 않게) */
@@ -53,6 +56,11 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv, out: (
   const ignored = all.filter((a) => !isPrivateIPv4(a));
   if (opts.mode === 'lan' && lanAddrs.length === 0) {
     return { error: `사설 네트워크 주소(192.168.x.x, 10.x.x.x, 172.16~31.x.x)를 찾지 못해 LAN 모드를 시작하지 않습니다${ignored.length ? ` (사설이 아닌 주소: ${ignored.join(', ')})` : ''}`, code: 1 };
+  }
+  if (opts.doctor) {
+    // 접속 주소가 창 아래쪽에 남도록 점검 요약을 먼저 쓴다
+    for (const line of formatStartupDoctor(await (deps.doctor ?? (() => startupDoctor({ env })))())) out(line);
+    out('');
   }
   const root = env.FLOOR_HOME ? resolve(env.FLOOR_HOME) : PROJECT_ROOT;
   const auth = opts.mode === 'lan' ? new LanAuth() : null;
@@ -94,7 +102,7 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv, out: (
     throw e;
   }
 
-  out(`PIXEL TRADING FLOOR · 분석 시뮬레이션 (실제 주문 없음)`);
+  out(`PIXEL TRADING FLOOR · 분석 도구 (실제 주문 기능 없음)`);
   printLocal();
   out(`  이 주소로 한 번 열면 브라우저에 접속 쿠키가 생깁니다. 그 뒤로는 http://localhost:${port}   데모: http://localhost:${port}/?demo=1   리포트: http://localhost:${port}/reports   진단: http://localhost:${port}/diagnostics`);
   out('  l + Enter: 이 PC 접속 주소 재발급 (이 PC 브라우저의 기존 접속 모두 무효)');
