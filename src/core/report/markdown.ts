@@ -1,5 +1,6 @@
 // 리포트 Markdown 생성 (P1-6-R1). 입력은 리포트 JSON뿐이고 같은 JSON이면 항상 같은 문서가 나온다.
 // 모델이 쓴 문장은 HTML 태그처럼 해석되지 않게 무력화한다 (P1-7.4).
+import type { EvidenceIssue } from '../rules/audit.ts';
 import type { Briefing } from '../schema/agents.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
 import { actionBiasLabel, BIAS_NOTE, CONFIDENCE_BAND_LABEL, CONFIDENCE_NOTE, panelView } from '../rules/display.ts';
@@ -42,9 +43,15 @@ function proposalLines(p: TradeProposal): string[] {
   return lines;
 }
 
-function briefingLines(b: Briefing): string[] {
+/** 주장 옆 표시 (P1-10-R1): 같은 역할·claimId의 근거 검사 결과 이름 */
+function claimMarks(issues: readonly EvidenceIssue[], role: string, claimId: string): string {
+  const labels = [...new Set(issues.filter((x) => x.role === role && x.claimId === claimId).map((x) => x.label))];
+  return labels.map((l) => ` ⚠ ${l}`).join('');
+}
+
+function briefingLines(b: Briefing, issues: readonly EvidenceIssue[]): string[] {
   const lines = [`### ${b.role} · ${b.bias}`, '', `**${mdText(b.summary)}**`, '', mdText(b.narrative), ''];
-  for (const c of b.claims) lines.push(`- \`${c.claimId}\` (${c.kind}) ${mdText(c.text)}${c.evidenceRefs.length ? ` — ${c.evidenceRefs.map(mdText).join(', ')}` : ''}`);
+  for (const c of b.claims) lines.push(`- \`${c.claimId}\` (${c.kind}) ${mdText(c.text)}${c.evidenceRefs.length ? ` — ${c.evidenceRefs.map(mdText).join(', ')}` : ''}${claimMarks(issues, b.role, c.claimId)}`);
   lines.push(`- 반대 시나리오: ${mdText(b.counterScenario)}`);
   if (b.changeTriggers.length) lines.push(`- 판단을 바꿀 조건: ${list(b.changeTriggers)}`);
   if (b.dataLimitations.length) lines.push(`- 데이터 한계: ${list(b.dataLimitations)}`);
@@ -101,11 +108,12 @@ export function renderMarkdown(r: Report): string {
   for (const x of s.sources) L.push(`| ${x.id}${x.estimated ? ' (추정 · 직접 체결가 아님)' : ''} | ${x.status} | ${x.freshness} | ${x.usable ? '예' : '아니오'} |`);
   L.push('');
 
+  const audit = r.evidenceAudit ?? []; // Phase 9 이전 리포트에는 없다
   const briefs = Object.values(r.briefings).filter((b): b is Briefing => Boolean(b));
   const analysts = briefs.filter((b) => b.role !== 'GUARD');
   if (analysts.length) {
     L.push('## 애널리스트 브리핑', '');
-    for (const b of analysts) L.push(...briefingLines(b));
+    for (const b of analysts) L.push(...briefingLines(b, audit));
   }
 
   if (r.mode === 'algorithm') {
@@ -124,13 +132,21 @@ export function renderMarkdown(r: Report): string {
   }
 
   L.push('## 리스크 심사', '', `- 심사자: ${r.riskReview.reviewers.join(', ') || '-'} · 시점: ${r.riskReview.timing === 'post_proposal' ? '제안 후' : '제안 전'}`, '');
-  for (const b of r.mode === 'algorithm' ? r.reviews : briefs.filter((x) => x.role === 'GUARD')) L.push(...briefingLines(b));
+  for (const b of r.mode === 'algorithm' ? r.reviews : briefs.filter((x) => x.role === 'GUARD')) L.push(...briefingLines(b, audit));
 
   if (r.pm) {
     L.push('## PM 심사', '', `- 결정: ${r.pm.pmDecision} · 사유 코드: ${list(r.pm.reasonCodes)}`);
     if (r.pm.modifiedFields.length) L.push(`- 변경 필드(코드 계산): ${r.pm.modifiedFields.join(', ')}`);
     L.push('', `**${mdText(r.pm.summary)}**`, '', mdText(r.pm.narrative), '');
   }
+
+  L.push('## 근거 검사', '');
+  if (audit.length === 0) L.push('- 문제 없음');
+  for (const x of audit) {
+    const where = x.claimId ? `${x.role} ${x.claimId}` : x.round !== null ? `${x.role} ${x.round}라운드` : x.role;
+    L.push(`- ${x.label} · ${where}${x.ref ? ` · ${mdText(x.ref)}` : ''} — ${mdText(x.detail)}`);
+  }
+  L.push('');
 
   L.push('## 과거 판정 회고', '', `- 과거 판정 회고: ${r.retrospective.enabled ? '켜짐' : '꺼짐'} (P1-9)`, '');
 

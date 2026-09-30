@@ -4,6 +4,7 @@ import { derivedValues } from '../data/project.ts';
 import type { AnalysisSnapshot } from '../data/snapshot.ts';
 import type { EstimatePayload, PricePayload } from '../data/sources.ts';
 import { confidenceBand } from '../rules/display.ts';
+import { auditEvidence, type EvidenceIssue } from '../rules/audit.ts';
 import { applyRules, type RuleContext } from '../rules/engine.ts';
 import { createEvidenceIndex } from '../rules/evidence.ts';
 import type { FinalDecision } from '../schema/decision.ts';
@@ -41,6 +42,16 @@ function briefIndex(r: JobRecord): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const b of [...Object.values(r.outputs.briefings), ...r.outputs.reviews]) out[b.role] = b.claims.map((c) => c.claimId);
   return out;
+}
+
+/** 지금까지 제출된 역할 출력의 근거 인용 검사 (P1-10-R1·R3·R5) */
+export function auditJob(r: JobRecord, s: AnalysisSnapshot): EvidenceIssue[] {
+  const o = r.outputs;
+  const proposals = [o.blitzPlan, o.proposal, o.pm?.revisedProposal ?? null].filter((p): p is TradeProposal => p !== null);
+  return auditEvidence(
+    { briefings: Object.values(o.briefings), reviews: o.reviews, debate: o.debate, proposals },
+    ruleContextFor(s, briefIndex(r)).evidence,
+  );
 }
 
 /** 역할 출력이 모두 모인 작업의 최종 판정 */

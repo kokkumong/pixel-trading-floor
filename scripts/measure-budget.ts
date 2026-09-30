@@ -48,6 +48,8 @@ export interface ModeSummary {
   jobDuration: Stats;
   roles: Partial<Record<Role, RoleStats>>;
   models: string[];
+  /** 표본의 Claude CLI 버전 (P1-11-R3) */
+  cliVersions: string[];
   derived: {
     callTimeoutSeconds: Partial<Record<Role, number>>;
     callTimeoutMax: number | null;
@@ -122,11 +124,15 @@ function summarizeMode(mode: Mode, jobs: JobRecord[]): ModeSummary {
   if (models.length > 1) notes.push(`모델이 섞임 (${models.join(', ')}): 재측정 대상 (P1-11-R3)`);
   const mixedPrompts = [...new Set(jobs.flatMap((j) => Object.keys(j.promptHashes ?? {})))].filter((role) => new Set(jobs.map((j) => (j.promptHashes as Record<string, string>)?.[role]).filter(Boolean)).size > 1);
   if (mixedPrompts.length) notes.push(`프롬프트 해시가 섞임 (${mixedPrompts.join(', ')}): 재측정 대상 (P1-11-R3)`);
+  const cliVersions = [...new Set(jobs.map((j) => j.claudeCliVersion).filter((v): v is string => !!v))].sort();
+  const unversioned = jobs.filter((j) => !j.claudeCliVersion).length;
+  if (cliVersions.length > 1) notes.push(`CLI 버전이 섞임 (${cliVersions.join(', ')}): 재측정 대상 (P1-11-R3)`);
+  if (unversioned) notes.push(`CLI 버전 미기록 ${unversioned}건: 버전 혼재를 확인할 수 없음 (P1-11-R3)`);
   if (derived.inputOverLimit.length) notes.push(`입력 p99×1.2가 ${INPUT_CEILING}자를 넘는 역할 (${derived.inputOverLimit.join(', ')}): 입력 범위를 먼저 줄인다`);
   if (derived.path.some((s) => s.p95 === null)) notes.push(`순차 경로에 표본 없는 단계가 있음 (${derived.path.filter((s) => s.p95 === null).map((s) => s.step).join(', ')})`);
 
   const jobDurations = jobs.map((j) => seconds(j.history[0]!.at, j.history[j.history.length - 1]!.at));
-  return { sample: jobs.length, byState, jobDuration: stats(jobDurations), roles, models, derived, final: notes.length === 0, notes };
+  return { sample: jobs.length, byState, jobDuration: stats(jobDurations), roles, models, cliVersions, derived, final: notes.length === 0, notes };
 }
 
 export function summarize(jobs: readonly JobRecord[], opts: { interface?: 'web' | 'floor'; since?: string } = {}): Summary {
@@ -146,11 +152,11 @@ const n = (x: number | null) => (x === null ? '-' : Number.isInteger(x) ? x.toLo
 /** P0 명세 부록에 붙일 표 (P1-11-R1·T2: 측정 날짜, 환경, 버전, 표본 수) */
 export function toMarkdown(s: Summary, meta: { measuredAt: string; environment: string; claudeCliVersion: string }): string {
   const L: string[] = [];
-  L.push(`- 측정일: ${meta.measuredAt} · 환경: ${meta.environment} · Claude Code ${meta.claudeCliVersion} · 인터페이스: ${s.filter.interface}${s.filter.since ? ` · ${s.filter.since} 이후` : ''}`);
-  L.push('', '| 모드 | 표본 | 종료 상태 | 작업 시간 p50/p95/최대(초) | 모델 | 확정 |', '|---|---|---|---|---|---|');
+  L.push(`- 측정일: ${meta.measuredAt} · 환경: ${meta.environment} · 보고 시점 Claude Code ${meta.claudeCliVersion} (표본 버전은 표의 CLI 열) · 인터페이스: ${s.filter.interface}${s.filter.since ? ` · ${s.filter.since} 이후` : ''}`);
+  L.push('', '| 모드 | 표본 | 종료 상태 | 작업 시간 p50/p95/최대(초) | 모델 | CLI | 확정 |', '|---|---|---|---|---|---|---|');
   for (const [mode, m] of Object.entries(s.modes) as [Mode, ModeSummary][]) {
     const states = Object.entries(m.byState).map(([k, v]) => `${k} ${v}`).join(', ');
-    L.push(`| ${mode} | ${m.sample} | ${states} | ${n(m.jobDuration.p50)} / ${n(m.jobDuration.p95)} / ${n(m.jobDuration.max)} | ${m.models.join(', ') || '-'} | ${m.final ? '예' : '아니오'} |`);
+    L.push(`| ${mode} | ${m.sample} | ${states} | ${n(m.jobDuration.p50)} / ${n(m.jobDuration.p95)} / ${n(m.jobDuration.max)} | ${m.models.join(', ') || '-'} | ${m.cliVersions.join(', ') || '-'} | ${m.final ? '예' : '아니오'} |`);
   }
   for (const [mode, m] of Object.entries(s.modes) as [Mode, ModeSummary][]) {
     L.push('', `**${mode}** 역할별 (초·자)`, '', '| 역할 | 호출 | 시간 p50/p95/p99 | 입력 p99 | 출력 p99 | 재시도 | 실패 | callTimeoutSeconds | maxInputChars | maxOutputChars |', '|---|---|---|---|---|---|---|---|---|---|');

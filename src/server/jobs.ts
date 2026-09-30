@@ -218,7 +218,7 @@ export class JobManager {
         },
       };
       const claudeCliVersion = await version();
-      await runJob(engine, job, driver, ac.signal, { save: reportSaver(this.reports, { claudeCliVersion }, clock) });
+      await runJob(engine, job, driver, ac.signal, { save: reportSaver(this.reports, { claudeCliVersion }, clock), claudeCliVersion });
     } catch (e) {
       this.o.log?.(redact(`작업 실행 오류: ${(e as Error).stack ?? String(e)}`, [], this.home));
       if (job && !isTerminal(job.record.state)) {

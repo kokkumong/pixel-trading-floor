@@ -1,5 +1,6 @@
 // 리포트 (P1 명세 6장). JSON이 원본이고 Markdown은 JSON에서 생성한다 (P1-6-R1).
 // 작업 기록과 스냅샷만으로 만드는 순수 함수다. 저장은 store.ts가 한다.
+import type { EvidenceIssue } from '../rules/audit.ts';
 import type { AnalysisSnapshot } from '../data/snapshot.ts';
 import { modelFor } from '../job/budget.ts';
 import type { Job } from '../job/engine.ts';
@@ -70,6 +71,8 @@ export interface Report {
   reviews: Briefing[];
   pm: PmReview | null;
   warnings: string[];
+  /** 근거 인용 검사 결과 (P1-10-R1·R3·R5) */
+  evidenceAudit: EvidenceIssue[];
   /** P1-6-R2 스냅샷 전체 (snapshotHash로 연결) */
   snapshot: AnalysisSnapshot;
 }
@@ -145,6 +148,7 @@ export function buildReport(job: Job, meta: ReportMeta, completedAt: Date): Repo
     reviews: o.reviews,
     pm: o.pm,
     warnings: [...r.warnings],
+    evidenceAudit: [...(r.evidenceAudit ?? [])],
     snapshot: snap,
   };
 }

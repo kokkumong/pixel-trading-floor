@@ -29,7 +29,7 @@ function dirs() {
   return { jobs: new JobStore(join(root, 'jobs')), reports: new ReportStore(join(root, 'reports'), { tzOffsetMinutes: 540 }), root };
 }
 
-interface RunOpts { iface?: 'web' | 'floor'; prompts?: PromptSet; demo?: boolean; at?: Date; d?: ReturnType<typeof dirs> }
+interface RunOpts { iface?: 'web' | 'floor'; prompts?: PromptSet; demo?: boolean; at?: Date; d?: ReturnType<typeof dirs>; driver?: ReturnType<typeof autoDriver> }
 
 async function completed(mode: Mode, o: RunOpts = {}) {
   const r = replayAcquirer(FIXTURE[mode]);
@@ -44,7 +44,7 @@ async function completed(mode: Mode, o: RunOpts = {}) {
     engine.finalize(j, { save });
     return { ...d, engine, job: j, at };
   }
-  await runJob(engine, job, autoDriver(), new AbortController().signal, { sleep: noSleep, save });
+  await runJob(engine, job, o.driver ?? autoDriver(), new AbortController().signal, { sleep: noSleep, save });
   return { ...d, engine, job, at };
 }
 
@@ -103,6 +103,25 @@ test('P1-6-T4 리포트 JSON만으로 모드·스냅샷·프롬프트·모델·�
   assert.match(md, /과거 판정 회고: 꺼짐/);
   assert.doesNotMatch(md, /확신도[^\n]*%/); // P0-3-R6
   assert.equal(reports.get(rep.jobId)?.jobId, rep.jobId); // P1-6-R9 jobId로 조회
+});
+
+test('P1-10-T2 리포트: 근거를 확인할 수 없는 주장 옆에 표시하고, 근거 검사 절에 모두 남긴다', async () => {
+  const driver = autoDriver({
+    TARO: (input) => {
+      const out = sampleOutput('TARO', input) as { claims: { evidenceRefs: string[] }[] };
+      out.claims[0]!.evidenceRefs = ['snap:binance.perp.price#/nope'];
+      return { output: out };
+    },
+  });
+  const { job } = await completed('scalp', { driver });
+  const rep = readJson(job.record.report!.json);
+  assert.deepEqual(rep.evidenceAudit.map((x) => `${x.label}:${x.role}:${x.claimId}`), ['근거 확인 불가:TARO:c1']);
+  const md = readFileSync(job.record.report!.md, 'utf8');
+  assert.match(md, /`c1` \(observation\) 관찰 — snap:binance\.perp\.price#\/nope ⚠ 근거 확인 불가/);
+  assert.match(md, /## 근거 검사[\s\S]*- 근거 확인 불가 · TARO c1 · snap:binance\.perp\.price#\/nope/);
+  const clean = await completed('scalp');
+  assert.deepEqual(readJson(clean.job.record.report!.json).evidenceAudit, []);
+  assert.match(readFileSync(clean.job.record.report!.md, 'utf8'), /## 근거 검사\n\n- 문제 없음/);
 });
 
 test('P1-6-T1 같은 종목·모드를 같은 초에 두 번 분석해도 두 리포트가 모두 남는다', async () => {

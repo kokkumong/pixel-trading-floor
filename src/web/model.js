@@ -153,7 +153,23 @@ export const WORLD_CLOCKS = [
 /**
  * @typedef {{ summary?: string; narrative?: string; bias?: string; claims?: { claimId: string; kind: string; text: string; evidenceRefs: string[] }[]; counterScenario?: string; changeTriggers?: string[]; dataLimitations?: string[] }} Briefing
  * @typedef {{ speaker: 'BULL' | 'BEAR'; round: number; summary: string; narrative: string; steelman: string | null; openIssues: string[] }} DebateMessage
+ * @typedef {{ kind: string; label: string; role: string; round: number | null; claimId: string | null; ref: string | null; detail: string }} EvidenceIssue
  */
+
+/**
+ * 근거 검사 표시 (P1-10-R1): 주장 옆 꼬리표, 발언·제안 아래 경고 줄
+ * @param {EvidenceIssue[]} issues
+ */
+function evidenceMarks(issues) {
+  /** @param {EvidenceIssue} x */
+  const why = (x) => (x.kind === 'UNRESOLVED_REF' ? x.ref : x.detail);
+  return {
+    /** @param {string} role @param {string} claimId */
+    claim: (role, claimId) => issues.filter((x) => x.role === role && x.claimId === claimId).map((x) => ` ⚠ ${x.label} (${why(x)})`).join(''),
+    /** @param {string} role @param {number | null} round */
+    lines: (role, round) => issues.filter((x) => x.role === role && x.claimId === null && x.round === round).map((x) => `⚠ ${x.label}: ${why(x)}`),
+  };
+}
 
 /**
  * 역할별 최신 말풍선 문구 (결론 요약)
@@ -219,10 +235,11 @@ export function consoleEntries(job, snapshot) {
   }
 
   const o = job.outputs ?? {};
+  const marks = evidenceMarks(job.evidenceAudit ?? []);
   const brief = (/** @type {Role} */ role, /** @type {Briefing | undefined} */ b) => {
     if (!b) return;
     const lines = [b.narrative ?? ''];
-    for (const c of b.claims ?? []) lines.push(`[${c.claimId} · ${c.kind}] ${c.text}`);
+    for (const c of b.claims ?? []) lines.push(`[${c.claimId} · ${c.kind}] ${c.text}${marks.claim(role, c.claimId)}`);
     if (b.counterScenario) lines.push(`반대 시나리오: ${b.counterScenario}`);
     if (b.changeTriggers?.length) lines.push(`판단을 바꿀 조건: ${b.changeTriggers.join(' / ')}`);
     out.push({ kind: 'agent', tab: 'agent', role, title: `${role} · ${ROLES[role].title}${b.bias ? ` · ${b.bias}` : ''}`, lines });
@@ -239,17 +256,18 @@ export function consoleEntries(job, snapshot) {
       const lines = [d.narrative];
       if (d.steelman) lines.unshift(`상대의 가장 강한 근거: ${d.steelman}`);
       if (d.openIssues?.length) lines.push(`남은 쟁점: ${d.openIssues.join(' / ')}`);
+      lines.push(...marks.lines(d.speaker, d.round));
       out.push({ kind: 'debate', tab: 'debate', role: d.speaker, title: `${d.speaker} · ${d.round}라운드 · ${ROLES[d.speaker].title}`, lines });
     }
   }
   if (o.blitzPlan) {
     section('스캘핑 데스크');
-    out.push({ kind: 'agent', tab: 'agent', role: 'BLITZ', title: `BLITZ · 스캘퍼 · ${actionText(o.blitzPlan.action)}`, lines: proposalLines(o.blitzPlan) });
+    out.push({ kind: 'agent', tab: 'agent', role: 'BLITZ', title: `BLITZ · 스캘퍼 · ${actionText(o.blitzPlan.action)}`, lines: [...proposalLines(o.blitzPlan), ...marks.lines('BLITZ', null)] });
   }
   if (o.briefings?.GUARD) brief('GUARD', o.briefings.GUARD);
   if (o.proposal) {
     section(algo ? '수석 트레이더 1차 판정' : '수석 트레이더 판정');
-    out.push({ kind: 'agent', tab: 'agent', role: 'ACE', title: `ACE · 수석 트레이더 · ${actionText(o.proposal.action)}`, lines: proposalLines(o.proposal) });
+    out.push({ kind: 'agent', tab: 'agent', role: 'ACE', title: `ACE · 수석 트레이더 · ${actionText(o.proposal.action)}`, lines: [...proposalLines(o.proposal), ...marks.lines('ACE', null)] });
   }
   if ((o.reviews ?? []).length) {
     section('리스크 위원회 심사');
@@ -259,6 +277,7 @@ export function consoleEntries(job, snapshot) {
     section('포트폴리오 매니저 최종 심사');
     const lines = [o.pm.narrative];
     if (o.pm.reasonCodes?.length) lines.push(`사유: ${o.pm.reasonCodes.join(', ')}`);
+    lines.push(...marks.lines('PM', null));
     out.push({ kind: 'agent', tab: 'agent', role: 'PM', title: `PM · 포트폴리오 매니저 · ${({ APPROVE: '승인', MODIFY: '수정승인', REJECT: '기각' })[/** @type {'APPROVE'} */ (o.pm.pmDecision)] ?? o.pm.pmDecision}`, lines });
   }
 

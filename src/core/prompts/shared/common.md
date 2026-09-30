@@ -20,7 +20,8 @@
 - `derived:<지표 이름>` — 입력 `derived`의 값. 하위 값은 점으로 잇는다. 예: `derived:rsi14`, `derived:macd.hist`
 - `brief:<역할>#<claimId>` — 앞선 역할 브리핑의 주장. 예: `brief:TARO#c2`
 - 소스 ID는 입력 `sources`의 키를 그대로 쓰고, JSON 포인터는 `/`로 시작한다.
-- 틀린 예 (쓰지 말 것): `derived:macd/hist`, `snap:<snapshotId>#/sources/...`, `snap:binance.perp.price.last`
+- 제안서(ACE·BLITZ·PM)에는 주장 목록이 없어 `brief:` 참조가 되지 않는다. 제안서 내용은 본문에서 말하고, 근거는 제안서가 인용한 `snap:`·`derived:` 참조를 그대로 쓴다.
+- 틀린 예 (쓰지 말 것): `derived:macd/hist`, `snap:<snapshotId>#/sources/...`, `snap:binance.perp.price.last`, `brief:ACE#c1`
 
 ## 출력
 - 주어진 JSON 스키마에 맞는 JSON 객체 하나만 출력한다. 설명문이나 코드 블록을 덧붙이지 않는다.

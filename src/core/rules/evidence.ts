@@ -42,6 +42,8 @@ export function resolvePointer(doc: unknown, pointer: string): unknown {
 
 export interface EvidenceIndex {
   has(ref: string): boolean;
+  /** snap:·derived: 참조가 가리키는 값. 없거나 brief: 참조면 undefined (P1-10-R3 수치 비교용) */
+  value(ref: string): unknown;
 }
 
 export interface EvidenceSources {
@@ -54,21 +56,24 @@ export interface EvidenceSources {
 }
 
 export function createEvidenceIndex(src: EvidenceSources): EvidenceIndex {
+  function value(ref: string): unknown {
+    const r = parseRef(ref);
+    if (!r) return undefined;
+    switch (r.kind) {
+      case 'snap':
+        return Object.hasOwn(src.snapshot, r.sourceId) ? resolvePointer(src.snapshot[r.sourceId], r.pointer) : undefined;
+      case 'derived':
+        return resolvePointer(src.derived, '/' + r.name.split('.').join('/')) ?? undefined; // null 지표는 근거가 아니다
+      case 'brief':
+        return undefined;
+    }
+  }
   return {
     has(ref) {
       const r = parseRef(ref);
-      if (!r) return false;
-      switch (r.kind) {
-        case 'snap':
-          if (!Object.hasOwn(src.snapshot, r.sourceId)) return false;
-          return resolvePointer(src.snapshot[r.sourceId], r.pointer) !== undefined;
-        case 'derived': {
-          const v = resolvePointer(src.derived, '/' + r.name.split('.').join('/'));
-          return v !== undefined && v !== null;
-        }
-        case 'brief':
-          return src.briefs[r.role]?.includes(r.claimId) ?? false;
-      }
+      if (r?.kind === 'brief') return src.briefs[r.role]?.includes(r.claimId) ?? false;
+      return value(ref) !== undefined;
     },
+    value,
   };
 }
