@@ -29,9 +29,9 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
 - Phase: 12, 이슈 #25, 브랜치 `feature/25-phase12-position-book`
-- 다음 단계: 구현 계속 (입력 화면) → 마무리
-- 통과 기준: P2-1-T1·T2·T3·T4 ✅ `test/core/position.test.ts` / P2-1-T5 ✅ `test/server/app.test.ts` (끝의 P2 테스트 3개) / P2-5-T1 ✅ `test/core/position.test.ts` / 파생 값(3.2절) ✅ / 입력 화면(P2-1-R1 폼, R7 요약·분석 버튼 옆 보유 표시, R9 시작 화면 경고) ⬜
-- 바꾼 파일: `src/core/position/{book,store,context,service}.ts`(신규), `src/core/data/project.ts`(`referencePrice` 추가), `src/core/job/{record,engine}.ts`, `src/server/{app,jobs,view}.ts`, `src/cli/floor.ts`, `test/core/position.test.ts`(신규), `test/server/{app.test,server-helpers}.ts`
+- 다음 단계: 마무리 (구현 끝, `verify:quiet` 통과, push 완료)
+- 통과 기준: P2-1-T1·T2·T3·T4 ✅ `test/core/position.test.ts` / P2-1-T5 ✅ `test/server/app.test.ts` (끝의 P2 테스트 3개) / P2-5-T1 ✅ `test/core/position.test.ts` / 파생 값(3.2절) ✅ / 입력 화면(P2-1-R1 폼, R7 요약·분석 버튼 옆 보유 표시, R9 시작 화면 경고, 결과 패널 positionNotes) ✅ `test/web/position.test.ts`
+- 바꾼 파일: `src/core/position/{book,store,context,service}.ts`(신규), `src/core/data/project.ts`(`referencePrice` 추가), `src/core/job/{record,engine}.ts`, `src/server/{app,jobs,view}.ts`, `src/cli/floor.ts`, `test/core/position.test.ts`(신규), `test/server/{app.test,server-helpers}.ts`, `src/web/position.js`(신규), `src/web/{floor.js,index.html,floor.css,model.js}`, `test/web/position.test.ts`(신규)
 - 결정:
   - `validateBook(raw, isKnown)`: 빠진 선택 필드는 기본값(null·[]·''), id 없으면 UUID 부여, `schemaVersion`·`riskPerTradePercent`(1) 기본값. 현물은 side LONG·leverage/marginMode/liquidationPrice 모두 null이어야 함. 오류는 `{path: '$.positions[i].field', message}`
   - 미국 종목 id(`US:TICKER`)는 저장 시 조회로 확인하고, 읽을 때는 형식만 본다(재시작 뒤 조회 캐시가 비어도 읽히도록)
@@ -40,11 +40,16 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
   - `PositionContext`(`position-context/1`): 매칭 포지션(메모 제외), `account {currency, equity, riskPerTradePercent}`, `price`(판정 기준 소스의 mark 우선·추정 제외), `derived`, `otherMarkets`, `warnings`(`NO_EQUITY`·`STALE_BOOK`·`BOOK_INVALID`·`NO_PRICE`), `notes`(코드가 만든 한 줄: `다른 시장 보유 있음: <이름> <현물|무기한>`, `보유 정보가 N시간 전 기준`, 파일 오류). 북이 missing이어도 컨텍스트를 만든다(보유 없음 확인). forced_direction·데모는 북을 읽지 않고 null
   - 숏 손익률은 명세의 `(평단/현재가 − 1)` 대신 `(1 − 현재가/평단)`(평단 대비 실제 손익률)로 했다. R = 단위 손익 ÷ |평단 − 손절|. 손절 거리·청산 거리는 불리한 방향 기준 %, 음수면 이미 넘음(Phase 13 V-POS-STOP-DIR에 씀). 열린 리스크는 평단 기준 손절 손실(수익권 손절이면 0). 모두 소수 둘째 자리 반올림
   - 엔진: `createEngine({positions: () => BookRead})`, `createJob` 시작에서 한 번 읽고 스냅샷 뒤 `record.positionContext`에 기록(INSUFFICIENT_DATA도). `JobView`에는 `positionNotes`만(금액 없음), `positionContext`는 넣지 않음(마스킹은 Phase 14)
+  - 웹: 순수 함수는 `src/web/position.js`(`formToPosition`·`positionToForm`·`bookPayload`·`fieldErrors`·`summaryRows`·`holdingLabel`·`staleWarning`). 저장은 포지션 폼 저장·계좌 저장·삭제마다 즉시 PUT(북 전체 교체, 초안 없음). 기존 포지션 수정은 종목 글자를 안 바꾸면 `id`·`instrumentId`를 보내고, 바꾸면 `id`+`symbol`. 목표가는 공백·`/`·(뒤에 세 자리 숫자가 아닌) 쉼표로 나눈다. 현물이면 방향 LONG·레버리지/마진/청산가 null로 보낸다. 400이면 편집 중 포지션(번호)·계좌 오류는 필드 옆(`instrumentId` 오류는 종목 칸), 나머지는 목록
+  - 웹: 분석 버튼 옆 보유 표시는 모드로 시장을 정한다(알고리즘=현물, 그 외=무기한, 강제 방향은 "보유를 반영하지 않음"). 상단 요약 수익률은 전광판 종목과 같은 포지션만(전광판 현재가 기준). 통화는 전광판 통화, 없으면 `KR:`→KRW 그 외 USD(표시용). 오래된 보유 경고는 북 status `ok`이고 24시간 초과일 때 상단 배너. 결과 패널은 `panelModel().positionNotes`를 `#panel-position`에 한 줄씩. 입력 버튼·요약은 `client.local`이고 데모가 아닐 때만
   - `/api/positions`는 access `local`(LAN 기기 403), PUT은 기존 Origin·Sec-Fetch-Site·JSON Content-Type 검사를 그대로 받는다. `Route.method`에 PUT 추가
-- 남은 일:
+- 남은 일 (마무리):
+  1. next-phase 4~6단계: HANDOFF 진행표(12 ✅, 13 다음)·"Phase 13 참고"(이 절 내용 이동)·"진행 중" 없음, ARCHITECTURE.md에 `src/core/position` 절(book·store·context·service)과 HTTP 서버 절에 `/api/positions`·웹 `position.js` 한 줄, CLAUDE.md 계층 지도에 포지션 행 한 줄 → verify → PR(`Close #25`) → 검사 통과 시 병합
+  2. Phase 13으로 넘길 것: `JobView`/리포트 마스킹(Phase 14), 결과 패널의 포지션 요약 표시(P2-6-R3, Phase 14)
+- 끝난 일 (참고):
   1. 웹 입력 화면 (`src/web/`, `// @ts-check`, `textContent`만): 포지션 목록·추가/수정/삭제 폼(종목 글자·시장·방향·평단·수량·레버리지·마진·청산가·손절·목표 0~3·메모), 계좌(통화별 총 자산 KRW/USD/USDT, 손실 한도 %). 저장 = PUT 전체 교체, 400이면 `errors[].path`를 필드 옆에 표시. LAN 읽기 전용이면 입력 화면을 숨김(`/api/status`의 `client.local`). 표시 규칙은 `model.js`의 순수 함수로 두고 `test/web/model.test.ts`로 검사
   2. R7(권장): 상단 포지션 요약(종목·방향·평단·마지막 갱신)과 분석 버튼 옆 대상 종목 보유 표시(전광판 `/api/board` 응답의 instrumentId로 매칭). R9: 북 `updatedAt` 24시간 초과면 시작 화면 경고. 결과 쪽은 `JobView.positionNotes`를 판정 패널/콘솔에 한 줄로 표시
-  3. 브라우저 확인(`.claude/launch.json`의 `floor`), `verify:quiet`, push → 마무리(HANDOFF 진행표·Phase 13 참고, ARCHITECTURE.md에 `src/core/position` 절 추가, CLAUDE.md 계층 지도에 한 줄)
+  3. 브라우저 확인 완료(포트 8010 임시 서버): 필드 오류 표시(롱 청산가 > 평단 → 청산가 칸), 계좌 손실 한도 9 → `5 이하`, 추가·수정(id 유지)·삭제, 모드별 보유 표시, `.floor/` 0700·파일 0600·`.bak` 생성 확인. 확인 뒤 `.floor/` 삭제. 사용자 서버가 8000번에서 실행 중이었음(코드 변경 전 시작, 재시작해야 새 API가 보임)
 - 실측: 없음 (Phase 12는 모델 호출 없음)
 
 ## P1 구현 완료 후 남은 일 (개발 Phase 없음)
