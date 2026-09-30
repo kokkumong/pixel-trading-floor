@@ -98,7 +98,8 @@ async function init() {
     $('go').hidden = true;
   }
   $('diag-link').hidden = !body.client.local;
-  $('open-positions').hidden = !body.client.local; // 포지션 북 API는 로컬 전용 (P2-1-R11)
+  // 포지션 북 API는 로컬 전용 (P2-1-R11). 데모는 실제 북을 읽지 않으므로(P2-8, "보유 예시" 선택을 쓴다) 버튼도 숨긴다
+  $('open-positions').hidden = !body.client.local || demo;
   renderMode();
   if (body.client.local && !demo) void loadPositions();
   if (body.running.length > 0) watch(body.running[0]);
