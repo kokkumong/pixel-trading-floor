@@ -42,6 +42,7 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - COMPLETED·INSUFFICIENT_DATA만 `finalDecision`을 가진다. 시작 시 `recoverInterrupted(kill, hasReport)`: 진행 중 작업 → INTERRUPTED, 기록된 PID는 명령줄에 claude가 있을 때만 그룹째 종료. SAVING에서 멈췄는데 리포트 JSON이 있으면 COMPLETED로 확정
   - `sweepAbandoned(exceptJobId)`: 스냅샷 뒤 `maxDurationSeconds`가 지난 진행 중 single_session 작업 → INTERRUPTED (P1-5-T3). CLI가 명령마다 부른다
   - `Acquirer.clockSkewMs()`: 수집 중 Date 헤더로 잰 시계 오차. 60초 초과면 스냅샷 전에 FAILED(E-CLOCK), 30초 초과면 경고 (`data/clock.ts`)
+- 근거 인용 검사(P1-10, `src/core/rules/audit.ts`): `auditEvidence(outputs, snapshot, derived)`는 **경고만** 만들고 판정은 바꾸지 않는다(강등은 규칙 엔진 V-EVIDENCE-REF). 제출마다 전체를 다시 계산해 `job.json evidenceAudit`에 넣고 → `JobView.evidenceAudit`(화면 콘솔 꼬리표) → 리포트 JSON `evidenceAudit`(Markdown 주장 꼬리표와 "## 근거 검사" 절)로 흐른다. 종류: `UNRESOLVED_REF`·`VALUE_MISMATCH`·`NO_BRIEF_REF`·`UNSOURCED_NUMBER`. 오탐 줄이기: 참조별 검사(본문 숫자 중 하나가 참조 값 0.5% 안이면 통과), 불일치는 다른 참조와도 안 맞는 숫자 중 참조 값 ±1% 안의 것만, 어림수(`약 N`·`N대`)와 한 자리 정수는 제외, 유효한 `snap:`·`derived:` 참조가 있는 발언은 새 수치 검사를 건너뜀. `claudeCliVersion`은 `RunOptions`/`FinalizeOptions`로 받아 `??=`로 처음 값만 기록(P1-11-R3)
 - 프롬프트 = `shared/common` + (`shared/briefing` | `shared/proposal` + `no-trade` 또는 `forced`) + `roles/<역할>`. 해시는 조합된 전문의 sha256 앞 12자 (`prompts.hash(role, mode)`), 작업 기록 `promptHashes`에 남는다
 - 강제 방향 ACE·BLITZ의 CLI 스키마는 action에서 NO_TRADE를 뺀다 (`jsonSchemaFor`). 검증 코드 V-ACTION은 그대로
 - 테스트 도구: `test/job-helpers.ts`의 `autoDriver(overrides)`(입력을 읽어 정상 출력 생성), `test/data-helpers.ts`의 `replayAcquirer(fixture)`
