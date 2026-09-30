@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClockProbe } from '../../src/core/data/clock.ts';
 import { NetError, type NetClient } from '../../src/core/data/net.ts';
-import { runDiagnostics, type DiagOptions } from '../../src/core/diag.ts';
+import { formatStartupDoctor, runDiagnostics, startupDoctor, type DiagOptions } from '../../src/core/diag.ts';
 import type { ClaudeExecutable } from '../../src/core/model/claude-cli.ts';
 import { replayAcquirer } from '../data-helpers.ts';
 import { tempEngine } from '../job-helpers.ts';
@@ -188,4 +188,35 @@ test('P1-8.2 Node.js 보안 패치: 지원 LTS 계열의 알려진 보안 릴리
   assert.equal((await at('25.9.0')).status, 'warn', '홀수 계열은 LTS가 아니다');
   assert.equal((await at('22.23.2', '2027-05-01T00:00:00Z')).status, 'warn', '지원 종료 뒤');
   assert.equal((await at('22.17.9')).status, 'error');
+});
+
+test('P2-7-R2 시작 점검: Node 버전·Claude CLI·버전·로그인만 확인하고 네트워크·디스크는 쓰지 않는다', async () => {
+  const checks = await startupDoctor({ env: {}, nodeVersion: '22.23.2', now: () => new Date('2026-09-30T00:00:00Z'), executable: exe() });
+  assert.deepEqual(checks.map((c) => c.id), ['node', 'claude-cli', 'claude-version', 'claude-auth']);
+  assert.ok(checks.every((c) => c.status === 'ok'), JSON.stringify(checks));
+  const text = formatStartupDoctor(checks).join('\n');
+  assert.match(text, /시작 점검/);
+  assert.match(text, /\[정상\] Node\.js 버전: 22\.23\.2/);
+  assert.match(text, /\[정상\] 인증 방식: 구독 로그인/);
+  assert.match(text, /분석을 실행할 수 있습니다/);
+  assert.doesNotMatch(text, /\[오류\]/);
+});
+
+test('P2-7-R2 시작 점검: Node가 오래됐거나 Claude가 없거나 로그인하지 않았으면 창에 안내를 표시한다', async () => {
+  const now = () => new Date('2026-09-30T00:00:00Z');
+  const missing = formatStartupDoctor(await startupDoctor({ env: {}, nodeVersion: '22.23.2', now, executable: null })).join('\n');
+  assert.match(missing, /\[오류\] Claude CLI: 실행 파일을 찾지 못함/);
+  assert.match(missing, /→ Claude Code 네이티브 설치/);
+  assert.match(missing, /\[건너뜀\] 인증 방식/);
+  assert.match(missing, /데모/); // 분석은 막혀도 데모는 쓸 수 있다는 안내
+
+  const logout = formatStartupDoctor(await startupDoctor({ env: {}, nodeVersion: '22.23.2', now, executable: exe('none') })).join('\n');
+  assert.match(logout, /\[오류\] 인증 방식: 로그인되어 있지 않음/);
+  assert.match(logout, /→ 터미널에서 claude를 실행해 로그인하세요/);
+  assert.doesNotMatch(logout, /secret-user/);
+
+  const oldNode = formatStartupDoctor(await startupDoctor({ env: {}, nodeVersion: '22.20.0', now, executable: exe() })).join('\n');
+  assert.match(oldNode, /\[주의\] Node\.js 버전: 22\.20\.0/);
+  assert.match(oldNode, /→ https:\/\/nodejs\.org/);
+  assert.doesNotMatch(oldNode, /\[오류\]/);
 });

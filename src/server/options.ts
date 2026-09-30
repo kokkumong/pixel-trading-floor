@@ -13,6 +13,8 @@ export interface ServerOptions {
   lanAllowAnalyze: boolean;
   /** 시작한 뒤 로컬 토큰 주소로 기본 브라우저를 연다 (시작 스크립트용: 주소를 파일로 남기지 않는다) */
   open: boolean;
+  /** 시작 전에 Node 버전·Claude 설치·로그인을 점검해 서버 창에 요약한다 (시작 파일용, P2-7-R2) */
+  doctor: boolean;
 }
 
 export function parsePort(raw: string | undefined): number | null {
@@ -27,7 +29,7 @@ export function parseServerOptions(argv: string[], env: NodeJS.ProcessEnv): Serv
   try {
     v = parseArgs({
       args: argv, strict: true, allowPositionals: false,
-      options: { lan: { type: 'boolean' }, port: { type: 'string' }, 'enable-project-zip': { type: 'boolean' }, 'lan-allow-analyze': { type: 'boolean' }, open: { type: 'boolean' } },
+      options: { lan: { type: 'boolean' }, port: { type: 'string' }, 'enable-project-zip': { type: 'boolean' }, 'lan-allow-analyze': { type: 'boolean' }, open: { type: 'boolean' }, doctor: { type: 'boolean' } },
     }).values as Record<string, string | boolean | undefined>;
   } catch (e) {
     return { error: (e as Error).message };
@@ -38,5 +40,5 @@ export function parseServerOptions(argv: string[], env: NodeJS.ProcessEnv): Serv
   const mode: ServerMode = v.lan === true || env.FLOOR_LAN === '1' ? 'lan' : 'local';
   const lanAllowAnalyze = v['lan-allow-analyze'] === true;
   if (lanAllowAnalyze && mode !== 'lan') return { error: '--lan-allow-analyze는 --lan과 함께만 쓸 수 있습니다' };
-  return { port, mode, enableProjectZip: v['enable-project-zip'] === true, lanAllowAnalyze, open: v.open === true };
+  return { port, mode, enableProjectZip: v['enable-project-zip'] === true, lanAllowAnalyze, open: v.open === true, doctor: v.doctor === true };
 }

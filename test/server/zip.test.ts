@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildZip, ZipWriter } from '../../src/server/zip.ts';
-import { isExcluded, listBundleFiles } from '../../src/server/bundle.ts';
+import { BUNDLE_INCLUDE, bundleFileMode, isExcluded, listBundleFiles } from '../../src/server/bundle.ts';
 import { readZip } from './zip-reader.ts';
 
 test('buildZip: 한글 파일명·빈 파일·압축 데이터를 되읽을 수 있다', () => {
@@ -68,4 +68,19 @@ test('ZipWriter: 항목을 하나씩 흘려 써도 buildZip과 같은 형식으�
   const back = readZip(Buffer.concat(chunks));
   assert.deepEqual(back.map((e) => e.name), ['reports/a.json', 'reports/한글.md']);
   assert.equal(back[1]!.data.toString(), '# 리포트\n');
+});
+
+test('P2-7-R1 zip에 유닉스 권한을 기록한다: macOS 시작 파일(.command)은 압축을 풀어도 실행 권한(755)이 남는다', async () => {
+  const chunks: Buffer[] = [];
+  const w = new ZipWriter(async (b) => { chunks.push(b); });
+  await w.add('p/start-floor.command', Buffer.from('#!/bin/bash\n'), bundleFileMode('start-floor.command'));
+  await w.add('p/package.json', Buffer.from('{}'), bundleFileMode('package.json'));
+  await w.finish();
+  const back = readZip(Buffer.concat(chunks));
+  assert.equal(back[0]!.mode, 0o755);
+  assert.equal(back[1]!.mode, 0o644);
+  const one = readZip(buildZip([{ name: 'x.command', data: Buffer.from('x'), mode: 0o755 }, { name: 'y.txt', data: Buffer.from('y') }]));
+  assert.equal(one[0]!.mode, 0o755);
+  assert.equal(one[1]!.mode, null, '권한을 주지 않으면 예전처럼 기록하지 않는다 (all.zip)');
+  for (const f of ['start-floor.command', 'start-floor-lan.command', 'start-floor.cmd', 'start-floor-lan.cmd']) assert.ok(BUNDLE_INCLUDE.includes(f), f);
 });

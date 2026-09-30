@@ -8,6 +8,12 @@ where node >nul 2>nul || (
   pause
   exit /b 1
 )
+node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)" >nul 2>nul || (
+  echo 설치된 Node.js는 이 앱을 실행할 수 없습니다. https://nodejs.org 에서 22.18 이상 LTS를 설치한 뒤 다시 실행하세요.
+  node -v
+  pause
+  exit /b 1
+)
 echo ============================================================
 echo  다른 기기에서 보기 모드
 echo  - 집이나 사무실의 신뢰할 수 있는 Wi-Fi에서만 쓰세요. 공용·게스트 Wi-Fi 금지
@@ -15,5 +21,5 @@ echo  - 다른 기기는 화면과 리포트를 읽기 전용으로만 봅니다
 echo  - 접속 주소는 아래 서버 출력에 표시되고 2시간 뒤 만료됩니다
 echo  - 방화벽 허용을 물으면 개인 네트워크만 허용하세요
 echo ============================================================
-node src\server\main.ts --lan --open
+node src\server\main.ts --lan --open --doctor
 pause

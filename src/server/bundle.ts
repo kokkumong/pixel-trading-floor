@@ -9,8 +9,13 @@ import { join } from 'node:path';
 export const BUNDLE_INCLUDE: readonly string[] = [
   'src', 'docs', 'config', 'fixtures', 'scripts', 'test', '.github', '.githooks',
   'package.json', 'package-lock.json', 'tsconfig.json', '.gitignore', 'CLAUDE.md', 'CONVENTION.md', 'README.md',
-  'start-floor.cmd', 'start-floor-lan.cmd',
+  'start-floor.cmd', 'start-floor-lan.cmd', 'start-floor.command', 'start-floor-lan.command',
 ];
+
+/** 번들 항목의 유닉스 권한. macOS 시작 파일(.command)은 받은 사람이 더블클릭으로 실행할 수 있게 755 (P2-7-R1) */
+export function bundleFileMode(relPath: string): number {
+  return relPath.endsWith('.command') ? 0o755 : 0o644;
+}
 
 /** 경로 조각 하나라도 걸리면 뺀다. .git은 원격 주소에 인증 정보가 들어 있을 수 있어 함께 뺀다 */
 const EXCLUDED_SEGMENTS = [
