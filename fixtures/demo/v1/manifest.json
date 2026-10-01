@@ -21,5 +21,22 @@
       "snapshot": "btc-scalp",
       "label": "BTC 20배 롱 청산가 근접 · 전량 청산 검토"
     }
+  },
+  "entryScenarios": {
+    "btc-wait": {
+      "mode": "algorithm",
+      "snapshot": "btc-algorithm",
+      "label": "BTC 관망 · 진입 시나리오 2건"
+    },
+    "btc-split": {
+      "mode": "algorithm",
+      "snapshot": "btc-algorithm",
+      "label": "BTC 현물 롱 · 3분할 진입"
+    },
+    "btc-short-alt": {
+      "mode": "scalp",
+      "snapshot": "btc-scalp",
+      "label": "BTC 숏 진입 · 대안 시나리오 1건"
+    }
   }
 }

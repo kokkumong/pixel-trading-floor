@@ -231,6 +231,7 @@ test('P2-8 데모 포지션 예시 선택지: 기본(포지션 없음) + 현재 
   const list = [{ name: 'btc-hold', mode: 'scalp', label: 'A' }, { name: 'btc-reduce', mode: 'algorithm', label: 'B' }];
   assert.deepEqual(demoScenarioOptions(list, 'scalp'), [{ value: '', label: '보유 포지션 없음' }, { value: 'btc-hold', label: '보유 예시: A' }]);
   assert.deepEqual(demoScenarioOptions(undefined, 'forced_direction'), [{ value: '', label: '보유 포지션 없음' }]);
+  assert.equal(demoScenarioOptions([{ name: 'btc-wait', mode: 'scalp', label: 'C', kind: 'entry' }], 'scalp')[1]!.label, '신규 진입 예시: C');
 });
 
 test('P2-6-T1 화면 패널 모델은 고지 문구를 항상 싣고, 서버 고지와 같은 문구다', async () => {

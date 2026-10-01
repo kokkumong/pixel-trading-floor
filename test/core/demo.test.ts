@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBlockedNet, type NetClient } from '../../src/core/data/net.ts';
-import { demoAcquirer, demoClock, demoDriver, demoModes, demoPositions, DemoUnavailableError, loadDemo, positionDemos, type DemoScenario } from '../../src/core/demo.ts';
+import { demoAcquirer, demoClock, demoDriver, demoModes, demoPositions, DemoUnavailableError, entryDemos, loadDemo, positionDemos, type DemoScenario } from '../../src/core/demo.ts';
 import { createEngine, type EngineOptions } from '../../src/core/job/engine.ts';
 import { panelView } from '../../src/core/rules/display.ts';
 import { runJob } from '../../src/core/job/runner.ts';
@@ -150,4 +150,52 @@ test('P2-8-T1 포지션 데모 3종: 외부 요청 0건·모델 호출 0회·근
   assert.throws(() => loadDemo('algorithm', undefined, 'btc-hold'), DemoUnavailableError);
   assert.throws(() => loadDemo('scalp', undefined, 'nope'), DemoUnavailableError);
   assert.equal(demoPositions(loadDemo('scalp')), null, '포지션 없는 데모는 컨텍스트를 만들지 않는다');
+});
+
+// ── P3 신규 진입 데모 (Phase 18) ──
+
+test('P3-6-T4 신규 진입 데모 3종: 외부 요청 0건·모델 호출 0회·근거 경고 0건으로 완료되고 시나리오·분할 계획이 규칙을 통과한다', async () => {
+  assert.deepEqual(entryDemos().map((p) => `${p.name}:${p.mode}`).sort(), ['btc-short-alt:scalp', 'btc-split:algorithm', 'btc-wait:algorithm']);
+  let attempts = 0;
+  const blocked = createBlockedNet();
+  const counting: NetClient = { kind: 'blocked', get: (url, e) => { attempts++; return blocked.get(url, e); } };
+  const run = async (name: string, mode: 'algorithm' | 'scalp') => {
+    const s = loadDemo(mode, undefined, name);
+    const { job } = await runDemo(s, counting, { positions: () => { throw new Error('데모가 실제 북을 읽음'); }, demoPositions: () => demoPositions(s) });
+    const r = job.record;
+    assert.equal(r.state, 'COMPLETED', `${name}: ${r.error?.detail}`);
+    assert.equal(r.usage.modelCallCount, 0, name);
+    assert.deepEqual(r.evidenceAudit, [], `${name}: ${JSON.stringify(r.evidenceAudit)}`);
+    const d = r.finalDecision!;
+    assert.deepEqual([d.ruleEngine.verdict, d.positionRef, d.entryPlan?.dropped, d.entryPlan?.warnings, d.entryPlan?.trancheViolations], ['PASS', null, [], [], []], `${name}: ${JSON.stringify([d.ruleEngine, d.entryPlan?.dropped, d.entryPlan?.warnings])}`);
+    return { d, view: panelView(d, new Date(d.decidedAt), r.positionContext ?? null) };
+  };
+
+  // 알고리즘 관망 + 시나리오 2건
+  const wait = await run('btc-wait', 'algorithm');
+  assert.deepEqual([wait.d.action, wait.d.pmDecision, wait.view.headline], ['NO_TRADE', 'APPROVE', '거래 없음 · 방향 불명확']);
+  assert.deepEqual(wait.view.entryPlan?.cards.map((c) => c.title), ['롱 · 눌림 · 주 시나리오', '롱 · 돌파 · 대안 시나리오']);
+  for (const s of wait.d.entryPlan!.scenarios) {
+    assert.ok(s.rewardRisk >= 1.5 && s.warnings.length === 0, `${s.role} ${s.rewardRisk}`);
+    assert.ok(s.sizing && s.sizing.suggestedQuantity > 0, s.role);
+  }
+
+  // 알고리즘 롱 + 3분할: 전부 체결 뒤 손절 손실이 한도(10,000 USDT의 1%) 이하
+  const split = await run('btc-split', 'algorithm');
+  assert.deepEqual([split.d.action, split.d.pmDecision], ['ENTER_LONG', 'APPROVE']);
+  const tp = split.d.entryPlan!.tranchePlan!;
+  assert.deepEqual([tp.rows.length, tp.avgEntry], [3, 83410]);
+  assert.ok(tp.lossAtStop !== null && tp.lossAtStop <= 100 && tp.lossAtStop > 99, String(tp.lossAtStop));
+  assert.equal(split.d.sizing?.suggestedQuantity, tp.totalQuantity);
+  assert.equal(split.view.entryPlan?.mainTranches?.rows.length, 3);
+  assert.ok(split.view.entryPlan?.mainTranches?.summary.some((x) => x.endsWith('≤ 총 자산의 1%')));
+
+  // 스캘핑 숏 + 반대 방향 대안 시나리오 1건
+  const short = await run('btc-short-alt', 'scalp');
+  assert.deepEqual([short.d.action, short.view.tone], ['ENTER_SHORT', 'short']);
+  assert.deepEqual(short.view.entryPlan?.cards.map((c) => c.title), ['롱 · 돌파 · 대안 시나리오']);
+  assert.equal(short.d.entryPlan!.scenarios[0]!.tranchePlan, null);
+
+  assert.equal(attempts, 0);
+  assert.throws(() => loadDemo('scalp', undefined, 'btc-wait'), DemoUnavailableError);
 });

@@ -49,6 +49,8 @@ interface Manifest {
   fixtureVersion: string;
   scenarios: Partial<Record<Mode, string>>;
   positionScenarios?: Record<string, PositionDemo>;
+  /** 신규 진입 데모 (P3-6-T4): 보유 0건·총 자산만 있는 가짜 북 + 시나리오·분할 응답. 파일 구성은 포지션 데모와 같다 */
+  entryScenarios?: Record<string, PositionDemo>;
 }
 
 export class DemoUnavailableError extends Error {}
@@ -66,12 +68,18 @@ export function positionDemos(dir: string = DEMO_DIR): ({ name: string } & Posit
   return Object.entries(readJson<Manifest>(dir, 'manifest.json').positionScenarios ?? {}).map(([name, p]) => ({ name, ...p }));
 }
 
-/** scenario를 주면 그 포지션 데모, 없으면 모드의 기본 데모 */
+/** 신규 진입 데모 목록 (진입 시나리오·분할 진입 예시) */
+export function entryDemos(dir: string = DEMO_DIR): ({ name: string } & PositionDemo)[] {
+  return Object.entries(readJson<Manifest>(dir, 'manifest.json').entryScenarios ?? {}).map(([name, p]) => ({ name, ...p }));
+}
+
+/** scenario를 주면 그 포지션·신규 진입 데모, 없으면 모드의 기본 데모 */
 export function loadDemo(mode: Mode, dir: string = DEMO_DIR, scenario?: string): DemoScenario {
   const m = readJson<Manifest>(dir, 'manifest.json');
   if (scenario !== undefined) {
-    const p = m.positionScenarios?.[scenario];
-    if (!p) throw new DemoUnavailableError(`없는 데모 시나리오입니다: ${scenario} (있는 시나리오: ${Object.keys(m.positionScenarios ?? {}).join(', ') || '없음'})`);
+    const all = { ...m.positionScenarios, ...m.entryScenarios };
+    const p = all[scenario];
+    if (!p) throw new DemoUnavailableError(`없는 데모 시나리오입니다: ${scenario} (있는 시나리오: ${Object.keys(all).join(', ') || '없음'})`);
     if (p.mode !== mode) throw new DemoUnavailableError(`데모 시나리오 ${scenario}는 ${p.mode} 모드입니다`);
     const snap = readJson<DemoSnapshot>(dir, `${p.snapshot}.snapshot.json`);
     return {

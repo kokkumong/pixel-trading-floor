@@ -69,12 +69,12 @@ export function isDemo(search) {
 }
 
 /**
- * 데모 포지션 예시 선택지 (P2-8). 첫 항목은 포지션 없는 기본 데모. 현재 모드의 시나리오만
- * @param {{ name: string; mode: string; label: string }[] | undefined} scenarios /api/status의 demoScenarios
+ * 데모 예시 선택지 (P2-8 보유 예시, P3-6-T4 신규 진입 예시). 첫 항목은 포지션 없는 기본 데모. 현재 모드의 시나리오만
+ * @param {{ name: string; mode: string; label: string; kind?: string }[] | undefined} scenarios /api/status의 demoScenarios
  * @param {Mode} mode
  */
 export function demoScenarioOptions(scenarios, mode) {
-  return [{ value: '', label: '보유 포지션 없음' }, ...(scenarios ?? []).filter((s) => s.mode === mode).map((s) => ({ value: s.name, label: `보유 예시: ${s.label}` }))];
+  return [{ value: '', label: '보유 포지션 없음' }, ...(scenarios ?? []).filter((s) => s.mode === mode).map((s) => ({ value: s.name, label: `${s.kind === 'entry' ? '신규 진입 예시' : '보유 예시'}: ${s.label}` }))];
 }
 
 export const FORCED_CONFIRM = {
