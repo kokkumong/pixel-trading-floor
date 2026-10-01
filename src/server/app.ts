@@ -17,6 +17,7 @@ import { budgetFor } from '../core/job/budget.ts';
 import { PLANNED_CALLS } from '../core/job/state.ts';
 import { MODES } from '../core/schema/types.ts';
 import { BoardService } from './board.ts';
+import { TickerService } from './ticker.ts';
 import { bundleFileMode, listBundleFiles } from './bundle.ts';
 import type { JobManager } from './jobs.ts';
 import { diagnosticsPage, messagePage, page, projectZipPage, reportPage, reportsPage, type Raw } from './pages.ts';
@@ -45,6 +46,7 @@ export interface AppOptions {
   manager: JobManager;
   /** 전광판 시세 (기본: 실제 공급자 조회) */
   board?: BoardService;
+  ticker?: TickerService;
   mode: ServerMode;
   /** 0이면 listen 때 정해진다 */
   port: number;
@@ -113,6 +115,7 @@ export interface App {
 export function createApp(o: AppOptions): App {
   const m = o.manager;
   const board = o.board ?? new BoardService();
+  const ticker = o.ticker ?? new TickerService();
   /** P0-1-R6: 실행 전 화면에 보일 계획 호출 수 범위와 최악 호출 수 */
   const plans = Object.fromEntries(MODES.map((x) => [x, { ...PLANNED_CALLS[x], maxModelCalls: budgetFor(x).maxModelCalls }]));
   const webDir = o.webDir ?? WEB_DIR;
@@ -280,6 +283,10 @@ export function createApp(o: AppOptions): App {
         if (r.ok) return json(c.res, 200, r.board);
         json(c.res, r.status, { error: r.code, message: r.message, ...(r.candidates ? { candidates: r.candidates } : {}) });
       },
+    },
+    {
+      method: 'GET', path: /^\/api\/ticker$/, access: 'read',
+      handle: async (c) => json(c.res, 200, await ticker.get(c.url.searchParams.get('demo') === '1')),
     },
     {
       method: 'POST', path: /^\/api\/analyze$/, access: 'analyze', rate: 'analyze',

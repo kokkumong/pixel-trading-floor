@@ -7,7 +7,9 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiagResult } from '../../src/core/diag.ts';
 import { createApp, CSP, LIMITS, type AppOptions } from '../../src/server/app.ts';
+import { createFixtureNet } from '../../src/core/data/net.ts';
 import { BoardService } from '../../src/server/board.ts';
+import { TickerService } from '../../src/server/ticker.ts';
 import { LAN_TOKEN_TTL_MS, LanAuth, lanIPv4Addresses } from '../../src/server/security.ts';
 import { replayNet } from '../data-helpers.ts';
 import { autoDriver, sampleOutput } from '../job-helpers.ts';
@@ -601,6 +603,25 @@ test('P1-8-T1, P0-7.4 /api/board: 시세는 LAN 인증 기기도 보고(read), �
     const bad = await l.req('/api/board?symbol=%3Cscript%3E');
     assert.equal(bad.status, 400);
     assert.equal(bad.json.error, 'E-INPUT');
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P0-7-T10 /api/ticker: 시세는 LAN 인증 기기도 보고(read), 데모는 외부 요청 0건', async () => {
+  const net = createFixtureNet({});
+  const l = await lan({ ticker: new TickerService({ net }) });
+  try {
+    const cookie = await l.login();
+    assert.equal((await l.remote('/api/ticker')).status, 401);
+    const demo = await l.remote('/api/ticker?demo=1', { cookie });
+    assert.equal(demo.status, 200);
+    assert.equal(demo.json.demo, true);
+    assert.equal(net.requests.length, 0);
+    const live = await l.remote('/api/ticker', { cookie });
+    assert.equal(live.status, 200);
+    assert.equal(live.json.schemaVersion, 'ticker/1');
+    assert.ok(net.requests.length > 0);
   } finally {
     await l.app.close();
   }
