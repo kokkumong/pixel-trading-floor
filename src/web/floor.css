@@ -133,8 +133,21 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 }
 .bubble:empty { visibility: hidden; }
 .bubble:hover { outline: 2px solid var(--gold); }
-.seat.thinking .bubble:empty { visibility: visible; }
+/* 쉬는 자리가 아니면 말풍선을 항상 둔다: 말이 없으면 대기 문구, 호출 중이면 생각 중 (가이드 4-2) */
+.seat:not(.off) .bubble:empty { visibility: visible; }
+.seat:not(.off) .bubble:empty::before { content: "분석 대기 중…"; color: #777; }
 .seat.thinking .bubble:empty::before { content: "생각 중…"; color: #777; }
+
+/* 벽 소품 */
+.props { position: absolute; top: 10px; right: 12px; display: flex; gap: 14px; align-items: flex-start; pointer-events: none; }
+.trading .props { right: auto; left: 12px; top: 44px; }
+.prop { image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, .45)); }
+.prop-monitor { width: 64px; height: 48px; }
+.prop-shelf { width: 56px; height: 48px; }
+.prop-board { width: 64px; height: 48px; }
+.prop-clock { width: 27px; height: 27px; }
+.prop-alarm { width: 24px; height: 24px; }
+.prop-sign { width: 24px; height: 30px; }
 
 /* 판정 패널 */
 .panel { background: #0d0d14; padding: 10px 12px; font-size: 12px; overflow: auto; min-height: 0; max-height: 100%; border: 2px solid #000; }
@@ -192,6 +205,27 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .console footer { display: flex; justify-content: space-between; padding: 4px 12px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); }
 .caret::after { content: "▌"; animation: blink 1s steps(2) infinite; color: var(--green); }
 @keyframes blink { 50% { opacity: 0; } }
+
+/* 하단 티커 띠 */
+.ticker { display: flex; align-items: center; gap: 12px; margin: 0 16px 10px; padding: 6px 12px; background: #07080c; border: 2px solid var(--line); overflow: hidden; }
+.ticker-label { color: var(--gold); white-space: nowrap; font-size: 12px; }
+.ticker-view { flex: 1; overflow: hidden; min-width: 0; }
+.ticker-track { display: flex; width: max-content; animation: ticker-run 90s linear infinite; }
+.ticker:hover .ticker-track { animation-play-state: paused; }
+.tick-run { display: flex; flex: none; }
+.tick { display: inline-flex; gap: 8px; padding: 0 18px; white-space: nowrap; border-right: 1px solid var(--line); }
+.tick b { color: var(--fg); font-weight: normal; }
+.tick .p { color: #c9c6bd; }
+.tick.up .c { color: var(--green); }
+.tick.down .c { color: var(--red); }
+.tick.flat .c { color: var(--muted); }
+.tick.closed { opacity: .55; }
+.ticker-time { white-space: nowrap; }
+@keyframes ticker-run { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ticker-view { overflow-x: auto; }
+  .ticker-track { animation: none; }
+}
 
 .foot { text-align: center; color: var(--muted); padding: 8px; font-size: 11px; border-top: 1px solid var(--line); }
 .toast {

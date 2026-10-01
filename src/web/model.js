@@ -149,6 +149,41 @@ export function fmtChange(ratio, digits = 2) {
   return `${p > 0 ? '+' : ''}${p.toFixed(digits)}%`;
 }
 
+/** 방 벽 소품 (가이드 4-2). 소품 그림은 sprites.js `drawProp` */
+export const ROOM_PROPS = {
+  analysts: ['monitor', 'shelf', 'clock'],
+  research: ['monitor', 'board'],
+  risk: ['monitor', 'alarm', 'sign'],
+  trading: ['monitor', 'clock'],
+};
+
+export const TICKER_GROUP_LABEL = {
+  coin: '코인', 'us-index': '미국 지수', 'kr-index': '한국 지수', 'kr-stock': '한국 종목', 'us-stock': '미국 종목',
+};
+
+/**
+ * 하단 티커 띠 표시 모델 (표시 전용: 판정·모델 입력에 쓰지 않는다)
+ * @param {any} ticker /api/ticker 응답
+ * @returns {{ id: string; group: string; label: string; price: string; change: string; tone: 'up' | 'down' | 'flat'; closed: boolean }[]}
+ */
+export function tickerView(ticker) {
+  const items = Array.isArray(ticker?.items) ? ticker.items : [];
+  return items.map((/** @type {any} */ i) => {
+    const rounded = Number(Number(i.changePct).toFixed(2));
+    const tone = rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat';
+    const arrow = tone === 'up' ? '▲' : tone === 'down' ? '▼' : '■';
+    return {
+      id: String(i.id),
+      group: String(i.group),
+      label: String(i.label),
+      price: fmtPrice(i.price, i.currency === 'POINT' ? undefined : i.currency),
+      change: `${arrow} ${fmtChange(i.changePct / 100)}`,
+      tone,
+      closed: i.closed === true,
+    };
+  });
+}
+
 /** @param {Date} d @param {string} timeZone */
 export function fmtClock(d, timeZone) {
   return d.toLocaleTimeString('en-GB', { timeZone, hour12: false });

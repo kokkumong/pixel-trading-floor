@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { JobManager } from '../../src/server/jobs.ts';
 import type { JobView } from '../../src/server/view.ts';
 import {
-  bubbles, confidenceBand, consoleEntries, DATA_FLOW, demoScenarioOptions, DISCLAIMER, errorView, floorPlan, initialMode, MARGIN_LABEL, multiRows, needsForcedConfirm, panelModel, planLabel,
+  bubbles, confidenceBand, ROOM_PROPS, tickerView, consoleEntries, DATA_FLOW, demoScenarioOptions, DISCLAIMER, errorView, floorPlan, initialMode, MARGIN_LABEL, multiRows, needsForcedConfirm, panelModel, planLabel,
 } from '../../src/web/model.js';
 import { buildBoard, collectBoardSources } from '../../src/core/board.ts';
 import { autoDriver, sampleOutput } from '../job-helpers.ts';
@@ -166,9 +166,11 @@ test('P0-8-R2·P1-1-T3 실패·취소 작업은 판정 패널에 나오지 않�
 
 test('P0-3-R5 유효 기한이 지난 판정은 화면 시각 기준으로 만료 배지가 붙는다', async () => {
   const { view } = await demoJob('algorithm');
-  const later = Date.parse(view.finalDecision!.validUntil!) + 1000;
-  assert.ok(panelModel(view, later)!.badges.includes('만료'));
-  assert.equal(panelModel(view, Date.parse(view.createdAt))!.badges.includes('만료'), false);
+  const until = Date.parse(view.finalDecision!.validUntil!);
+  assert.ok(panelModel(view, until + 1000)!.badges.includes('만료'));
+  // 서버가 실제 시각으로 붙인 만료 배지(녹화 데이터는 시간이 지나면 항상 만료)를 빼고, 화면 시각만 유효 기한 직전으로 비교한다
+  const fresh = { ...view, panel: { ...view.panel!, badges: view.panel!.badges.filter((b) => b !== '만료') } };
+  assert.equal(panelModel(fresh, until - 1000)!.badges.includes('만료'), false);
 });
 
 test('P0-1-R6 실행 전 계획 호출 수와 최악 호출 수 문구', () => {
@@ -234,4 +236,28 @@ test('P2-8 데모 포지션 예시 선택지: 기본(포지션 없음) + 현재 
 test('P2-6-T1 화면 패널 모델은 고지 문구를 항상 싣고, 서버 고지와 같은 문구다', async () => {
   const { DISCLAIMER: server } = await import('../../src/core/rules/display.ts');
   assert.equal(DISCLAIMER, server);
+});
+
+test('P0-7-T10 티커 표시 모델: 등락 방향·부호·가격 표기·마감 표시', () => {
+  const v = tickerView({ items: [
+    { id: 'BTC', label: 'BTC', group: 'coin', currency: 'USD', price: 83481.32, changePct: 0.117, closed: false },
+    { id: 'KOSPI', label: 'KOSPI', group: 'kr-index', currency: 'POINT', price: 6880.13, changePct: -0.5, closed: true },
+    { id: '005930', label: '삼성전자', group: 'kr-stock', currency: 'KRW', price: 271000, changePct: 0.001, closed: false },
+  ] });
+  assert.deepEqual(v.map((i) => i.tone), ['up', 'down', 'flat']);
+  assert.equal(v[0]!.price, '$83,481.32');
+  assert.equal(v[0]!.change, '▲ +0.12%');
+  assert.equal(v[1]!.price, '6,880.13');
+  assert.equal(v[1]!.change, '▼ -0.50%');
+  assert.equal(v[1]!.closed, true);
+  assert.equal(v[2]!.price, '₩271,000');
+  assert.deepEqual(tickerView(null), []);
+  assert.deepEqual(tickerView({ items: [] }), []);
+});
+
+test('가이드 4-2 모든 방에 벽 소품이 있고, 화면 소스에 없는 종류는 없다', () => {
+  const rooms = floorPlan('algorithm').map((r) => r.id);
+  for (const id of rooms) assert.ok((ROOM_PROPS as Record<string, string[]>)[id]?.length, id);
+  const sprites = readFileSync(join(WEB, 'sprites.js'), 'utf8');
+  for (const kind of Object.values(ROOM_PROPS).flat()) assert.ok(sprites.includes(`kind === '${kind}'`), kind);
 });

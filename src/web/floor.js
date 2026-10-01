@@ -4,12 +4,12 @@
 import { drawChart } from './chart.js';
 import {
   bubbles, consoleEntries, DATA_FLOW, demoScenarioOptions, errorView, fmtChange, fmtClock, fmtPrice, FORCED_CONFIRM, floorPlan, initialMode, isDemo,
-  MODES, multiRows, needsForcedConfirm, panelModel, planLabel, roleStatus, ROLES, stateLabel, WORLD_CLOCKS,
+  MODES, multiRows, needsForcedConfirm, panelModel, planLabel, roleStatus, ROLES, ROOM_PROPS, stateLabel, tickerView, TICKER_GROUP_LABEL, WORLD_CLOCKS,
 } from './model.js';
 import {
   accountToForm, bookPayload, emptyForm, fieldErrors, formToPosition, holdingLabel, positionToForm, staleWarning, summaryRows,
 } from './position.js';
-import { drawCharacter, repaint } from './sprites.js';
+import { drawCharacter, drawProp, repaint, repaintProp } from './sprites.js';
 
 /** @typedef {import('./model.js').Mode} Mode */
 /** @typedef {import('./model.js').ConsoleEntry} ConsoleEntry */
@@ -17,6 +17,7 @@ import { drawCharacter, repaint } from './sprites.js';
 /** @typedef {import('./position.js').AccountForm} AccountForm */
 
 const BOARD_REFRESH_MS = 15_000;
+const TICKER_REFRESH_MS = 30_000;
 const FORCED_KEY = 'floor.forcedConfirmed'; // 탭(세션)마다 한 번 (P0-5-R1). 모드 자체는 저장하지 않는다 (P0-5-R2)
 
 /** @param {string} id */
@@ -45,6 +46,8 @@ const state = {
   /** @type {string} */ boardSymbol: '',
   /** @type {number | undefined} */ boardTimer: undefined,
   /** @type {any} */ board: null,
+  /** @type {number | undefined} */ tickerTimer: undefined,
+  /** @type {{ canvas: HTMLCanvasElement; kind: string }[]} */ props: [],
   /** @type {any} /api/positions 응답 (로컬 접속만. LAN이면 null) */ positions: null,
   /** @type {number | null} 편집 중인 포지션 번호 (추가면 목록 길이) */ editIndex: null,
   /** @type {Map<string, { seat: HTMLElement; canvas: HTMLCanvasElement; bubble: HTMLElement }>} */ seats: new Map(),
@@ -82,6 +85,7 @@ async function init() {
   const sym = /** @type {HTMLInputElement} */ ($('symbol'));
   sym.value = demo ? 'BTC' : 'BTC';
   void loadBoard(sym.value);
+  void loadTicker();
 
   const { res, body } = await api('/api/status');
   if (!res.ok || !body) {
@@ -227,6 +231,36 @@ async function loadBoard(raw) {
   if (!demo) state.boardTimer = window.setTimeout(() => void loadBoard(symbol), BOARD_REFRESH_MS);
 }
 
+// ---------- 하단 티커 (표시 전용) ----------
+
+async function loadTicker() {
+  clearTimeout(state.tickerTimer);
+  const { res, body } = await api(`/api/ticker${demo ? '?demo=1' : ''}`);
+  renderTicker(res.ok ? body : null);
+  if (!demo) state.tickerTimer = window.setTimeout(() => void loadTicker(), TICKER_REFRESH_MS);
+}
+
+/** @param {any} data */
+function renderTicker(data) {
+  const items = tickerView(data);
+  const strip = $('ticker');
+  strip.hidden = items.length === 0;
+  if (items.length === 0) return;
+  const cell = (/** @type {typeof items[number]} */ i) => {
+    const c = el('span', `tick ${i.tone}${i.closed ? ' closed' : ''}`);
+    c.title = `${TICKER_GROUP_LABEL[/** @type {keyof typeof TICKER_GROUP_LABEL} */ (i.group)] ?? i.group}${i.closed ? ' · 마감(직전 체결 기준)' : ''}`;
+    c.append(el('b', '', i.label), el('span', 'p', i.price), el('span', 'c', i.change));
+    return c;
+  };
+  // 같은 줄을 두 번 이어 붙여 끊김 없이 흐르게 한다. 두 번째는 보조 기술에서 숨긴다
+  const a = el('div', 'tick-run');
+  a.append(...items.map(cell));
+  const b = /** @type {HTMLElement} */ (a.cloneNode(true));
+  b.setAttribute('aria-hidden', 'true');
+  $('ticker-track').replaceChildren(a, b);
+  $('ticker-time').textContent = `갱신 ${new Date(data.builtAt).toLocaleTimeString()}`;
+}
+
 /** @param {any} b */
 function renderBoard(b) {
   $('q-name').textContent = b ? b.displayName : '—';
@@ -261,8 +295,19 @@ function renderBoard(b) {
 
 function renderRooms() {
   state.seats.clear();
+  state.props = [];
   for (const room of floorPlan(state.mode)) {
     const sec = $(`room-${room.id}`);
+    sec.querySelector('.props')?.remove();
+    const props = el('div', 'props');
+    props.setAttribute('aria-hidden', 'true');
+    for (const kind of ROOM_PROPS[/** @type {keyof typeof ROOM_PROPS} */ (room.id)] ?? []) {
+      const canvas = drawProp(kind);
+      canvas.classList.add('prop', `prop-${kind}`);
+      props.append(canvas);
+      state.props.push({ canvas, kind });
+    }
+    sec.prepend(props);
     /** @type {HTMLElement} */ (sec.querySelector('.room-title')).textContent = room.title;
     const seats = /** @type {HTMLElement} */ (sec.querySelector('.seats'));
     seats.replaceChildren(...room.seats.map((s) => {
@@ -292,6 +337,7 @@ function renderSeats() {
 
 function tick() {
   state.frame ^= 1;
+  for (const p of state.props) repaintProp(p.canvas, p.kind, state.frame);
   for (const r of state.calling) {
     const s = state.seats.get(r);
     if (s) repaint(s.canvas, r, state.frame);
