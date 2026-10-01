@@ -10,13 +10,17 @@ export interface RiskPrice {
 /**
  * perpetual + leverage + ENTER_* + stopLoss가 모두 있을 때만 계산한다. 그 외에는 null.
  * 기준 진입가: market이면 위험 계산 가격(mark 우선), 그 외에는 진입 구간에서 손절과 가장 먼 쪽 (보수적 가정).
+ * 분할 진입이면 avgEntry(가중 평균 진입가)를 기준으로 한다 (P3-3-R5).
  */
-export function computeRisk(p: TradeProposal, riskPrice: RiskPrice | null, assumedMaintenanceMargin: number): RiskInfo | null {
+export function computeRisk(p: TradeProposal, riskPrice: RiskPrice | null, assumedMaintenanceMargin: number, avgEntry: number | null = null): RiskInfo | null {
   if (p.marketType !== 'perpetual' || p.leverage === null || p.stopLoss === null || p.action === 'NO_TRADE') return null;
   const long = p.action === 'ENTER_LONG';
   let basePrice: number;
   let basePriceKind: RiskInfo['basePriceKind'];
-  if (p.entry.type === 'market') {
+  if (avgEntry !== null) {
+    basePrice = avgEntry;
+    basePriceKind = 'entry';
+  } else if (p.entry.type === 'market') {
     if (!riskPrice) return null;
     basePrice = riskPrice.value;
     basePriceKind = riskPrice.kind;
@@ -26,10 +30,26 @@ export function computeRisk(p: TradeProposal, riskPrice: RiskPrice | null, assum
     basePrice = edge;
     basePriceKind = 'entry';
   }
-  const roughMarginLimit = 1 / p.leverage - assumedMaintenanceMargin;
-  const stopDistance = Math.abs(basePrice - p.stopLoss) / basePrice;
+  return riskDistance({ long, leverage: p.leverage, stopLoss: p.stopLoss, basePrice, basePriceKind, averaged: avgEntry !== null }, assumedMaintenanceMargin);
+}
+
+export interface RiskDistanceInput {
+  long: boolean;
+  leverage: number;
+  stopLoss: number;
+  basePrice: number;
+  basePriceKind: RiskInfo['basePriceKind'];
+  /** 기준 진입가가 분할 진입의 가중 평균이다 (P3-3-R5) */
+  averaged?: boolean;
+}
+
+/** 기준 진입가·손절·레버리지로 위험 거리를 계산한다. 시나리오(P3-4-R2)도 같은 계산을 쓴다 */
+export function riskDistance(x: RiskDistanceInput, assumedMaintenanceMargin: number): RiskInfo {
+  const { long, basePrice, basePriceKind } = x;
+  const roughMarginLimit = 1 / x.leverage - assumedMaintenanceMargin;
+  const stopDistance = Math.abs(basePrice - x.stopLoss) / basePrice;
   return {
-    leverage: p.leverage,
+    leverage: x.leverage,
     marginMode: 'unspecified',
     liquidationEstimateType: 'rough',
     estimatedLiquidationPrice: null,
@@ -44,7 +64,7 @@ export function computeRisk(p: TradeProposal, riskPrice: RiskPrice | null, assum
       '거래소 미지정',
       `유지증거금 ${round(assumedMaintenanceMargin * 100, 4)}% 가정`,
       '수수료·펀딩비·슬리피지 미반영',
-      `기준 가격: ${basePriceKind === 'entry' ? '진입 구간 경계' : basePriceKind}`,
+      `기준 가격: ${x.averaged ? '분할 진입 가중 평균' : basePriceKind === 'entry' ? '진입 구간 경계' : basePriceKind}`,
     ],
   };
 }

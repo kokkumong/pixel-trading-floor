@@ -103,13 +103,13 @@ line();
 
 function sample(s: AnalysisSnapshot, entry: number, stop: number, targets: number[]): TradeProposal {
   return {
-    schemaVersion: 'proposal/3', jobId: 'inspect', author: 'ACE', instrumentId: s.instrumentId, snapshotId: s.snapshotId,
+    schemaVersion: 'proposal/4', jobId: 'inspect', author: 'ACE', instrumentId: s.instrumentId, snapshotId: s.snapshotId,
     action: 'ENTER_LONG', bias: 'BULLISH', unforcedAction: mode === 'forced_direction' ? 'NO_TRADE' : null, marketType: s.marketType,
     priceBasis: { sourceRef: basisId, currency: s.quoteCurrency }, timeframe: mode === 'algorithm' ? '1d' : '15m',
     expectedHoldingPeriod: '예시', validForMinutes: 120, entry: { type: 'limit', min: entry, max: entry },
     stopLoss: stop, targets, leverage: s.marketType === 'perpetual' ? 20 : null, confidence: 55,
     rationale: '확인용 예시', evidenceRefs: ['derived:rsi14', `snap:${basisId}#/last`], invalidationConditions: [], warnings: [],
-    positionRef: null, sizeFraction: null,
+    positionRef: null, sizeFraction: null, scenarios: [], tranches: null,
   };
 }
 

@@ -1,5 +1,5 @@
-// FinalDecision (P0 명세 3.4, v0.3 status 확장, P2 포지션 명세 2.1 decision/3). 시스템이 확정하는 객체이며 모델이 직접 만들지 않는다.
-import type { TradeProposal } from './proposal.ts';
+// FinalDecision (P0 명세 3.4, v0.3 status 확장, P2 포지션 명세 2.1, P3 신규 진입 명세 4장 decision/4). 시스템이 확정하는 객체이며 모델이 직접 만들지 않는다.
+import type { Scenario, TradeProposal } from './proposal.ts';
 import type {
   Action, Bias, Currency, ConfidenceBand, DecisionStatus, ExecutionBackend, Mode, PmDecision, ResultClass, RuleVerdict,
 } from './types.ts';
@@ -53,6 +53,49 @@ export interface Sizing {
   assumptions: string[];
 }
 
+/** 분할 진입 계산 (P3 3.2). 수량은 가중 평균 진입가 기준이며 총 자산이 없으면 null (P3-3-R6) */
+export interface TranchePlan {
+  avgEntry: number;
+  rows: { price: number; weight: number; quantity: number | null; cumulativeQuantity: number | null }[];
+  totalQuantity: number | null;
+  /** 전부 체결된 뒤 손절까지 갔을 때 손실 금액 (리스크 예산 이하, P3-3-R1) */
+  lossAtStop: number | null;
+  /** perpetual만: 합계 수량 × 평균 진입가 ÷ 레버리지 */
+  marginRequired: number | null;
+}
+
+/** 규칙을 통과한 시나리오와 코드가 계산한 파생 값 (P3-4-R2). tranches는 규칙을 통과한 것만 남는다 */
+export interface ScenarioPlan extends Scenario {
+  /** 첫 목표까지 보상 ÷ 기준 진입가~손절 위험. 기준 진입가는 수량 계산과 같다 */
+  rewardRisk: number;
+  sizing: Sizing | null;
+  risk: RiskInfo | null;
+  tranchePlan: TranchePlan | null;
+  /** 제거된 분할의 규칙 코드 (V-TRANCHE-SUM·ORDER·SPREAD) */
+  trancheViolations: string[];
+  /** LOW_REWARD_RISK, TRANCHE_DROPPED */
+  warnings: string[];
+}
+
+export interface DroppedScenario {
+  /** 모델 제안 scenarios 배열에서의 위치 */
+  index: number;
+  role: Scenario['role'];
+  side: Scenario['side'];
+  codes: string[];
+}
+
+/** 신규 진입 분석의 시나리오·분할 계획 (P3). 판정(action)에는 영향을 주지 않는다 (D31) */
+export interface EntryPlan {
+  /** 지금 진입안(최상위 entry)의 분할 계획 */
+  tranchePlan: TranchePlan | null;
+  trancheViolations: string[];
+  scenarios: ScenarioPlan[];
+  dropped: DroppedScenario[];
+  /** NO_WAIT_PLAN, SCN_DROPPED, TRANCHE_DROPPED, NO_EQUITY */
+  warnings: string[];
+}
+
 export interface RuleResult {
   verdict: RuleVerdict;
   violations: RuleViolation[];
@@ -60,8 +103,8 @@ export interface RuleResult {
 }
 
 export interface FinalDecision {
-  /** decision/2(포지션 필드 없음)는 이전 작업·리포트 읽기용이다 (P2-2-R4) */
-  schemaVersion: 'decision/3';
+  /** decision/2(포지션 필드 없음)·decision/3(entryPlan 없음)은 이전 작업·리포트 읽기용이다 (P2-2-R4, P3-6-T3) */
+  schemaVersion: 'decision/4';
   jobId: string;
   snapshotId: string;
   mode: Mode;
@@ -86,4 +129,6 @@ export interface FinalDecision {
   positionRef: string | null;
   positionPlan: PositionPlan | null;
   sizing: Sizing | null;
+  /** 포지션 보유·강제 방향·판정 없음은 null (P3-1-R2) */
+  entryPlan: EntryPlan | null;
 }

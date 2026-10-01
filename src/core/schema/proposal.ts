@@ -7,6 +7,51 @@ import {
 
 const price = () => num({ exclusiveMin: 0, code: 'V-POSITIVE' });
 
+export const SCENARIO_ROLES = ['PRIMARY', 'ALTERNATE'] as const;
+export const SIDES = ['LONG', 'SHORT'] as const;
+export const TRIGGER_KINDS = ['PULLBACK', 'BREAKOUT'] as const;
+export const MAX_SCENARIOS = 2;
+
+/** 분할 진입 1건 (P3 명세 3.1). 개수·비중·순서는 규칙 엔진이 검사한다 (V-TRANCHE-*) */
+export const TrancheSchema = obj({
+  price: price(),
+  weight: num({ description: '비중 0.1~0.8, 전체 합 1' }),
+});
+const tranches = () => nul(arr(TrancheSchema), {
+  default: null,
+  description: '분할 진입 2~3건. algorithm 모드의 zone 진입에서만, 그 외 null. 롱은 높은 가격부터, 숏은 낮은 가격부터',
+});
+
+/**
+ * 조건부 진입 계획 (P3 명세 1.1). 여기서는 구조만 검사하고, 개수·기하·트리거·레버리지는 규칙 엔진이 검사해
+ * 위반한 시나리오만 제거한다 (V-SCN-*, D31).
+ */
+export const ScenarioSchema = obj({
+  role: en(SCENARIO_ROLES, { description: 'PRIMARY는 최대 1건이며 bias와 같은 방향' }),
+  side: en(SIDES, { description: 'SHORT는 perpetual만' }),
+  trigger: obj({
+    kind: en(TRIGGER_KINDS, { description: 'PULLBACK: 가격이 level로 되돌아올 때, BREAKOUT: level을 돌파·이탈할 때' }),
+    level: price(),
+    timeframe: en(TIMEFRAMES),
+    confirmation: str({ maxLength: 200 }),
+  }),
+  entry: obj({
+    type: en(ENTRY_TYPES, { description: 'limit 또는 zone만 (조건부 진입이므로 market 불가)' }),
+    min: price(),
+    max: price(),
+  }),
+  stopLoss: price(),
+  targets: arr(price(), { description: '1~3개' }),
+  leverage: nul(int({ min: 1 }), { description: 'perpetual이면 1~20, spot이면 null' }),
+  tranches: tranches(),
+  invalidationConditions: arr(str({ maxLength: 300 }), { description: '1~3개' }),
+  recheckAfterMinutes: int({ min: 1, description: 'validForMinutes 이하' }),
+  evidenceRefs: arr(str({ maxLength: 200 }), { maxItems: 5 }),
+  rationale: str({ maxLength: 400 }),
+});
+export type Scenario = Infer<typeof ScenarioSchema>;
+export type Tranche = Infer<typeof TrancheSchema>;
+
 export const ProposalOutputSchema = obj({
   instrumentId: str({ maxLength: 64, description: '입력의 instrumentId를 그대로 복사' }),
   snapshotId: str({ maxLength: 64, description: '입력의 snapshotId를 그대로 복사' }),
@@ -36,14 +81,19 @@ export const ProposalOutputSchema = obj({
   warnings: arr(str({ maxLength: 300 }), { maxItems: 5 }),
   positionRef: nul(str({ maxLength: 64 }), { description: '입력 position.positionRef를 그대로 복사. 포지션 없음이면 null' }),
   sizeFraction: nul(num({ min: 0.25, max: 0.75 }), { description: 'REDUCE에서만 0.25·0.5·0.75 중 하나, 그 외 null' }),
+  scenarios: arr(ScenarioSchema, {
+    default: [],
+    description: '조건이 충족되면 진입하는 계획 0~2건. 보유 포지션이 있거나 forced_direction이면 빈 배열',
+  }),
+  tranches: tranches(),
 });
 
 export type ProposalOutput = Infer<typeof ProposalOutputSchema>;
 export type ProposalAuthor = 'ACE' | 'BLITZ' | 'PM';
 
-/** proposal/2(포지션 필드 없음)는 이전 작업·리포트 읽기용이다 (P2-2-R4) */
+/** proposal/2(포지션 필드 없음)·proposal/3(scenarios·tranches 없음)은 이전 작업·리포트 읽기용이다 (P2-2-R4, P3-6-T3) */
 export interface TradeProposal extends ProposalOutput {
-  schemaVersion: 'proposal/3';
+  schemaVersion: 'proposal/4';
   jobId: string;
   author: ProposalAuthor;
 }
@@ -116,7 +166,7 @@ export function checkProposal(raw: unknown, ctx: ProposalContext): ProposalCheck
   }
 
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, proposal: { schemaVersion: 'proposal/3', jobId: ctx.jobId, author: ctx.author, ...p } };
+  return { ok: true, proposal: { schemaVersion: 'proposal/4', jobId: ctx.jobId, author: ctx.author, ...p } };
 }
 
 /** 두 제안서에서 값이 다른 최상위 필드 이름 (PM MODIFY의 modifiedFields 산출용, P0-2-R3). */

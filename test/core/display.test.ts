@@ -8,13 +8,13 @@ import { JOB, SNAP, proposal } from '../helpers.ts';
 
 function decision(over: Partial<FinalDecision> = {}): FinalDecision {
   return {
-    schemaVersion: 'decision/3', jobId: JOB, snapshotId: SNAP, mode: 'algorithm', resultClass: 'analysis',
+    schemaVersion: 'decision/4', jobId: JOB, snapshotId: SNAP, mode: 'algorithm', resultClass: 'analysis',
     status: 'VALID', action: 'ENTER_LONG', bias: 'BULLISH', unforcedAction: null, proposal: proposal(),
     decidedAt: '2026-09-29T00:00:00Z', validUntil: '2026-09-29T02:00:00Z',
     confidence: { score: 62, band: 'MEDIUM', calibrationVersion: 'uncalibrated-v0' },
     reasonCodes: [], ruleEngine: { verdict: 'PASS', violations: [], warnings: [] }, risk: null,
     finalDecisionMaker: 'PM', pmDecision: 'APPROVE', modifiedFields: [], forcedDirection: false,
-    executionBackend: 'subprocess_per_role', positionRef: null, positionPlan: null, sizing: null,
+    executionBackend: 'subprocess_per_role', positionRef: null, positionPlan: null, sizing: null, entryPlan: null,
     ...over,
   };
 }

@@ -30,12 +30,14 @@ export function proposalOutput(over: Partial<ProposalOutput> = {}): ProposalOutp
     warnings: [],
     positionRef: null,
     sizeFraction: null,
+    scenarios: [],
+    tranches: null,
     ...over,
   };
 }
 
 export function proposal(over: Partial<ProposalOutput> = {}, author: TradeProposal['author'] = 'ACE'): TradeProposal {
-  return { schemaVersion: 'proposal/3', jobId: JOB, author, ...proposalOutput(over) };
+  return { schemaVersion: 'proposal/4', jobId: JOB, author, ...proposalOutput(over) };
 }
 
 export function proposalCtx(mode: Mode = 'scalp', over: Partial<ProposalContext> = {}): ProposalContext {
