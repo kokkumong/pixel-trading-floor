@@ -31,7 +31,38 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-없음
+- Phase: 18, 이슈 #41, 브랜치 `feature/41-phase18-scenario-prompts-ui` (push 완료, `verify:quiet` 통과)
+- 다음 단계: 구현 계속(가이드 개정·실제 claude 스모크 2회) → 마무리(문서·PR·병합). 코드 구현은 끝났다
+- 통과 기준:
+  - P3-1-T5 ✅ `test/web/model.test.ts` / P3-1-T2(화면) ✅ `test/core/entry-view.test.ts`
+  - P3-2-T1·T2·T3 ✅ `test/core/entry-view.test.ts`
+  - P3-5-T1·T2 ✅ `test/core/prompts.test.ts`(+ 호출 수는 `entry-view.test.ts`) / P3-5-T3 ✅ `entry-view.test.ts` / P3-5-T4 ✅ `test/web/model.test.ts`·`entry-view.test.ts`(Markdown)
+  - P3-6-T1 ✅ `entry-view.test.ts` / P3-6-T2 ✅ `test/server/app.test.ts`(LAN·SSE·리포트·all.zip·project.zip)·`entry-view.test.ts` / P3-6-T3 ✅ `entry-view.test.ts`·`entry-plan.test.ts` / P3-6-T4 ✅ `test/core/demo.test.ts`
+  - P3-1-R7 ✅ `test/core/evidence-audit.test.ts` / CLI 요약 ✅ `test/cli/floor.test.ts`
+  - 가이드 개정(P3-6-R6) ⬜ / 실제 claude 스모크(알고리즘·스캘핑 각 1회, P3-5-R4 측정) ⬜
+- 바꾼 파일:
+  - 프롬프트: `src/core/prompts/shared/scenarios.md`(신규), `shared/forced.md`·`position.md`, `roles/ACE.md`·`BLITZ.md`·`PM.md`, `prompts/index.ts`
+  - 표시: `src/core/rules/entryview.ts`(신규), `rules/display.ts`, `rules/audit.ts`, `report/markdown.ts`·`report.ts`·`store.ts`, `server/view.ts`·`app.ts`, `cli/floor.ts`
+  - 화면: `src/web/model.js`·`floor.js`·`floor.css`·`index.html`
+  - 데모: `src/core/demo.ts`, `fixtures/demo/v1/manifest.json`, `btc-wait`·`btc-split`·`btc-short-alt`의 `.responses.json`·`.positions.json`
+  - 테스트: 위 파일들 + `test/job-helpers.ts`(`sampleScenario`), `test/core/report/report.test.ts`·`position-report.test.ts`(리포트 v3)
+- 결정:
+  - 프롬프트 조합: 보유 없는 비강제 작업의 ACE·BLITZ·PM에만 `shared/scenarios.md`를 붙인다. 보유·강제 방향의 ACE·BLITZ JSON 스키마에서는 `scenarios`·`tranches`를 뺀다(없는 필드는 `[]`·`null`로 읽힘). PM `revisedProposal` 스키마는 좁히지 않았다
+  - 분석가·토론·GUARD·위험 토론 프롬프트는 P2와 같다: 해시를 `prompts.test.ts`에 고정했다. 이 역할 프롬프트를 일부러 바꾸면 그 표도 갱신한다
+  - 표시 문구는 `entryPlanView(decision)`(`rules/entryview.ts`) 한 곳에서 만들고 `PanelView.entryPlan`으로 화면·리포트 Markdown·CLI 요약이 같이 쓴다. `decision.entryPlan`만 읽는다. 시나리오·분할·경고가 하나도 없으면 null(영역 없음). `NO_EQUITY` 안내는 카드나 분할 표가 있을 때만 붙인다(기존 진입 데모 화면이 바뀌지 않게)
+  - `조건 미충족` 문구는 시나리오 카드에만 붙는다. 지금 진입안의 분할 표는 조건부 계획이 아니라서 붙이지 않는다. 만료는 화면이 `validUntil`과 화면 시각으로 판단한다(데모 fixture는 녹화 시각이 지나 `만료됨`으로 보인다 — 기존 `만료` 배지와 같은 동작)
+  - `규칙에 의해 모델 제안이 조정됨` 문구는 보유 없는 판정에서는 모델이 시나리오를 쓴 경우(DOWNGRADED)에만 붙는다
+  - LAN 마스킹 결함 수정: `maskJobView`가 최상위 `sizing`이 없으면 그대로 돌려줘 `NO_TRADE` + 시나리오의 수량이 새던 것을 고쳤다. 패널 카드는 가린 판정에서 다시 만든다
+  - 근거 검사: 시나리오 `evidenceRefs`가 없으면 `NO_SCENARIO_REF`(시나리오 근거 없음), 없는 참조는 `UNRESOLVED_REF`. 경고만. BLITZ·ACE·PM 수정안에 같은 시나리오가 있으면 경고가 중복될 수 있다(기존 제안서 참조 검사와 같은 동작)
+  - 리포트 `reportSchemaVersion` 3 (store는 1~3을 읽는다). Markdown `## 진입 시나리오`는 `## 데이터 스냅샷` 앞
+  - 데모: manifest `entryScenarios`(파일 구성은 포지션 데모와 같고 북은 보유 0건·총 자산 10,000 USDT). `/api/status`의 `demoScenarios`에 `kind: 'position' | 'entry'`가 붙고 화면 선택지는 `신규 진입 예시: …`. CLI는 `--demo --scenario btc-wait|btc-split|btc-short-alt`. `btc-wait`·`btc-split`은 기본 알고리즘 데모에서 ACE·PM(분할은 RISKY·SAFE·NEUTRAL 해석 주장도)만 바꾼 손으로 쓴 fixture, `btc-short-alt`는 스캘핑 데모에서 ACE만 바꿨다. 기본 데모(알고리즘 PM 기각, 스캘핑 ACE 관망)는 그대로이며 `재진입 조건이 제시되지 않음` 경고가 보인다
+  - 브라우저 확인(데모 `btc-split`·`btc-wait`): 카드·분할 표·수량·고지가 표시되고 콘솔 오류 없음, 카드 글자색은 중립색
+- 남은 일 (순서대로):
+  1. 가이드 개정 v1.7 → v1.8 (rename + 개정 이력 한 줄): P3-6-R6의 (a) 시나리오 카드 읽는 법(조건부 계획, 앱이 가격을 감시하지 않음, 만료), (b) 분할 진입과 수량 계산 방식, (c) `NO_TRADE`는 안전 신호가 아님, (d) 총 자산을 입력해야 수량이 나옴. 넣을 곳은 6장(6-2~6-4 근처에 새 절)과 4-5(데모 선택지 `신규 진입 예시`), 12장 요약
+  2. 실제 claude 스모크: `node src/cli/floor.ts analyze BTC algorithm`, `... BTC scalp` 각 1회(보유 없는 상태). 시나리오가 실제로 나오는지, `entryPlan.dropped` 사유, 호출 수·시간·비용, ACE·BLITZ·PM 호출의 출력 토큰·소요 시간이 상한(P0 8장) 안인지 확인해 "실측 기록"에 한 줄 (P3-5-R4). 시나리오가 규칙에 많이 걸리면 `shared/scenarios.md` 문구를 고친다
+  3. 마무리(스킬 4~6단계): 진행표 18 ✅, "Phase 18 참고"를 P3 완료 뒤 참고 절로 바꾸기, `docs/ARCHITECTURE.md`(작업 엔진 절: 프롬프트 조합·시나리오 근거 검사 / 리포트 절: 리포트 v3·`entryScenarios` 데모 / HTTP 서버 절: 카드·마스킹 / `rules/entryview.ts`), CLAUDE.md는 "구현은 Phase 17(완료)·18"을 완료로 고치는 한 줄만, PR(`Close #41`) → 검사 통과 시 병합
+  4. P3 구현이 끝나면 메모리 `mac-app-packaging-plan`의 .app/.dmg 배포 논의를 사용자에게 다시 꺼낸다
+- 실측: 아직 없음 (스모크 전)
 
 ## Phase 18 참고 (P3 구현 끝 Phase)
 Phase 17(이슈 #39, 스키마 v4·시나리오·분할 규칙·파생 값·마스킹 코어)이 끝났다. Phase 18은 프롬프트·표시·리포트·데모·가이드다 (P3-2, P3-5, P3-6).
