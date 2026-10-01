@@ -423,8 +423,34 @@ export function panelModel(job, nowMs) {
     violations: /** @type {string[]} */ ((d.ruleEngine?.violations ?? []).map((/** @type {any} */ v) => `${v.code} ${v.message}`)),
     maker: d.finalDecisionMaker,
     rationale: p?.rationale ?? null,
+    entryPlan: scenarioModel(job.panel.entryPlan ?? null, nowMs),
   };
 }
+
+/**
+ * 진입 시나리오 영역 (P3-6-R1). 문구는 서버 entryPlanView가 만든 것을 그대로 쓰고, 만료만 화면 시각으로 본다 (P3-1-R6).
+ * 카드에는 판정 색(tone)을 주지 않는다: 방향은 제목 글자로만 구분한다 (P3-6-R2).
+ * @param {any} e EntryPlanView | null (이전 서버 응답·decision/3 이전 작업은 없음)
+ * @param {number} nowMs
+ */
+export function scenarioModel(e, nowMs) {
+  if (!e) return null;
+  const expired = Boolean(e.validUntil) && Date.parse(e.validUntil) < nowMs;
+  return {
+    heading: /** @type {string} */ (e.heading),
+    expired,
+    status: /** @type {string} */ (expired ? e.expiredNotice : e.notice),
+    guide: /** @type {string} */ (e.guide),
+    warnings: /** @type {string[]} */ (e.warnings ?? []),
+    mainTranches: /** @type {TrancheTable | null} */ (e.mainTranches ?? null),
+    cards: /** @type {ScenarioCard[]} */ (e.cards ?? []),
+  };
+}
+
+/**
+ * @typedef {{ rows: { label: string; price: string; weight: string; quantity: string | null; cumulative: string | null }[]; summary: string[]; note: string }} TrancheTable
+ * @typedef {{ title: string; side: string; recheck: string; condition: string; fields: { label: string; value: string }[]; tranches: TrancheTable | null; invalidation: string[]; rationale: string; warnings: string[] }} ScenarioCard
+ */
 
 /**
  * 오류 안내 (P1-1-T3, P1-8-R6). 진행 중이거나 완료면 null

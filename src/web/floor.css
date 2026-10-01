@@ -170,6 +170,22 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .panel-rationale { font-size: 11px; color: #c9c6bd; margin: 6px 0 0; }
 .panel-notes .pos-summary { color: var(--fg); }
 .panel-disclaimer { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); margin: 8px 0 0; padding-top: 4px; }
+/* 진입 시나리오 카드 (P3-6-R2): 조건부 계획이라 판정 색(녹색·빨강)을 쓰지 않는다. 경고만 경고색 */
+.scenarios { margin-top: 10px; border-top: 2px solid var(--line); padding-top: 6px; }
+.scn-heading { color: var(--fg); font-size: 14px; }
+.scn-status { color: var(--warn); font-weight: bold; }
+.scenarios.expired .scn-status { color: #9a9fb0; }
+.scenarios.expired .scn-card { opacity: .6; }
+.scn-warn { color: var(--warn); font-size: 11px; }
+.scn-card { border: 2px solid var(--line); background: #10121a; margin-top: 6px; padding: 6px 8px; }
+.scn-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.scn-title { color: var(--fg); }
+.scn-recheck, .scn-note, .scn-sum, .scn-inv { color: var(--muted); font-size: 11px; }
+.scn-cond { color: var(--fg); margin-top: 2px; }
+.scn-tranches { width: 100%; border-collapse: collapse; font-size: 11px; margin: 4px 0; }
+.scn-tranches th { color: var(--muted); font-weight: normal; text-align: right; }
+.scn-tranches td { text-align: right; border-top: 1px dashed var(--line); }
+.scn-tranches th:first-child, .scn-tranches td:first-child { text-align: left; }
 .tone-long .panel-headline { color: var(--green); }
 .tone-short .panel-headline { color: var(--red); }
 .tone-neutral .panel-headline { color: var(--gold); }
