@@ -41,6 +41,7 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## Phase 20 참고 (P4 데스크톱 앱)
 Phase 19(이슈 #43)로 `desktop/`(Electron 44.5.1 스파이크 `main.cjs`)와 `docs/PIXEL-TRADING-FLOOR-P4-데스크톱앱-명세-v0.1.md`를 만들었다. 실측과 결정은 그 명세 0장.
 - 이어서 할 일(Phase 20): `desktop/main.cjs`를 스파이크에서 정식 셸로 바꾼다 — 단일 인스턴스, 창 보안 설정(P4-4-R1·R2), 종료 처리(P4-1-R5), 편집 메뉴, `FLOOR_HOME`=`userData/data`(P4-2-R1). 테스트할 수 있는 판단(주소 허용·경로 검사·`webPreferences` 객체)은 Electron 없이 import되는 순수 모듈로 빼서 루트 `test/`에서 검증한다(P4-1-R2). 정확한 위치는 `[구현 시 결정]`(예: `desktop/lib/*.cjs`나 `src/desktop/*.ts` 중 루트 `tsc`가 검사할 수 있는 쪽)
+- 보안 수칙(사용자 제시 11개)은 P4 명세 4장 대조표가 기준이다. 스파이크 `desktop/main.cjs`·`preload.cjs`는 A1~A6을 이미 구현·실행 확인했다(창 `require`·`process` 없음, `window.open` null, 카메라·알림·위치·클립보드 거부, 외부 이동 차단). Phase 20은 `openExternalSafe`(R10)·`openDataFolder`·`getClaudeStatus`(R7)·URL 스킴 미등록(R11)을 정식 구현한다. **App Sandbox는 쓰지 않기로 했다(D9, 사용자 결정)**
 - 실행 방법(개발): `cd desktop && npm install && node node_modules/electron/install.js` 한 번, 이후 `node_modules/electron/dist/Electron.app/Contents/MacOS/Electron desktop`(저장소 루트에서). Electron 44는 `npm install`만으로는 바이너리를 받지 않는다
 - 스파이크 확인값: Node 24.21 내장·`.ts` 로드·`app.asar` 안 로드·짧은 PATH에서 claude 탐색 모두 통과(맥 arm64). 윈도우 `.cmd` claude는 `process.execPath`가 Electron이라 별도 처리 필요(P4-3-R5)
 - 맥 먼저, 윈도우는 맥 뒤(사용자 결정 2026-10-01). 중복 파일 `start-floor 2.cmd`·`start-floor-lan 2.cmd`·`.gitattributes 2`는 사용자가 삭제 여부를 정하지 않았다(untracked, 건드리지 않음)
