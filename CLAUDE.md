@@ -6,7 +6,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - `docs/PIXEL-TRADING-FLOOR-P0-명세-v*.md` — 계약과 검증 항목 (`P0-<n>-R<m>`, `P0-<n>-T<m>`)
 - `docs/PIXEL-TRADING-FLOOR-P1-명세-v*.md` — 첫 실전 분석 전 기능 (상태 머신, 레지스트리, 지표 정의, 위험 거리, /floor 코어, 리포트, 보안, 데모·진단, 근거 인용)
 - `docs/PIXEL-TRADING-FLOOR-P2-포지션-명세-v*.md` — 보유 포지션 입력과 포지션 인지 판정 (`P2-<n>-R<m>`, `P2-<n>-T<m>`). P0 결정 D3(포지션 입력 없음)를 폐기한다. 구현은 Phase 12~15 (완료)
-- `docs/PIXEL-TRADING-FLOOR-P3-신규진입-명세-v*.md` — 보유가 없는 사용자의 신규 진입 지원: 진입 시나리오 카드, 분할 진입, `NO_TRADE` 후속 안내 (`P3-<n>-R<m>`, `P3-<n>-T<m>`). 명세는 Phase 16(완료), 구현은 Phase 17~18
+- `docs/PIXEL-TRADING-FLOOR-P3-신규진입-명세-v*.md` — 보유가 없는 사용자의 신규 진입 지원: 진입 시나리오 카드, 분할 진입, `NO_TRADE` 후속 안내 (`P3-<n>-R<m>`, `P3-<n>-T<m>`). 명세는 Phase 16(완료), 구현은 Phase 17(완료)·18
 - `docs/PIXEL-TRADING-FLOOR-구조-보완안-v*.md` — 목표 구조, 우선순위(5장), P2
 - 문서 버전은 수시로 올라간다. 파일명을 외우지 말고 `ls docs/`로 최신 파일을 찾는다
 - 구현 범위: P0와 P1 전체(완료), P2 포지션(Phase 12~15, 완료). `/floor`는 처음부터 공통 코어 구조로 만든다 (과도기 `lightweight`는 스키마에만 존재)
@@ -37,6 +37,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - 최종 의사결정자: algorithm=PM, scalp·forced=ACE. PM이 없는 결과에 `PM 승인` 문구 금지 — 명세 2장
 - `action`: ENTER_LONG | ENTER_SHORT | NO_TRADE, `bias`: BULLISH | BEARISH | NEUTRAL (분리 저장) — 명세 3.2
 - 포지션(P2): 포지션이 있을 때만 행동 `HOLD/ADD/REDUCE/EXIT`. 모델에는 **비율만** 전달하고 금액·수량·총 자산·메모는 보내지 않음. 수량은 코드가 리스크 예산(기본 1%)으로 계산. 분석가·토론 역할은 포지션을 못 봄. 저장은 `.floor/positions.json`. `forced_direction`은 포지션 무시 — P2 명세 2~5장
+- 진입 계획(P3): 보유 없는 진입 판정은 `proposal/4`의 `scenarios`·`tranches`를 규칙(`V-SCN-*`·`V-TRANCHE-*`)이 걸러 `decision/4`의 `entryPlan`으로 확정한다. 화면·리포트는 `entryPlan`만 읽고 모델 원본(`proposal`)은 읽지 않는다. 보유·`forced_direction`은 `entryPlan = null` — P3 명세
 - 모델 출력 `TradeProposal` ≠ 시스템 확정 `FinalDecision`. 규칙(`V-*`)은 **코드**로 적용 — 명세 3.3~3.6
 - 확신도: 화면엔 LOW/MEDIUM/HIGH만, `%` 금지, 규칙에 사용 금지 — 명세 3.5
 - 스냅샷: 작업당 한 번 수집, 불변, `snapshotHash`. 에이전트는 외부 조회 불가, 역할별 투영 입력만 — 명세 4장

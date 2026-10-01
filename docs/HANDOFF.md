@@ -25,17 +25,18 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 14 | 리포트·화면 표기·고지·마스킹·LAN·데모 fixture (P2-5·6·8) | ✅ |
 | 15 | macOS·Windows 시작 파일, 시작 시 doctor, 가이드 v1.6 (P2-7, P2-6-R5) → **P2 구현 끝** | ✅ |
 | 16 | P3 신규 진입 명세(`P3-신규진입-명세`): 진입 시나리오 카드·분할 진입·NO_TRADE 후속 안내 | ✅ |
-| 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | 대기 |
-| 18 | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | 대기 |
+| 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | ✅ |
+| **18** | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | **다음** |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-- Phase: 17, 이슈 #39, 브랜치 `feature/39-phase17-schema-v4-scenarios` (push 완료, PR 없음)
-- 다음 단계: 마무리 (스킬 4 → 5 → 6). 구현은 끝났고 `verify:quiet` 통과(테스트 402개)
-- 통과 기준: 전부 ✅ `test/core/entry-plan.test.ts` — P3-1-T1·T2·T3·T4, P3-3-T1·T2·T3·T4·T5, P3-4-T1·T2·T3, P3-6-T3(코어: decision/3 리포트·판정 읽기), P3-2-R1(`NO_WAIT_PLAN` 코어), 스키마 v4. 결함 주입 확인: 분할 수량 기준가, `V-LIQ-BUFFER` 평균 진입가, `V-SCN-DUP`, 강제 방향 제외
-- 바꾼 파일: `src/core/schema/dsl.ts`(필드 `default`), `schema/proposal.ts`(`ScenarioSchema`·`TrancheSchema`·`proposal/4`), `schema/decision.ts`(`EntryPlan`·`ScenarioPlan`·`TranchePlan`·`DroppedScenario`·`decision/4`), `rules/entryplan.ts`(신규: `checkTranches`·`averageEntry`·`planTranches`·`buildEntryPlan`), `rules/engine.ts`(`rules/3`, 임계값 4개, `RuleOutcome.entryPlan`), `rules/risk.ts`(`riskDistance`, `computeRisk`의 `avgEntry`), `rules/sizing.ts`(`floorQty`·`r2` export), `job/decide.ts`, `position/mask.ts`(`maskEntryPlan`·`maskTranchePlan`), `scripts/inspect.ts`, 테스트 도우미(`test/helpers.ts`·`job-helpers.ts`·`position-helpers.ts`)
-- 결정:
+없음
+
+## Phase 18 참고 (P3 구현 끝 Phase)
+Phase 17(이슈 #39, 스키마 v4·시나리오·분할 규칙·파생 값·마스킹 코어)이 끝났다. Phase 18은 프롬프트·표시·리포트·데모·가이드다 (P3-2, P3-5, P3-6).
+- 쓸 파일: `src/core/rules/entryplan.ts`(`checkTranches`·`averageEntry`·`planTranches`·`buildEntryPlan`), `schema/proposal.ts`(`ScenarioSchema`·`TrancheSchema`), `schema/decision.ts`(`EntryPlan` 등), `position/mask.ts`(`maskEntryPlan`·`maskTranchePlan`), `test/core/entry-plan.test.ts`
+- Phase 17 결정 (유지):
   - 시나리오·분할의 **구조**(타입·필수 필드·가격 > 0·글자 수)는 스키마가 검사해 틀리면 `SCHEMA_ERROR` 재시도. **개수·기하·트리거·레버리지**는 규칙이 검사해 해당 항목만 제거(D31). 그래서 스키마의 시나리오 `entry.type`은 `market`도 받고 `V-SCN-SHAPE`가 제거한다
   - `scenarios`·`tranches`가 없는 출력은 `[]`·`null`로 채워 읽는다(DSL `default`). 기존 데모 fixture·scripted 응답·Phase 18 전 프롬프트가 그대로 통과한다. JSON 스키마에서는 필수 필드다
   - 모델이 쓴 원본은 `proposal`에 그대로 남고, 규칙을 통과한 결과는 `decision.entryPlan`에만 있다. **화면·리포트는 `entryPlan`만 읽는다**. `V-TRANCHE-MODE` 정규화(scalp·zone 아님)와 P3-1-R2(보유·강제 방향·데이터 부족은 `entryPlan = null`)도 규칙 엔진이 한다
@@ -48,13 +49,8 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
   - 기준 진입가: 분할이 있으면 가중 평균, 없으면 구간의 불리한 쪽(롱 `max`, 숏 `min`). 손익비·수량·위험 거리가 같은 값을 쓴다. 분할이 있으면 `sizing.suggestedQuantity` = 분할 수량 합계
   - PM 기각: `entryPlan`은 빈 계획 + `NO_WAIT_PLAN`(기각된 제안의 시나리오는 채택하지 않음)
   - 마스킹은 보안 사항이라 이번에 넣었다: `maskDecision`이 `entryPlan`의 수량·손실 금액·증거금을 가린다 (P3-6-T2의 코어 부분. 서버 경로 테스트는 Phase 18)
-- 남은 일 (마무리 세션, 순서대로):
-  1. 진행표 17 ✅, 18 굵게·`다음`. 이 절의 결정을 "Phase 18 참고" 절로 옮기고 이 절은 `없음`
-  2. `docs/ARCHITECTURE.md`에 `rules/entryplan.ts`·`EntryPlan` 설명 추가 (포지션 절 또는 규칙 관련 절)
-  3. CLAUDE.md "핵심 계약 요약"에 `proposal/4`·`decision/4`·`entryPlan` 한 줄 (계약이 바뀜), "문서" 절의 P3 문구 "구현은 Phase 17~18" 확인
-  4. `verify:quiet` → PR(`Close #39`) → 검사 통과 시 병합 → 보고
 - Phase 18로 넘긴 것: 프롬프트(ACE·BLITZ·PM)와 보유·강제 방향 JSON 스키마에서 `scenarios` 빼기, 시나리오 `evidenceRefs` 근거 검사(P3-1-R7, `auditEvidence`), 화면 카드·리포트 `## 진입 시나리오`·`reportSchemaVersion` 3, 서버 경로 마스킹 테스트(P3-6-T2), 데모 fixture, 가이드
-- 실측: 실제 claude 스모크 안 함 (프롬프트가 Phase 18이라 의미 없음). 모델 호출 0회
+- 실측: Phase 17은 실제 claude 스모크를 하지 않았다(프롬프트가 Phase 18이라 의미 없음). Phase 18 끝에서 알고리즘·스캘핑 각 1회 스모크로 시나리오 출력 호출 수·시간·비용을 기록한다
 
 ## UI 개선 (이슈 #35, 개발 Phase 없음)
 - 방 벽 소품(`sprites.js drawProp`, `model.js ROOM_PROPS`), 분석 전 말풍선 `분석 대기 중…`, 하단 티커 띠 `GET /api/ticker`(30초, 표시 전용, 데모는 숨김). 명세 P0 v0.11 7.4·P0-7-T10, 가이드 v1.7 4-2·4-3-1
