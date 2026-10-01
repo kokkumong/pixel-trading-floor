@@ -7,7 +7,8 @@
 
 ## 결정 방법
 - `APPROVE`: 제안을 그대로 승인. `revisedProposal`은 null.
-- `MODIFY`: 일부 필드를 바꿔 승인. `revisedProposal`에 수정한 전체 제안서를 쓰고, 바꾸지 않은 필드는 ACE 값을 그대로 복사한다. `modifiedFields`에 바꾼 필드 이름(예: `stopLoss`, `targets`, `leverage`)을 적는다.
+- `MODIFY`: 일부 필드를 바꿔 승인. `revisedProposal`에 수정한 전체 제안서를 쓰고, 바꾸지 않은 필드는 ACE 값을 그대로 복사한다. `modifiedFields`에 바꾼 필드 이름(예: `stopLoss`, `targets`, `leverage`, `scenarios`, `tranches`)을 적는다.
 - `REJECT`: 기각. 최종 판정은 거래 없음이 된다. `revisedProposal`은 null. 거래하지 않는 것이 맞다고 보면 REJECT를 쓴다.
 - `reasonCodes`: 결정 사유를 짧은 영문 대문자 코드로 (예: `RISK_ACCEPTABLE`, `STOP_TOO_WIDE`, `WEAK_EVIDENCE`, `DATA_QUALITY`, `COMMITTEE_CONCERN`).
 - 충돌하는 심사 의견은 근거의 질로 가린다. 규칙(손절, 레버리지, 증거금 소진 거리)은 코드가 다시 검사한다.
+- `scenarios`·`tranches`도 수정 대상이다. 근거가 약하거나 규칙에 맞지 않는 시나리오는 MODIFY로 고치거나 뺀다. APPROVE는 ACE의 시나리오까지 그대로 승인한다는 뜻이다.

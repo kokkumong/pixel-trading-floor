@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { JobManager } from '../../src/server/jobs.ts';
 import type { JobView } from '../../src/server/view.ts';
 import {
-  bubbles, confidenceBand, ROOM_PROPS, tickerView, consoleEntries, DATA_FLOW, demoScenarioOptions, DISCLAIMER, errorView, floorPlan, initialMode, MARGIN_LABEL, multiRows, needsForcedConfirm, panelModel, planLabel,
+  bubbles, confidenceBand, ROOM_PROPS, tickerView, consoleEntries, DATA_FLOW, demoScenarioOptions, DISCLAIMER, errorView, floorPlan, initialMode, MARGIN_LABEL, multiRows, needsForcedConfirm, panelModel, planLabel, scenarioModel,
 } from '../../src/web/model.js';
 import { buildBoard, collectBoardSources } from '../../src/core/board.ts';
-import { autoDriver, sampleOutput } from '../job-helpers.ts';
+import { autoDriver, sampleOutput, sampleProposal, sampleScenario } from '../job-helpers.ts';
 import { manager } from '../server/server-helpers.ts';
 import { registry, replayNet } from '../data-helpers.ts';
 
@@ -231,6 +231,7 @@ test('P2-8 데모 포지션 예시 선택지: 기본(포지션 없음) + 현재 
   const list = [{ name: 'btc-hold', mode: 'scalp', label: 'A' }, { name: 'btc-reduce', mode: 'algorithm', label: 'B' }];
   assert.deepEqual(demoScenarioOptions(list, 'scalp'), [{ value: '', label: '보유 포지션 없음' }, { value: 'btc-hold', label: '보유 예시: A' }]);
   assert.deepEqual(demoScenarioOptions(undefined, 'forced_direction'), [{ value: '', label: '보유 포지션 없음' }]);
+  assert.equal(demoScenarioOptions([{ name: 'btc-wait', mode: 'scalp', label: 'C', kind: 'entry' }], 'scalp')[1]!.label, '신규 진입 예시: C');
 });
 
 test('P2-6-T1 화면 패널 모델은 고지 문구를 항상 싣고, 서버 고지와 같은 문구다', async () => {
@@ -260,4 +261,57 @@ test('가이드 4-2 모든 방에 벽 소품이 있고, 화면 소스에 없는 
   for (const id of rooms) assert.ok((ROOM_PROPS as Record<string, string[]>)[id]?.length, id);
   const sprites = readFileSync(join(WEB, 'sprites.js'), 'utf8');
   for (const kind of Object.values(ROOM_PROPS).flat()) assert.ok(sprites.includes(`kind === '${kind}'`), kind);
+});
+
+// ── P3 진입 시나리오 카드 (Phase 18) ──
+
+async function scenarioJob(html = false) {
+  const { m } = manager({
+    driver: () => autoDriver({
+      ACE: (input) => ({
+        output: sampleProposal(input, {
+          action: 'NO_TRADE', bias: 'BULLISH', entry: { type: 'market', min: null, max: null }, stopLoss: null, targets: [], leverage: null,
+          scenarios: [sampleScenario(input, html ? { rationale: '<img src=x onerror=alert(1)>', invalidationConditions: ['<b>굵게</b>'] } : {})],
+        }),
+      }),
+    }),
+  });
+  const r = await m.start({ symbol: 'BTC', mode: 'scalp', idempotencyKey: `scn-${Math.random().toString(36).slice(2, 10)}` });
+  await m.idle();
+  return m.view((r as { jobId: string }).jobId)!;
+}
+
+test('P3-1-T5 시나리오 카드는 진입 색 없이 조건 미충족 문구로 렌더되고 validUntil 이후에는 만료됨을 표시한다', async () => {
+  const v = await scenarioJob();
+  assert.equal(v.state, 'COMPLETED', JSON.stringify(v.error));
+  const until = Date.parse(v.finalDecision!.validUntil!);
+  const p = panelModel(v, until - 1000)!;
+  assert.equal(p.tone, 'neutral'); // NO_TRADE: 관망 표기는 그대로 (P3-2-R3)
+  const e = p.entryPlan!;
+  assert.deepEqual([e.heading, e.status, e.expired, e.cards.length], ['진입 시나리오', '조건 미충족 — 아직 진입 신호가 아님', false, 1]);
+  assert.match(e.cards[0]!.recheck, /^재확인 .+ 뒤$/);
+  assert.equal('tone' in e.cards[0]!, false);
+  const late = panelModel(v, until + 1000)!;
+  assert.deepEqual([late.entryPlan!.expired, late.entryPlan!.status], [true, '만료됨 — 다시 분석하세요']);
+  assert.ok(late.badges.includes('만료'));
+  assert.equal(scenarioModel(null, until), null);
+
+  // 카드 스타일은 진입 색(녹색·빨강)을 쓰지 않는다. 방향별 클래스도 만들지 않는다
+  const css = readFileSync(join(WEB, 'floor.css'), 'utf8');
+  const scnRules = css.split('\n').filter((l) => /^\.(scn-|scenarios)/.test(l));
+  assert.ok(scnRules.length >= 8);
+  for (const rule of scnRules) assert.equal(/--green|--red|#3ddc84|#ff4d4d/i.test(rule), false, rule);
+  const js = readFileSync(join(WEB, 'floor.js'), 'utf8');
+  const render = js.slice(js.indexOf('function trancheTable'), js.indexOf('function renderPanel'));
+  assert.equal(/tone-|long|short|c\.side/.test(render), false);
+});
+
+test('P3-5-T4 시나리오 문장의 HTML 태그는 화면 모델에 글자 그대로 실리고 textContent로만 그린다', async () => {
+  const v = await scenarioJob(true);
+  const c = panelModel(v, Date.now())!.entryPlan!.cards[0]!;
+  assert.deepEqual([c.rationale, c.invalidation], ['<img src=x onerror=alert(1)>', ['<b>굵게</b>']]);
+  const js = readFileSync(join(WEB, 'floor.js'), 'utf8');
+  const render = js.slice(js.indexOf('function trancheTable'), js.indexOf('function renderPanel'));
+  assert.ok(render.includes('c.rationale') && render.includes('c.invalidation') && render.includes('c.condition'));
+  assert.equal(/innerHTML|outerHTML|insertAdjacentHTML/.test(render), false);
 });

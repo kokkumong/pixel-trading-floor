@@ -278,3 +278,20 @@ test('P2-6-R1 analyze --demo REDUCE 헤드라인에 판정 표기를 중복해 �
   assert.doesNotMatch(r.out, /\(일부 청산 검토\)|진입 market/);
   assert.ok(r.out.includes(DISCLAIMER));
 });
+
+test('P3-6-R1 analyze --demo 신규 진입 요약: 조건 미충족 문구·시나리오·분할 표·감시하지 않는다는 안내를 쓴다', async () => {
+  const h = harness('algorithm');
+  const wait = await h.run('analyze', 'BTC', 'algorithm', '--demo', '--scenario', 'btc-wait');
+  assert.equal(wait.code, EXIT.OK, wait.err);
+  assert.match(wait.out, /\n {2}진입 시나리오 — 조건 미충족 — 아직 진입 신호가 아님\n/);
+  assert.match(wait.out, /\n {2}\[롱 · 눌림 · 주 시나리오\] 재확인 12시간 뒤\n {4}조건 \(1d\): 가격이 83000까지 내려옴 — /);
+  assert.match(wait.out, /진입 구간 82600 ~ 83500 · 손절 81200 · 목표 87300 · 89500 · 손익비 [\d.]+ \(첫 목표 기준\) · 수량 [\d.]+ \(/);
+  assert.ok(wait.out.includes('앱은 가격을 감시하지 않고 주문도 내지 않습니다') && wait.out.includes(DISCLAIMER));
+  assert.doesNotMatch(wait.out, /\[만료\]|만료됨/);
+
+  const split = await h.run('analyze', 'BTC', 'algorithm', '--demo', '--scenario', 'btc-split');
+  assert.equal(split.code, EXIT.OK, split.err);
+  assert.match(split.out, /지금 진입안의 분할 진입\n {4}1차 84100 · 비중 40% · 수량 [\d.]+ \(누적 [\d.]+\)\n {4}2차 83300 · 비중 30%/);
+  assert.match(split.out, /전부 체결 시 손절 손실 [\d.]+ USDT ≤ 총 자산의 1%/);
+  assert.ok(split.out.includes('1차 체결 후 무효화 조건에 해당하면 남은 분할은 진입하지 않는다.'));
+});

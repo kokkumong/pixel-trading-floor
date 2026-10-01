@@ -26,31 +26,33 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 15 | macOS·Windows 시작 파일, 시작 시 doctor, 가이드 v1.6 (P2-7, P2-6-R5) → **P2 구현 끝** | ✅ |
 | 16 | P3 신규 진입 명세(`P3-신규진입-명세`): 진입 시나리오 카드·분할 진입·NO_TRADE 후속 안내 | ✅ |
 | 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | ✅ |
-| **18** | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | **다음** |
+| 18 | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | ✅ |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
 없음
 
-## Phase 18 참고 (P3 구현 끝 Phase)
-Phase 17(이슈 #39, 스키마 v4·시나리오·분할 규칙·파생 값·마스킹 코어)이 끝났다. Phase 18은 프롬프트·표시·리포트·데모·가이드다 (P3-2, P3-5, P3-6).
-- 쓸 파일: `src/core/rules/entryplan.ts`(`checkTranches`·`averageEntry`·`planTranches`·`buildEntryPlan`), `schema/proposal.ts`(`ScenarioSchema`·`TrancheSchema`), `schema/decision.ts`(`EntryPlan` 등), `position/mask.ts`(`maskEntryPlan`·`maskTranchePlan`), `test/core/entry-plan.test.ts`
+## P3 구현 완료 후 참고 (개발 Phase 없음)
+Phase 18(이슈 #41)로 P3 신규 진입(진입 시나리오·분할 진입·관망 후속 안내) 구현이 끝났다. 진행표에 다음 Phase는 없다. 새 작업은 사용자와 범위를 정한 뒤 이슈를 만든다.
+- 다음 논의 후보: macOS .app/.dmg 지인 배포(P3 구현 뒤 재개하기로 함), P1-11 본 측정(조합별 10회 이상), 아래 "남은 불확실성"
+- 쓸 파일: `src/core/rules/entryplan.ts`(규칙·계산), `src/core/rules/entryview.ts`(`entryPlanView` — 화면·리포트·CLI 공용 문구), `src/core/prompts/shared/scenarios.md`, `src/core/position/mask.ts`, `fixtures/demo/v1/manifest.json`의 `entryScenarios`, 테스트 `test/core/entry-plan.test.ts`·`entry-view.test.ts`, `test/job-helpers.ts`의 `sampleScenario`
 - Phase 17 결정 (유지):
-  - 시나리오·분할의 **구조**(타입·필수 필드·가격 > 0·글자 수)는 스키마가 검사해 틀리면 `SCHEMA_ERROR` 재시도. **개수·기하·트리거·레버리지**는 규칙이 검사해 해당 항목만 제거(D31). 그래서 스키마의 시나리오 `entry.type`은 `market`도 받고 `V-SCN-SHAPE`가 제거한다
-  - `scenarios`·`tranches`가 없는 출력은 `[]`·`null`로 채워 읽는다(DSL `default`). 기존 데모 fixture·scripted 응답·Phase 18 전 프롬프트가 그대로 통과한다. JSON 스키마에서는 필수 필드다
-  - 모델이 쓴 원본은 `proposal`에 그대로 남고, 규칙을 통과한 결과는 `decision.entryPlan`에만 있다. **화면·리포트는 `entryPlan`만 읽는다**. `V-TRANCHE-MODE` 정규화(scalp·zone 아님)와 P3-1-R2(보유·강제 방향·데이터 부족은 `entryPlan = null`)도 규칙 엔진이 한다
-  - 경고는 `entryPlan.warnings`(`NO_WAIT_PLAN`·`SCN_DROPPED`·`TRANCHE_DROPPED`·`NO_EQUITY`)와 시나리오별 `warnings`(`LOW_REWARD_RISK`·`TRANCHE_DROPPED`)에만 둔다. `ruleEngine.warnings`에는 넣지 않았다(기존 화면·데모의 경고 0건 유지)
-  - `V-SCN-SHAPE`에 `invalidationConditions` 1~3개 포함. `PRIMARY` 2건·시나리오 3건 이상은 뒤쪽을 제거. SHAPE·DIR 위반이면 나머지 검사는 하지 않는다
-  - `V-SCN-TRIGGER`: 현재가를 모르면 제거. 숏 `BREAKOUT`은 `level < 현재가`이고 `entry.max ≤ level`
-  - `V-SCN-DISTANCE`·`V-TRANCHE-SPREAD`의 ATR은 스냅샷의 `atr14` 하나를 쓴다(시나리오 `timeframe`별 ATR은 스냅샷에 없음). ATR이 없으면 두 검사를 건너뛴다
-  - `V-SCN-DUP` 겹침 비율 = 겹친 길이 ÷ 더 좁은 구간의 길이. 한쪽이 지정가(점)이면 다른 구간 안에 있을 때 겹침. 최종 판정이 `ENTER_*`일 때만 검사
-  - `V-SCN-LEVERAGE`: 무기한인데 `leverage`가 null이어도 위반
-  - 기준 진입가: 분할이 있으면 가중 평균, 없으면 구간의 불리한 쪽(롱 `max`, 숏 `min`). 손익비·수량·위험 거리가 같은 값을 쓴다. 분할이 있으면 `sizing.suggestedQuantity` = 분할 수량 합계
-  - PM 기각: `entryPlan`은 빈 계획 + `NO_WAIT_PLAN`(기각된 제안의 시나리오는 채택하지 않음)
-  - 마스킹은 보안 사항이라 이번에 넣었다: `maskDecision`이 `entryPlan`의 수량·손실 금액·증거금을 가린다 (P3-6-T2의 코어 부분. 서버 경로 테스트는 Phase 18)
-- Phase 18로 넘긴 것: 프롬프트(ACE·BLITZ·PM)와 보유·강제 방향 JSON 스키마에서 `scenarios` 빼기, 시나리오 `evidenceRefs` 근거 검사(P3-1-R7, `auditEvidence`), 화면 카드·리포트 `## 진입 시나리오`·`reportSchemaVersion` 3, 서버 경로 마스킹 테스트(P3-6-T2), 데모 fixture, 가이드
-- 실측: Phase 17은 실제 claude 스모크를 하지 않았다(프롬프트가 Phase 18이라 의미 없음). Phase 18 끝에서 알고리즘·스캘핑 각 1회 스모크로 시나리오 출력 호출 수·시간·비용을 기록한다
+  - 시나리오·분할의 **구조**는 스키마가 검사(`SCHEMA_ERROR` 재시도), **개수·기하·트리거·레버리지**는 규칙이 검사해 해당 항목만 제거(D31). `scenarios`·`tranches`가 없는 출력은 `[]`·`null`로 읽는다
+  - 모델 원본은 `proposal`, 규칙 통과 결과는 `decision.entryPlan`. 화면·리포트는 `entryPlan`만 읽는다. 보유·강제 방향·데이터 부족은 `entryPlan = null`
+  - 경고는 `entryPlan.warnings`(`NO_WAIT_PLAN`·`SCN_DROPPED`·`TRANCHE_DROPPED`·`NO_EQUITY`)와 시나리오별 `warnings`에만 둔다(`ruleEngine.warnings`에는 없음)
+  - ATR은 스냅샷의 `atr14` 하나. 기준 진입가: 분할이 있으면 가중 평균, 없으면 구간의 불리한 쪽. PM 기각은 빈 계획 + `NO_WAIT_PLAN`
+- Phase 18 결정:
+  - 프롬프트: 보유 없는 비강제 작업의 ACE·BLITZ·PM에만 `shared/scenarios.md`를 붙인다. 보유·강제 방향의 ACE·BLITZ JSON 스키마에서는 `scenarios`·`tranches`를 뺀다. PM `revisedProposal` 스키마는 좁히지 않았다
+  - 분석가·토론·GUARD·위험 토론 프롬프트 해시를 `test/core/prompts.test.ts`의 `P2_HASHES`에 고정했다. **이 역할 프롬프트를 일부러 바꾸면 그 표도 갱신한다**
+  - `조건 미충족` 문구는 시나리오 카드에만 붙는다(지금 진입안의 분할 표에는 없음). `NO_EQUITY` 안내는 카드나 분할 표가 있을 때만. 만료는 화면이 `validUntil`과 화면 시각으로 판단한다(데모는 녹화 시각이 지나 `만료됨`으로 보인다)
+  - `규칙에 의해 모델 제안이 조정됨`은 보유 없는 판정에서는 모델이 시나리오를 쓴 강등(DOWNGRADED)에만 붙는다
+  - LAN 마스킹: `maskJobView`가 최상위 `sizing`이 없어도 `entryPlan`이 있으면 가리고, 패널 카드는 가린 판정에서 다시 만든다(이전에는 `NO_TRADE` + 시나리오 수량이 샜다)
+  - 근거 검사: 시나리오 `evidenceRefs`가 없으면 `NO_SCENARIO_REF`, 없는 참조는 `UNRESOLVED_REF`(경고만). BLITZ·ACE·PM 수정안에 같은 시나리오가 있으면 경고가 중복될 수 있다
+  - 리포트 `reportSchemaVersion` 3 (store는 1~3을 읽는다)
+  - 데모: `entryScenarios`(`btc-wait`·`btc-split`·`btc-short-alt`)는 기본 데모의 ACE·PM(분할은 RISKY·SAFE·NEUTRAL 해석 주장도)만 바꾼 손으로 쓴 fixture다. 북은 보유 0건·총 자산 10,000 USDT. 기본 데모 두 개(알고리즘 PM 기각, 스캘핑 ACE 관망)는 시나리오가 없어 `재진입 조건이 제시되지 않음`이 보인다
+- 남은 불확실성 (P3 명세 9.1): 시나리오 남발 여부, `5×ATR`·`0.2×ATR`·손익비 1.5·겹침 50% 임계값은 스모크 2건만 본 값이다. 실전 분석이 쌓이면 `entryPlan.dropped` 사유 분포를 보고 조정한다. 분할 진입(`tranches`)은 스모크에서 모델이 쓰지 않아 실전 출력은 아직 확인하지 못했다
+- 미뤄진 항목: 데모 카드가 항상 `만료됨`으로 보이는 점(기본 데모의 `만료` 배지와 같은 원인), 기본 데모 fixture에 시나리오 추가
 
 ## UI 개선 (이슈 #35, 개발 Phase 없음)
 - 방 벽 소품(`sprites.js drawProp`, `model.js ROOM_PROPS`), 분석 전 말풍선 `분석 대기 중…`, 하단 티커 띠 `GET /api/ticker`(30초, 표시 전용, 데모는 숨김). 명세 P0 v0.11 7.4·P0-7-T10, 가이드 v1.7 4-2·4-3-1
@@ -103,6 +105,7 @@ P2(Phase 11~15) 구현은 끝났다. 남은 것은 사용자가 하거나 선택
 
 ## 실측 기록
 
+- 실측(sonnet, Phase 18 스모크, 시나리오 프롬프트 적용, 총 자산 미입력): BTC scalp 60.5초·호출 5·재시도 0·$0.240·ACE 관망 + 주 시나리오 1건(제외 0건, 근거 경고 0건), BTC algorithm 97.4초·호출 13·재시도 0·$0.478·PM 승인(관망) + 주 시나리오 1건(제외 0건, `LOW_REWARD_RISK` 1.35). 제안서 호출은 BLITZ 11.4초·1,576토큰, ACE 10.5~11.4초·1,587~1,749토큰, PM 7.6초·921토큰으로 상한 조정은 필요 없었다(P3-5-R4). 분할 진입은 두 번 모두 쓰지 않음
 - Phase 15: 시작 점검 0.4초(이 Mac), 모델 호출 없음
 - Phase 13: 모델 호출 없음(실측 없음, 스모크는 Phase 14로 미룸)
 - Phase 12: 모델 호출 없음(실측 없음)

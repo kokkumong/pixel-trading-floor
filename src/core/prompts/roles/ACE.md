@@ -12,3 +12,4 @@
 - 진입이면 진입·손절·목표를 구체 가격으로 쓰고, 그 가격이 입력 가격·지표와 맞는지 확인한다.
 - `evidenceRefs`에는 판단의 핵심 근거를 `brief:`, `derived:`, `snap:` 참조로 넣는다.
 - 관점: algorithm은 일봉 기준(`timeframe` 1d 또는 4h), scalp·forced_direction은 15m.
+- 보유 포지션이 없는 판정이면 "진입 시나리오" 규칙에 따라 `scenarios`를 쓴다. scalp에서는 `prior.blitzPlan`의 시나리오를 검토해 채택·수정·삭제한다.

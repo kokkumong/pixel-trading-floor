@@ -2,6 +2,7 @@
 import type { PositionContext } from '../position/context.ts';
 import type { FinalDecision, Sizing } from '../schema/decision.ts';
 import type { Action, Bias, ConfidenceBand, MarketType } from '../schema/types.ts';
+import { entryPlanView, type EntryPlanView } from './entryview.ts';
 
 /** action + bias 조합 표기 (P0 명세 3.2, P2 포지션 명세 2.2). 포지션 행동은 판정형으로 쓴다 (P2-6-R1) */
 export function actionBiasLabel(action: Action, bias: Bias, sizeFraction: number | null = null): string {
@@ -90,6 +91,8 @@ export interface PanelView {
   /** 판정에 쓴 보유 포지션 요약 (P2-6-R3). 수량·총 자산 없음 */
   position: string | null;
   disclaimer: string;
+  /** 진입 시나리오·분할 진입 영역 (P3-6-R1). 없으면 그리지 않는다 */
+  entryPlan: EntryPlanView | null;
 }
 
 const SIDE_LABEL = { LONG: '롱', SHORT: '숏' } as const;
@@ -120,7 +123,7 @@ function biasNote(pc: PositionContext | null | undefined): string {
 export function panelView(d: FinalDecision, now: Date = new Date(), pc: PositionContext | null = null): PanelView {
   const badges: string[] = [];
   const notes: string[] = [];
-  const base = { position: d.positionRef && pc?.position?.id === d.positionRef ? positionSummary(pc) : null, disclaimer: DISCLAIMER };
+  const base = { position: d.positionRef && pc?.position?.id === d.positionRef ? positionSummary(pc) : null, disclaimer: DISCLAIMER, entryPlan: entryPlanView(d) };
   if (d.forcedDirection) badges.push('강제 방향 시뮬레이션');
   if (d.ruleEngine.verdict !== 'PASS') badges.push('규칙 차단');
   if (d.validUntil && Date.parse(d.validUntil) < now.getTime()) badges.push('만료');
@@ -153,8 +156,10 @@ export function panelView(d: FinalDecision, now: Date = new Date(), pc: Position
   if (d.action === 'NO_TRADE') notes.push(biasNote(pc));
   const codes = d.reasonCodes;
   const alerts = Object.keys(POSITION_ALERTS).filter((c) => codes.includes(c)).map((c) => POSITION_ALERTS[c]!);
-  if (d.positionRef && d.ruleEngine.verdict === 'DOWNGRADED') {
-    notes.push(`규칙에 의해 모델 제안이 조정됨: ${d.ruleEngine.violations.map((v) => v.code).join(', ')}`); // P2-3-R2
+  // P2-3-R2. 보유 없는 판정은 모델이 시나리오를 썼을 때만 붙인다 (P3-2-R2: 강등된 판정의 시나리오는 재검사한 결과다)
+  const hadScenarios = d.entryPlan ? d.entryPlan.scenarios.length + d.entryPlan.dropped.length > 0 : false;
+  if ((d.positionRef || hadScenarios) && d.ruleEngine.verdict === 'DOWNGRADED') {
+    notes.push(`규칙에 의해 모델 제안이 조정됨: ${d.ruleEngine.violations.map((v) => v.code).join(', ')}`);
   }
   for (const c of Object.keys(POSITION_NOTES)) if (codes.includes(c)) notes.push(POSITION_NOTES[c]!);
   const plan = d.positionPlan;

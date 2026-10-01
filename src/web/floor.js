@@ -533,6 +533,57 @@ function renderFooter() {
   $('console-count').textContent = job ? `호출 ${job.usage.modelCallCount}회${job.usage.retryCallCount ? ` · 재시도 ${job.usage.retryCallCount}` : ''}` : '';
 }
 
+/**
+ * 분할 진입 표 (P3-6-R3). 수량이 없으면(총 자산 미입력) 가격·비중만 그린다
+ * @param {import('./model.js').TrancheTable} t
+ */
+function trancheTable(t) {
+  const hasQty = t.rows.some((r) => r.quantity !== null);
+  const table = el('table', 'scn-tranches');
+  const head = el('tr');
+  for (const h of ['분할', '가격', '비중', ...(hasQty ? ['수량', '누적'] : [])]) head.append(el('th', '', h));
+  table.append(head);
+  for (const r of t.rows) {
+    const tr = el('tr');
+    for (const c of [r.label, r.price, r.weight, ...(hasQty ? [r.quantity ?? '—', r.cumulative ?? '—'] : [])]) tr.append(el('td', '', c));
+    table.append(tr);
+  }
+  const box = el('div', 'scn-tranche-box');
+  box.append(table, ...t.summary.map((s) => el('div', 'scn-sum', s)), el('div', 'scn-note', t.note));
+  return box;
+}
+
+/**
+ * 진입 시나리오 카드 (P3-6-R1). 모델이 쓴 문장은 textContent로만 넣는다 (P3-5-R5). 진입 색(녹색·빨강)을 쓰지 않는다 (P3-6-R2)
+ * @param {ReturnType<typeof import('./model.js').scenarioModel>} e
+ */
+function renderScenarios(e) {
+  const box = $('panel-scenarios');
+  box.hidden = !e;
+  box.replaceChildren();
+  if (!e) return;
+  box.className = `scenarios${e.expired ? ' expired' : ''}`;
+  // 조건 미충족·만료 문구는 시나리오 카드마다 붙인다. 지금 진입안의 분할 표는 조건부 계획이 아니다
+  box.append(el('div', 'scn-heading', e.heading), ...e.warnings.map((w) => el('div', 'scn-warn', w)));
+  if (e.mainTranches) {
+    const main = el('div', 'scn-card');
+    main.append(el('div', 'scn-title', '지금 진입안의 분할 진입'), trancheTable(e.mainTranches));
+    box.append(main);
+  }
+  for (const c of e.cards) {
+    const card = el('div', 'scn-card');
+    const head = el('div', 'scn-head');
+    head.append(el('span', 'scn-title', `[${c.title}]`), el('span', 'scn-recheck', c.recheck));
+    const rows = el('dl', 'panel-rows');
+    rows.append(...c.fields.flatMap((f) => [el('dt', '', f.label), el('dd', '', f.value)]));
+    card.append(head, el('div', 'scn-status', e.status), el('div', 'scn-cond', c.condition), rows, ...c.warnings.map((w) => el('div', 'scn-warn', w)));
+    if (c.tranches) card.append(trancheTable(c.tranches));
+    card.append(el('div', 'scn-inv', `무효화 조건: ${c.invalidation.join(' / ')}`), el('p', 'panel-rationale', c.rationale));
+    box.append(card);
+  }
+  if (e.cards.length > 0 || e.mainTranches) box.append(el('div', 'scn-note', e.guide));
+}
+
 function renderPanel() {
   const p = panelModel(state.job, Date.now());
   const panel = $('panel');
@@ -554,6 +605,7 @@ function renderPanel() {
   if (p.risk) risk.append(el('div', '', `${p.risk.label}: ${p.risk.value}`), el('div', '', `가정: ${p.risk.assumptions.join(' · ')}`));
   $('panel-violations').replaceChildren(...p.violations.map((v) => el('div', '', v)));
   $('panel-rationale').textContent = p.rationale ?? '';
+  renderScenarios(p.entryPlan);
   const rep = /** @type {HTMLAnchorElement} */ ($('panel-report'));
   rep.hidden = !state.job?.reportUrl;
   if (state.job?.reportUrl) {

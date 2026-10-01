@@ -1,0 +1,586 @@
+{
+  "DIANA": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "바이낸스 현물 BTC 최근가는 84186.01 USDT입니다.",
+          "evidenceRefs": [
+            "snap:binance.spot.price#/last"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "observation",
+          "text": "무기한 선물 최근가는 84148.3, 지수가는 84204.737입니다. 현물과 선물 가격 차이는 작습니다.",
+          "evidenceRefs": [
+            "snap:binance.perp.price#/last",
+            "snap:binance.perp.price#/index"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "interpretation",
+          "text": "현물과 선물이 거의 같은 가격이라 가격 발견에 이상 징후는 보이지 않습니다. 다만 이것만으로 밸류에이션이나 유동성 수준은 판단할 수 없습니다.",
+          "evidenceRefs": [
+            "snap:binance.spot.price#/last",
+            "snap:binance.perp.price#/mark"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "assumption",
+          "text": "marketCap, volume24h, circulatingSupply, 52주 고저가 없어 52주 범위 내 위치와 회전율, 공급 위험은 평가하지 않았습니다.",
+          "evidenceRefs": []
+        }
+      ],
+      "counterScenario": "시가총액 대비 거래대금이 큰 폭으로 늘고 52주 저점 부근이라는 사실이 확인되면 저평가·유동성 양호 쪽으로 강세 해석이 가능합니다. 반대로 52주 고점 부근이고 거래대금이 마르면 약세 해석이 가능합니다.",
+      "changeTriggers": [
+        "52주 고저 데이터로 현재가가 범위 상단 80% 이상으로 확인될 때",
+        "52주 고저 데이터로 현재가가 범위 하단 20% 이하로 확인될 때",
+        "volume24h/marketCap 비율이 급변할 때",
+        "circulatingSupply에 큰 변동이 확인될 때"
+      ],
+      "dataLimitations": [
+        "marketCap 없음",
+        "volume24h 없음",
+        "circulatingSupply 없음",
+        "52주 고저 없음, derived 비어 있음"
+      ],
+      "bias": "NEUTRAL",
+      "summary": "시가총액·거래대금·공급량·52주 범위 데이터가 없어 기본적 분석 근거가 부족합니다. 가격 수준의 부담 여부는 판단할 수 없어 NEUTRAL입니다.",
+      "narrative": "입력에는 현물·선물 가격만 있고 기본 지표가 전혀 없습니다. 그래서 가격이 52주 범위의 어디쯤인지, 거래대금이 시가총액 대비 활발한지, 공급 측 위험이 있는지 확인할 수 없습니다. 현물과 선물 가격이 가깝다는 점만 확인됩니다. 근거가 얇아 방향성 판단은 보류하고 NEUTRAL로 둡니다."
+    }
+  ],
+  "VIBE": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "공포·탐욕 지수는 73으로 Greed 구간이다.",
+          "evidenceRefs": [
+            "snap:feargreed.alternative#/value",
+            "snap:feargreed.alternative#/classification"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "observation",
+          "text": "헤드라인에 금리·국채수익률 상승, 연준 우려, 이란 긴장이 반복된다. BTC는 $83.4k 보합이라고 한다.",
+          "evidenceRefs": [
+            "snap:news.google#/items/8",
+            "snap:news.google#/items/9",
+            "snap:news.google#/items/0"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "observation",
+          "text": "$500,000 목표 전망과 Coinbase의 CFTC 승인 같은 낙관 재료도 있다. 반면 Bitcoin Group 실적은 약세 시장을 언급한다.",
+          "evidenceRefs": [
+            "snap:news.google#/items/3",
+            "snap:news.google#/items/4",
+            "snap:news.google#/items/5"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "interpretation",
+          "text": "지수는 탐욕인데 헤드라인 톤은 매크로 경계 중심이라 방향이 어긋난다. 과열이라고 보기엔 약하지만 심리는 단독 진입 근거가 약하다.",
+          "evidenceRefs": [
+            "snap:feargreed.alternative#/value",
+            "snap:news.google#/items/6"
+          ]
+        }
+      ],
+      "counterScenario": "수익률 상승이 진정되고 ETF 유입과 규제 호재가 이어지면 탐욕이 더 커지며 상승이 이어질 수 있다. 반대로 수익률이 급등하면 탐욕 구간의 되돌림이 커질 수 있다.",
+      "changeTriggers": [
+        "공포·탐욕 지수가 80 이상으로 오르면 과열로 보고 역발상 약세로 기운다",
+        "지수가 50 아래로 내려가면 심리 악화로 본다",
+        "헤드라인이 매크로 경계에서 ETF 유입·규제 호재 중심으로 바뀌면 강세 쪽으로 기운다"
+      ],
+      "dataLimitations": [
+        "공포·탐욕 지수의 과거 추이가 없어 방향 변화를 알 수 없다",
+        "뉴스는 10건뿐이고 매체 편향이 있을 수 있다",
+        "소셜·파생 심리 데이터가 없다"
+      ],
+      "bias": "NEUTRAL",
+      "summary": "공포·탐욕 73(Greed)이지만 헤드라인은 수익률·연준 경계가 중심이라 방향이 엇갈립니다. 심리만으로는 중립입니다.",
+      "narrative": "지수는 탐욕이지만 극단적 과열은 아닙니다. 뉴스는 채권 수익률 급등, 금 급락, 이란 긴장 등 매크로 불안이 중심이고, BTC는 $83.4k 부근에서 보합입니다. 장기 목표가와 규제 호재가 낙관을 받치고 있으나 단기 촉매는 아닙니다. 지수와 헤드라인 톤이 어긋나므로 심리 측면에서는 중립으로 봅니다."
+    }
+  ],
+  "TARO": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "종가 83,500.01은 sma20 80,706.583, ema20 81,615.012, sma50 76,501.249보다 위에 있습니다. 이동평균이 정배열입니다.",
+          "evidenceRefs": [
+            "derived:lastClose",
+            "derived:sma20",
+            "derived:ema20",
+            "derived:sma50"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "observation",
+          "text": "RSI14는 60.886752로 중립보다 강하고 과열은 아닙니다. MACD hist는 72.383896으로 양수지만 매우 작아 모멘텀이 둔화됐습니다.",
+          "evidenceRefs": [
+            "derived:rsi14",
+            "derived:macd.hist",
+            "derived:macd.macd"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "observation",
+          "text": "9/21에 거래량 31,963과 함께 87,395.67까지 급등했습니다. 이후 84,000대에서 좁게 움직이고 9/28은 저점 82,563까지 내렸습니다.",
+          "evidenceRefs": [
+            "derived:recentHigh20",
+            "snap:binance.spot.price#/last"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "interpretation",
+          "text": "저항은 87,395 부근과 85,255입니다. 지지는 82,563~83,500, 그 아래 80,700(sma20)입니다. ATR14는 2,266.135라 손절 폭은 약 1.5ATR(약 3,400)이 적절합니다.",
+          "evidenceRefs": [
+            "derived:atr14",
+            "derived:recentHigh20",
+            "derived:sma20"
+          ]
+        }
+      ],
+      "counterScenario": "82,563을 종가로 이탈하면 급등분이 되돌려지며 sma20 80,700, 이후 75,000 저점까지 조정이 깊어질 수 있습니다. MACD hist가 음수로 전환하면 이 흐름이 더 강해집니다.",
+      "changeTriggers": [
+        "일봉 종가가 82,563 아래로 마감",
+        "MACD hist가 음수로 전환",
+        "87,395 돌파 후 종가 안착하면 강세 확대",
+        "RSI14가 50 아래로 하락"
+      ],
+      "dataLimitations": [
+        "일봉만 제공되어 단기 진입 타이밍 판단은 어렵습니다.",
+        "당일 봉은 미완성이라 근거가 약합니다.",
+        "거래량 추세 지표가 derived에 없습니다."
+      ],
+      "bias": "BULLISH",
+      "summary": "일봉 상승 추세는 유지 중이지만 87,395 고점 이후 횡보·조정 구간입니다. 83,500~82,500 지지가 유지되면 상방 우위입니다.",
+      "narrative": "스윙 관점에서는 상승 추세가 유지되고 있습니다. 다만 급등 후 4거래일 이상 84,000대에서 횡보하고 있고 MACD 히스토그램이 거의 0에 가까워 추세 가속은 약합니다. 현물가 84,186은 마지막 종가보다 약간 높고 당일 봉은 미완성입니다. 지지 위에서는 눌림 매수 우위이고, 지지 이탈 시에는 관망이나 축소가 낫습니다."
+    }
+  ],
+  "NOVA": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "채권금리 상승과 Fed 우려, 이란 긴장이 시장 부담으로 보도됨. BTC는 $83.4k 부근 횡보로 표기됨.",
+          "evidenceRefs": [
+            "snap:news.google#/items/8",
+            "snap:news.google#/items/9",
+            "snap:news.google#/items/0"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "observation",
+          "text": "금이 3.4% 급락했다는 기사가 있으며 금리 상승이 위험자산 전반에 압력이 될 수 있다는 논조임.",
+          "evidenceRefs": [
+            "snap:news.google#/items/6"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "observation",
+          "text": "Coinbase가 CFTC로부터 24/7 USDC 파생상품 청산 승인을 받았다는 제목이 있음. 인프라 측면에서 긍정적임.",
+          "evidenceRefs": [
+            "snap:news.google#/items/4"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "observation",
+          "text": "독일 Bitcoin Group 상반기 매출이 약세장 영향으로 감소했고, Liquid Network 페그아웃 중단 이슈도 있음.",
+          "evidenceRefs": [
+            "snap:news.google#/items/5",
+            "snap:news.google#/items/1"
+          ]
+        },
+        {
+          "claimId": "c5",
+          "kind": "interpretation",
+          "text": "거시 부담(금리, Fed, 지정학)이 규제·인프라 호재를 상쇄해 방향성은 불분명함. 장기 $500k 전망 기사는 가격 근거로 약함.",
+          "evidenceRefs": [
+            "snap:news.google#/items/3",
+            "snap:news.google#/items/0"
+          ]
+        }
+      ],
+      "counterScenario": "금리 상승세가 진정되고 Fed 우려가 완화되며 ETF 수급과 Coinbase 파생상품 호재가 부각되면 BTC가 반등할 수 있음.",
+      "changeTriggers": [
+        "미 국채금리 하락 반전 또는 Fed 완화 시사",
+        "BTC가 $83.4k 아래로 밀리며 금리 급등 지속",
+        "현물 ETF 대규모 순유입/유출 기사 확인",
+        "이란 긴장 격화 또는 완화 소식"
+      ],
+      "dataLimitations": [
+        "모든 기사 요약이 null이라 제목만으로 판단함",
+        "가격·지표 데이터(sources, derived)가 비어 있음",
+        "일부 제목이 잘렸고 출처 신뢰도가 다양함",
+        "모든 기사가 당일 게시라 시차 비교가 어려움"
+      ],
+      "bias": "NEUTRAL",
+      "summary": "금리 상승·Fed·이란 긴장이라는 거시 부담과 Coinbase CFTC 승인 호재가 엇갈려 뉴스 관점은 중립임.",
+      "narrative": "최근 헤드라인은 대부분 당일 게시로, 핵심 주제는 채권금리 급등과 Fed 기조, 지정학 리스크임. 금 급락까지 겹쳐 위험자산 전반에 부담이 있으나 BTC 가격은 $83.4k에서 횡보 중이라고 보도됨. 반면 Coinbase의 CFTC 승인은 구조적 호재지만 단기 가격 영향은 제한적일 수 있음. 요약이 없어 세부 판단에는 한계가 있으므로 금리 방향을 우선 확인해야 함."
+    }
+  ],
+  "RISKY": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "ATR14는 2266.135, 마지막 종가는 83500.01입니다. 일간 변동 폭이 종가의 약 2.7%입니다.",
+          "evidenceRefs": [
+            "derived:atr14",
+            "derived:lastClose"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "observation",
+          "text": "최근 20봉 범위는 74967.97~87395.67이고, 실현변동성(20)은 0.0229입니다. 저항까지 약 3,900, 범위 하단까지는 훨씬 멀어 상방 여지가 있습니다.",
+          "evidenceRefs": [
+            "derived:recentHigh20",
+            "derived:recentLow20",
+            "derived:realizedVol"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "interpretation",
+          "text": "ACE의 분할 진입은 눌림 구간에 나눠 사서 평균 진입가를 낮추는 방식이라, 시장가 한 번 진입보다 손익비가 낫습니다. 다만 구간 하단까지 내려오지 않으면 일부만 체결되어 상승 구간의 비중이 작아집니다.",
+          "evidenceRefs": [
+            "derived:atr14",
+            "derived:recentHigh20"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "interpretation",
+          "text": "현물이라 레버리지와 청산 위험이 없어 넓은 손절을 감당하기 쉽습니다. 다만 MACD hist가 0에 가깝고 재돌파에 실패해 시장가 추격은 정당화되지 않습니다.",
+          "evidenceRefs": [
+            "derived:macd.hist"
+          ]
+        }
+      ],
+      "counterScenario": "눌림 대기 중 82,563까지 내려오지 않고 87,395를 바로 돌파해 상승하면 기회를 놓칩니다. 반대로 진입 후 모멘텀이 꺾여 넓은 손절이 실제로 발동하면 손실이 큽니다.",
+      "changeTriggers": [
+        "82,563~83,500 구간에서 지지 반등 확인 시 분할 진입 검토",
+        "일봉 종가가 87,395 위에 안착하면 돌파 추종 진입",
+        "MACD hist가 음수로 전환하면 관망 유지",
+        "일봉 종가가 82,563 아래로 마감하면 진입 보류"
+      ],
+      "dataLimitations": [
+        "sources가 비어 있어 현재가와 지표 원자료를 직접 확인할 수 없습니다",
+        "ACE가 인용한 현재가 84,186은 이번 입력으로 검증되지 않습니다",
+        "일봉만 있고 거래량·파생 데이터가 없습니다",
+        "derived에 RSI, MACD 값이 없어 ACE 인용에 의존합니다"
+      ],
+      "bias": "BULLISH",
+      "summary": "분할 진입에 동의합니다. 변동성 대비 상방 여지가 있고, 눌림 구간 분할로 손절 폭 부담을 줄였습니다.",
+      "narrative": "ACE의 계획은 추세 상승을 따르되 추격을 피하는 구조입니다. ATR 기준 하루 약 2,300 움직이는 종목이라 저항까지의 거리는 며칠 안에 닿을 수 있습니다. 1차 비중을 가장 크게 둔 점은 미체결 위험을 줄입니다. 목표는 20봉 고점 부근에서 일부 청산하고 나머지는 추세를 따라가는 편이 합리적입니다."
+    }
+  ],
+  "SAFE": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "ATR14는 2266.135, 마지막 종가는 83500.01입니다. 1.5ATR 손절은 약 3,400입니다.",
+          "evidenceRefs": [
+            "derived:atr14",
+            "derived:lastClose"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "observation",
+          "text": "20봉 고점은 87395.67, 저점은 74967.97입니다. 저점까지는 약 8,500 여유가 없어 손절이 뚫리면 손실이 커질 수 있습니다.",
+          "evidenceRefs": [
+            "derived:recentHigh20",
+            "derived:recentLow20",
+            "derived:lastClose"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "interpretation",
+          "text": "분할 진입의 평균 진입가 기준으로 손절 폭은 약 2,400, 저항까지는 약 3,900이라 손익비는 1.6 안팎입니다. 다만 세 번 모두 체결된 뒤 손절까지 가면 손실은 한도 전체입니다. 1차 체결 뒤 무효화 조건에 해당하면 남은 분할은 취소해야 합니다.",
+          "evidenceRefs": [
+            "derived:recentHigh20",
+            "derived:atr14"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "interpretation",
+          "text": "RISKY c4의 '현물이라 넓은 손절을 감당하기 쉽다'는 주장에 반대합니다. 청산이 없어도 손실 금액은 손절 폭에 비례하고, 갭이나 급락에는 손절 체결가가 밀릴 수 있습니다.",
+          "evidenceRefs": [
+            "brief:RISKY#c4",
+            "derived:realizedVol"
+          ]
+        },
+        {
+          "claimId": "c5",
+          "kind": "observation",
+          "text": "sources가 비어 있어 ACE가 인용한 현재가를 검증할 수 없습니다.",
+          "evidenceRefs": [
+            "derived:lastClose"
+          ]
+        }
+      ],
+      "counterScenario": "눌림 없이 87,395를 종가로 돌파해 추세가 이어지면 관망하는 사이 상승을 놓칩니다. 그 경우 비용은 기회 손실에 그치고 실제 손실은 아닙니다.",
+      "changeTriggers": [
+        "일봉 종가가 87,395 위에 안착하면 소규모 비중으로 재검토",
+        "82,563~83,500 눌림 후 반등 종가가 나오면 절반 비중 이하로 검토",
+        "일봉 종가가 82,563 아래면 진입 보류 유지",
+        "손절은 진입가 기준 1ATR(약 2,270) 이내로 좁힐 수 있을 때만 진입"
+      ],
+      "dataLimitations": [
+        "sources가 비어 현재가를 검증할 수 없습니다",
+        "RSI와 MACD 값은 derived에 없어 ACE 인용에 의존합니다",
+        "일봉만 있고 거래량·파생 데이터가 없습니다",
+        "갭이나 유동성 데이터가 없어 손절 체결 슬리피지를 추정할 수 없습니다"
+      ],
+      "bias": "NEUTRAL",
+      "summary": "조건부로 동의합니다. 수량이 평균 진입가 기준 손실 한도 안에서 계산되고, 지지 이탈 시 남은 분할을 취소한다는 전제가 지켜져야 합니다.",
+      "narrative": "분할 진입은 불리한 방향으로 더 사는 구조라 물타기로 변질되기 쉽습니다. 이번 계획은 전부 체결되어도 손절 손실이 한도를 넘지 않도록 수량을 정하고, 일봉 종가가 82,563 아래면 남은 분할을 취소하도록 했습니다. 이 두 조건이 지켜지는 한 꼬리위험은 관리 가능합니다. 갭 하락 시 손절 체결가가 밀릴 수 있다는 점은 남습니다."
+    }
+  ],
+  "NEUTRAL": [
+    {
+      "claims": [
+        {
+          "claimId": "c1",
+          "kind": "observation",
+          "text": "ATR14는 2266.135, 마지막 종가는 83500.01입니다. 20봉 고점은 87395.67이라 저항까지 약 3,900입니다.",
+          "evidenceRefs": [
+            "derived:atr14",
+            "derived:lastClose",
+            "derived:recentHigh20"
+          ]
+        },
+        {
+          "claimId": "c2",
+          "kind": "interpretation",
+          "text": "SAFE c3의 지적대로 평균 진입가 기준 손익비는 1.6 안팎이며, 시장가 한 번 진입보다 조건이 낫습니다. 전부 체결 시 손실이 한도 전체라는 점은 수량 계산으로 관리됩니다.",
+          "evidenceRefs": [
+            "brief:SAFE#c3",
+            "derived:atr14",
+            "derived:recentHigh20"
+          ]
+        },
+        {
+          "claimId": "c3",
+          "kind": "interpretation",
+          "text": "RISKY c3의 미체결 지적과 SAFE c4의 손절 폭 비례 손실 반론은 둘 다 타당합니다. RISKY c4의 넓은 손절 논리보다, 분할 가격과 취소 조건을 미리 정한 이번 계획이 균형에 가깝습니다.",
+          "evidenceRefs": [
+            "brief:RISKY#c3",
+            "brief:SAFE#c4",
+            "brief:RISKY#c4"
+          ]
+        },
+        {
+          "claimId": "c4",
+          "kind": "observation",
+          "text": "실현변동성(20)은 0.022910966입니다. 20봉 저점은 74967.97로 하방 완충은 멀지만 손실 폭이 커질 수 있습니다.",
+          "evidenceRefs": [
+            "derived:realizedVol",
+            "derived:recentLow20"
+          ]
+        }
+      ],
+      "counterScenario": "눌림 없이 87,395를 종가로 돌파해 상승이 이어지면 관망 탓에 기회를 놓칩니다. 비용은 기회 손실에 한정됩니다.",
+      "changeTriggers": [
+        "82,563~83,500 눌림 후 반등 종가 시 절반 비중 이하, 손절 1ATR 내외로 조건부 승인",
+        "일봉 종가가 87,395 위에 안착하면 소규모 돌파 진입 재검토",
+        "일봉 종가가 82,563 아래면 진입 보류 유지",
+        "MACD hist가 음수로 전환하면 기각 유지"
+      ],
+      "dataLimitations": [
+        "sources가 비어 현재가 84,186을 검증할 수 없습니다",
+        "RSI·MACD 값이 derived에 없어 ACE 인용에 의존합니다",
+        "일봉만 있고 거래량·파생 데이터가 없습니다"
+      ],
+      "bias": "NEUTRAL",
+      "summary": "ACE의 분할 진입을 지지합니다. 손익비가 개선됐고 무효화 조건이 구체적입니다. 남은 분할 취소 조건을 지키는 것이 전제입니다.",
+      "narrative": "RISKY는 상승 여지를, SAFE는 전부 체결 뒤의 손실을 짚었습니다. 두 의견 모두 분할 가격·비중과 취소 조건이 미리 정해져 있으면 수용할 수 있습니다. 현재가 검증이 어렵다는 데이터 한계는 PM이 감안해야 합니다."
+    }
+  ],
+  "BULL": [
+    {
+      "steelman": null,
+      "evidenceRefs": [
+        "brief:TARO#c1",
+        "brief:TARO#c2",
+        "brief:TARO#c3",
+        "brief:TARO#c4",
+        "brief:DIANA#c3",
+        "brief:NOVA#c3",
+        "brief:VIBE#c1"
+      ],
+      "openIssues": [
+        "MACD hist가 양수인데 82,563 지지가 유지되는 한 조정이 추세 훼손이라고 볼 근거는 무엇인가?",
+        "거시 부담이 이미 83.4k 횡보에 반영됐다면 추가 하락 근거는 무엇인가?",
+        "Coinbase CFTC 승인 같은 인프라 호재를 BEAR는 어떻게 평가하는가?"
+      ],
+      "summary": "이동평균 정배열과 82,563 지지 위 횡보, 과열 아닌 RSI가 매수 논거다. 거시 부담은 있으나 가격에 이미 반영된 듯하다.",
+      "narrative": "종가는 sma20, ema20, sma50 위에 있고 정배열이라 추세는 상승 쪽이다. RSI14는 60대로 강하지만 과열이 아니어서 상승 여력이 남아 있다. 9/21 대량 거래를 동반한 87,395 급등 뒤 84,000대에서 좁게 눌리는 것은 분배보다 숨 고르기로 볼 수 있다. 현물과 선물 가격이 거의 같아 가격 발견 이상도 없고, Coinbase의 CFTC 승인은 인프라 호재다. 인정할 약점은 MACD hist가 매우 작고 거시 헤드라인이 부정적이라는 점이며, 그래서 82,563 종가 이탈 시 논거를 철회하는 조건부 강세다."
+    },
+    {
+      "steelman": "BEAR의 가장 강한 근거는 정배열이 후행 확인일 뿐이라는 점이다. MACD hist가 거의 0이라 모멘텀이 둔화됐고, 87,395 재돌파에 실패했다. 심리는 Greed인데 헤드라인은 금리·Fed·이란 등 매크로 경계라 괴리가 해소되면 하방이 커질 수 있다. 가격 반영 주장도 검증되지 않았다.",
+      "evidenceRefs": [
+        "brief:TARO#c1",
+        "brief:TARO#c2",
+        "brief:TARO#c3",
+        "brief:TARO#c4",
+        "brief:VIBE#c4",
+        "brief:NOVA#c5",
+        "brief:DIANA#c3"
+      ],
+      "openIssues": [
+        "82,563 종가 이탈이 없는 상태에서 하락 전환을 전제하는 근거는 무엇인가?",
+        "Greed 73은 VIBE 기준 과열 경계(80) 아래인데, 이를 약세 신호로 보는 근거는 무엇인가?",
+        "BEAR의 손익비 우려는 82,563 부근 진입이나 조정 대기로 해결되지 않는가?"
+      ],
+      "summary": "BEAR의 모멘텀 둔화 지적은 타당하지만, 82,563 지지와 정배열이 유지되는 한 추세는 훼손되지 않았다. 진입 방식만 조정하면 된다.",
+      "narrative": "MACD hist가 작다는 점과 87,395 미돌파는 인정한다. 다만 hist는 여전히 양수이고 RSI14는 60대로 과열이 아니어서 모멘텀 소진이 아니라 둔화 단계로 본다. 지지 여유가 좁다는 지적은 손익비 문제이지 방향 문제가 아니므로, 82,563~83,500 부근 눌림에서 진입하거나 87,395 종가 안착을 확인하는 방식으로 해결된다. 심리 괴리도 VIBE가 80 이상을 과열 기준으로 삼았으므로 73은 아직 경계 수준이 아니다. 새 근거는 없으며, 82,563 종가 이탈이나 MACD hist 음전환 시 강세 논거를 철회한다."
+    }
+  ],
+  "BEAR": [
+    {
+      "steelman": "BULL의 가장 강한 근거는 종가가 sma20·ema20·sma50 위에 있는 정배열이고, RSI14가 60대로 과열이 아니며, 9/21 급등 뒤 82,563 지지 위에서 눌리는 흐름이 분배보다 숨 고르기라는 점이다. 현물·선물 가격 차이도 작아 가격 발견 이상이 없다.",
+      "evidenceRefs": [
+        "brief:TARO#c2",
+        "brief:TARO#c3",
+        "brief:VIBE#c1",
+        "brief:VIBE#c4",
+        "brief:NOVA#c1",
+        "brief:NOVA#c4",
+        "brief:NOVA#c5",
+        "brief:DIANA#c4"
+      ],
+      "openIssues": [
+        "급등 이후 87,395을 재돌파하지 못하고 MACD hist가 거의 0인데, 이를 상승 지속이 아닌 모멘텀 소진으로 볼 근거는 무엇인가?",
+        "공포·탐욕 73(Greed)인데 헤드라인은 금리·Fed·이란 등 매크로 경계 중심이다. 이 괴리가 해소될 때 하방이 커질 위험은 어떻게 보는가?",
+        "82,563과 현재가 사이 여유가 좁은데 ATR14 대비 손절 폭이 큰 점은 손익비상 불리하지 않은가?"
+      ],
+      "summary": "정배열은 후행 지표이고 모멘텀은 둔화, 심리는 탐욕인데 매크로는 부정적이라 상방 여력보다 되돌림 위험이 더 크다.",
+      "narrative": "정배열은 이미 진행된 상승을 보여 주는 후행 확인이며, 신규 진입 근거로는 약하다. TARO 스스로 MACD hist가 매우 작아 모멘텀이 둔화됐다고 했고, 9/21 대량 거래 급등 뒤 87,395을 넘지 못한 채 84,000대에서 좁게 움직였다. 9/28에는 저점 82,563까지 내려 지지 확인 여유가 크지 않다. VIBE는 심리가 Greed인데 헤드라인은 금리·Fed·이란·금 급락 등 매크로 경계라 어긋난다고 봤고, 가격이 이미 반영했다는 BULL의 가정에는 검증 근거가 없다. Coinbase CFTC 승인은 인프라 호재지만 즉각적인 수급 근거는 아니며, Bitcoin Group 실적은 약세장을 언급한다. DIANA도 밸류에이션·유동성 데이터가 없어 가격 발견 정상 외에는 강세를 뒷받침하지 못한다고 했다."
+    },
+    {
+      "steelman": "BULL의 가장 강한 근거는 82,563 종가 이탈이 없고 정배열이 유지되며 MACD hist가 아직 양수라는 점이다. 모멘텀은 소진이 아니라 둔화 단계이고, Greed 73은 VIBE의 과열 기준 80 아래다. 손익비는 눌림 진입으로 해결된다는 주장이다.",
+      "evidenceRefs": [
+        "brief:TARO#c2",
+        "brief:TARO#c3",
+        "brief:TARO#c4",
+        "brief:VIBE#c4",
+        "brief:NOVA#c5",
+        "brief:NOVA#c4",
+        "brief:DIANA#c4"
+      ],
+      "openIssues": [
+        "지지 이탈 확인 전까지 기다리자는 것은 조건부 논리다. 그럼 현재가 부근 신규 매수의 우위는 무엇인가?",
+        "VIBE는 심리와 헤드라인이 어긋난다고 했다. 이 괴리가 매크로 악화 쪽으로 해소될 때 하방 위험은 어떻게 보는가?",
+        "MACD hist가 매우 작은 상태에서 87,395 재돌파 실패가 이어지면 이를 추세 지속으로 볼 근거는 무엇인가?"
+      ],
+      "summary": "BULL도 모멘텀 둔화와 손익비 약점을 인정했다. 지지 이탈 확인 후 철회한다는 조건부 강세는 현재 매수 우위를 입증하지 못한다.",
+      "narrative": "BULL은 모멘텀 둔화와 87,395 미돌파를 인정했고, 그 결론은 지금 사자가 아니라 눌림을 기다리자는 것이다. 이는 현재가 부근 매수 우위가 약하다는 뜻이다. 82,563 종가 이탈 전에는 추세가 유지된다는 말은 훼손 시점이 늦다는 의미이기도 하다. 그때는 이미 sma20 80,700까지 여유가 좁다. NOVA는 거시 부담이 호재를 상쇄해 방향이 불분명하다고 봤고, DIANA는 밸류에이션·유동성 근거가 없다고 했다. Greed 73이 80 미만이라도 헤드라인 톤과 어긋나는 점은 남는다. 그래서 상방 근거보다 되돌림 위험이 더 크다."
+    }
+  ],
+  "ACE": [
+    {
+      "instrumentId": "CRYPTO:BTC",
+      "snapshotId": "{{snapshotId}}",
+      "action": "ENTER_LONG",
+      "bias": "BULLISH",
+      "unforcedAction": null,
+      "marketType": "spot",
+      "priceBasis": {
+        "sourceRef": "binance.spot.price",
+        "currency": "USDT"
+      },
+      "timeframe": "1d",
+      "expectedHoldingPeriod": "며칠~2주",
+      "validForMinutes": 1440,
+      "entry": {
+        "type": "zone",
+        "min": 82600,
+        "max": 84100
+      },
+      "stopLoss": 81000,
+      "targets": [
+        87300,
+        90000
+      ],
+      "leverage": null,
+      "confidence": 58,
+      "rationale": "추세는 상승 쪽입니다. 종가가 sma20·ema20·sma50 위에 있고 RSI14는 60.9입니다. 현재가 84,186에서 시장가로 한 번에 사면 손익비가 불리하므로, 지지 82,563 위 82,600~84,100 구간에 지정가 세 번으로 나눠 진입합니다. 가중 평균 진입가는 약 83,410이고 손절 81,000까지 약 2,400, 첫 목표 87,300까지 약 3,900입니다. 1차만 체결되고 지지가 깨지면 남은 분할은 진입하지 않습니다.",
+      "evidenceRefs": [
+        "brief:TARO#c1",
+        "brief:TARO#c2",
+        "brief:TARO#c4",
+        "brief:VIBE#c4",
+        "brief:NOVA#c5",
+        "derived:atr14",
+        "derived:macd.hist",
+        "snap:binance.spot.price#/last"
+      ],
+      "invalidationConditions": [
+        "일봉 종가가 82,563 아래로 마감하면 남은 분할 진입을 취소한다",
+        "MACD hist가 음수로 전환하면 모멘텀 약화로 보고 재검토한다",
+        "일봉 종가가 81,000 아래면 판단을 폐기한다"
+      ],
+      "warnings": [
+        "일봉만 제공되어 진입 타이밍 판단이 제한됩니다",
+        "가격이 구간 하단까지 내려오지 않으면 일부만 체결됩니다"
+      ],
+      "positionRef": null,
+      "sizeFraction": null,
+      "scenarios": [],
+      "tranches": [
+        {
+          "price": 84100,
+          "weight": 0.4
+        },
+        {
+          "price": 83300,
+          "weight": 0.3
+        },
+        {
+          "price": 82600,
+          "weight": 0.3
+        }
+      ]
+    }
+  ],
+  "PM": [
+    {
+      "pmDecision": "APPROVE",
+      "modifiedFields": [],
+      "reasonCodes": [
+        "RISK_ACCEPTABLE",
+        "SPLIT_ENTRY_OK"
+      ],
+      "revisedProposal": null,
+      "summary": "ACE의 3분할 진입 제안을 승인합니다. 평균 진입가 기준 손익비가 개선됐고 남은 분할 취소 조건이 명확합니다.",
+      "narrative": "리스크 위원회 세 명 모두 조건부로 동의했습니다. 수량은 전부 체결된 뒤 손절까지 갔을 때의 손실이 한도 안에 들도록 코드가 계산합니다. 일봉 종가가 82,563 아래로 마감하면 남은 분할은 진입하지 않습니다. 주문은 사람이 직접 실행합니다."
+    }
+  ]
+}

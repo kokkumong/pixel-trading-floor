@@ -102,7 +102,7 @@ async function flatWithSizing() {
 
 test('P2-2-R4 리포트 v2는 positionContext 전체를 담고 Markdown에 포지션 요약·고지를 쓴다 (총 자산은 Markdown에 없음)', async () => {
   const { report } = await flatWithSizing();
-  assert.equal(report.reportSchemaVersion, 2);
+  assert.equal(report.reportSchemaVersion, 3);
   assert.equal(report.positionContext?.account.equity, SECRET.equity);
   const md = renderMarkdown(report);
   assert.ok(md.includes(`> **고지** — ${DISCLAIMER}`));

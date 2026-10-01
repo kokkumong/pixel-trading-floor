@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "positions/1",
+  "updatedAt": "2026-09-29T06:00:00Z",
+  "account": {
+    "equity": {
+      "KRW": null,
+      "USD": null,
+      "USDT": 10000
+    },
+    "riskPerTradePercent": 1
+  },
+  "positions": []
+}

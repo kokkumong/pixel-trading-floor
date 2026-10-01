@@ -96,3 +96,21 @@ test('숫자 추출: 천 단위 쉼표, 소수, %·만·억, 식별자 속 숫�
   const ns = extractNumbers('rsi14 대신 RSI 72, 가격 1,341,000원(134.1만), 펀딩 -0.01%, 시총 3.2억, ma50');
   assert.deepEqual(ns.map((n) => n.text), ['72', '1,341,000', '134.1만', '0.01%', '3.2억']);
 });
+
+test('P3-1-R7 시나리오의 evidenceRefs도 검사한다: 없는 참조는 근거 확인 불가, 참조가 없으면 시나리오 근거 없음 (경고만)', () => {
+  const scn = (evidenceRefs: string[]) => ({
+    role: 'PRIMARY' as const, side: 'LONG' as const,
+    trigger: { kind: 'PULLBACK' as const, level: 98.5, timeframe: '1h' as const, confirmation: '1시간봉 종가 확인' },
+    entry: { type: 'zone' as const, min: 98, max: 99 }, stopLoss: 97.5, targets: [102], leverage: 10, tranches: null,
+    invalidationConditions: ['97.5 이탈'], recheckAfterMinutes: 60, evidenceRefs, rationale: '지지 재확인',
+  });
+  const ok = auditEvidence(input({ proposals: [proposal({ scenarios: [scn(['derived:rsi14'])] })] }), evidence);
+  assert.deepEqual(ok, []);
+  const out = auditEvidence(input({ proposals: [proposal({ scenarios: [scn(['derived:nope']), scn([])] })] }), evidence);
+  assert.deepEqual(kinds(out), ['UNRESOLVED_REF:ACE:-:derived:nope', 'NO_SCENARIO_REF:ACE:-:']);
+  assert.match(out[0]!.detail, /^시나리오 1: /);
+  assert.match(out[1]!.detail, /^시나리오 2: /);
+  // proposal/3 이전 기록(scenarios 없음)도 읽힌다
+  const { scenarios: _s, ...old } = proposal();
+  assert.deepEqual(auditEvidence(input({ proposals: [old as ReturnType<typeof proposal>] }), evidence), []);
+});

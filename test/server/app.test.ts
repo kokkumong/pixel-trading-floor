@@ -12,7 +12,7 @@ import { BoardService } from '../../src/server/board.ts';
 import { TickerService } from '../../src/server/ticker.ts';
 import { LAN_TOKEN_TTL_MS, LanAuth, lanIPv4Addresses } from '../../src/server/security.ts';
 import { replayNet } from '../data-helpers.ts';
-import { autoDriver, sampleOutput } from '../job-helpers.ts';
+import { autoDriver, sampleOutput, sampleProposal, sampleScenario } from '../job-helpers.ts';
 import { manager } from './server-helpers.ts';
 import { readZip } from './zip-reader.ts';
 
@@ -108,7 +108,7 @@ function readSse(port: number, host: string, path: string, headers: Record<strin
   });
 }
 
-async function lan(over: Partial<AppOptions> = {}, clock = { t: Date.now() }) {
+async function lan(over: Parameters<typeof start>[0] = {}, clock = { t: Date.now() }) {
   const auth = new LanAuth({ now: () => clock.t });
   const h = await start({ mode: 'lan', auth, now: () => clock.t, ...over });
   // LAN Host로 접속한 다른 기기 흉내
@@ -843,6 +843,86 @@ test('P2-5-T3 all.zip은 가린 JSON·Markdown을 담고, project.zip은 .floor/
     const z = await h.req('/project.zip', { body: `confirm=${files.json.listHash}`, type: 'application/x-www-form-urlencoded' });
     const names = readZip(z.body).map((e) => e.name);
     assert.deepEqual(names, ['pixel-trading-floor/package.json']);
+  } finally {
+    await h.app.close();
+  }
+});
+
+// ── P3-6 시나리오 마스킹 (Phase 18) ──
+
+/** 관망 + 주 시나리오 1건: 최상위 수량 제안은 없고 시나리오에만 수량이 있다 */
+const scenarioDriver = () => autoDriver({
+  ACE: (input) => ({
+    output: sampleProposal(input, {
+      action: 'NO_TRADE', bias: 'BULLISH', entry: { type: 'market', min: null, max: null }, stopLoss: null, targets: [], leverage: null,
+      scenarios: [sampleScenario(input)],
+    }),
+  }),
+});
+
+test('P3-6-T2 LAN 응답(작업·SSE·리포트)은 시나리오 수량·손실 한도를 [masked]로 가리고 가격·손익비는 남긴다', async () => {
+  const l = await lan({ managerOpts: { driver: scenarioDriver } });
+  try {
+    assert.equal((await l.req('/api/positions', { method: 'PUT', body: spotBook })).status, 200);
+    const r = await l.req('/api/analyze', { body: analyzeBody({ mode: 'scalp' }) });
+    await l.m.idle();
+    const id = r.json.jobId;
+    const local = (await l.req(`/api/jobs/${id}`)).json;
+    assert.deepEqual([local.finalDecision.action, local.finalDecision.sizing], ['NO_TRADE', null]);
+    const scn = local.finalDecision.entryPlan.scenarios[0];
+    const q = scn.sizing.suggestedQuantity;
+    assert.equal(typeof q, 'number');
+    assert.ok(local.panel.entryPlan.cards[0].fields.some((f: { label: string; value: string }) => f.label === '수량' && f.value.startsWith(`${q} (`)));
+
+    const cookie = await l.login();
+    const secrets = [String(EQUITY), '987.65', `"${q} (`, `"suggestedQuantity":${q}`];
+    const clean = (label: string, text: string) => {
+      for (const s of secrets) assert.ok(!text.includes(s), `${label}: ${s}`);
+      assert.ok(text.includes('[masked]'), label);
+    };
+    const remote = await l.remote(`/api/jobs/${id}`, { cookie });
+    clean('job', remote.text);
+    assert.equal(remote.json.finalDecision.entryPlan.scenarios[0].sizing.suggestedQuantity, '[masked]');
+    assert.equal(remote.json.finalDecision.entryPlan.scenarios[0].rewardRisk, scn.rewardRisk);
+    const card = remote.json.panel.entryPlan.cards[0];
+    assert.ok(card.fields.some((f: { label: string; value: string }) => f.label === '수량' && f.value.startsWith('[masked] (')));
+    assert.deepEqual(card.fields[0], local.panel.entryPlan.cards[0].fields[0]); // 진입 구간은 그대로
+    const sse = await readSse(l.port, l.lanHost, `/api/jobs/${id}/events`, { Cookie: cookie, 'x-test-ip': LAN_IP });
+    clean('sse', JSON.stringify(sse.events));
+    for (const ext of ['.json', '.md', '']) {
+      const text = (await l.remote(`/reports/${id}${ext}`, { cookie })).text;
+      for (const s of [String(EQUITY), '987.65', `수량: ${q} `, `"suggestedQuantity": ${q}`]) assert.ok(!text.includes(s), `report${ext}: ${s}`);
+      assert.ok(text.includes('[masked]'), `report${ext}`);
+    }
+    assert.ok((await l.remote(`/reports/${id}.md`, { cookie })).text.includes('- 수량: [masked] ('));
+    assert.ok((await l.req(`/reports/${id}.md`)).text.includes(`- 수량: ${q} (`)); // 서버 PC는 원본
+  } finally {
+    await l.app.close();
+  }
+});
+
+test('P3-6-T2 all.zip은 시나리오 수량을 가린 JSON·Markdown을 담고, project.zip은 작업·리포트·포지션 파일을 담지 않는다', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'floor-proj-'));
+  for (const [rel, text] of [['package.json', '{}'], ['.floor/positions.json', '{}'], ['reports/x.json', '{}'], ['jobs/x/job.json', '{}']] as const) {
+    mkdirSync(join(projectRoot, rel, '..'), { recursive: true });
+    writeFileSync(join(projectRoot, rel), text);
+  }
+  const h = await start({ projectRoot, enableProjectZip: true, managerOpts: { driver: scenarioDriver } });
+  try {
+    await h.req('/api/positions', { method: 'PUT', body: spotBook });
+    const r = await h.req('/api/analyze', { body: analyzeBody({ mode: 'scalp' }) });
+    await h.m.idle();
+    const q = (await h.req(`/api/jobs/${r.json.jobId}`)).json.finalDecision.entryPlan.scenarios[0].sizing.suggestedQuantity;
+    const entries = readZip((await h.req('/reports/all.zip', { method: 'POST' })).body);
+    assert.deepEqual(entries.map((e) => e.name.split('.').at(-1)).sort(), ['json', 'md']);
+    for (const e of entries) {
+      const text = e.data.toString('utf8');
+      for (const s of [String(EQUITY), '987.65', `수량: ${q} `, `"suggestedQuantity": ${q}`]) assert.ok(!text.includes(s), `${e.name}: ${s}`);
+      assert.ok(text.includes('[masked]') && text.includes(e.name.endsWith('.md') ? '## 진입 시나리오' : '"entryPlan"'), e.name);
+    }
+    const files = await h.req('/api/project-zip/files');
+    const z = await h.req('/project.zip', { body: `confirm=${files.json.listHash}`, type: 'application/x-www-form-urlencoded' });
+    assert.deepEqual(readZip(z.body).map((e) => e.name), ['pixel-trading-floor/package.json']);
   } finally {
     await h.app.close();
   }

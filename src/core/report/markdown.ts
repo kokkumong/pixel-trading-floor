@@ -5,6 +5,7 @@ import type { Briefing } from '../schema/agents.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
 import { actionBiasLabel, BIAS_NOTE, CONFIDENCE_BAND_LABEL, CONFIDENCE_NOTE, DISCLAIMER, NO_POSITION_BIAS_NOTE, panelView } from '../rules/display.ts';
 import type { Report } from './report.ts';
+import type { EntryPlanView, TrancheTable } from '../rules/entryview.ts';
 
 const MODE_LABEL = { algorithm: '알고리즘', scalp: '스캘핑 20x', forced_direction: '강제 방향 시뮬레이션' } as const;
 
@@ -41,6 +42,33 @@ function proposalLines(p: TradeProposal): string[] {
   if (p.warnings.length) lines.push(`- 경고: ${list(p.warnings)}`);
   lines.push('', `> ${mdText(p.rationale)}`);
   return lines;
+}
+
+function trancheLines(t: TrancheTable): string[] {
+  const out = ['', '| 분할 | 가격 | 비중 | 수량 | 누적 수량 |', '|---|---|---|---|---|'];
+  for (const r of t.rows) out.push(`| ${r.label} | ${r.price} | ${r.weight} | ${r.quantity ?? '-'} | ${r.cumulative ?? '-'} |`);
+  out.push('', ...t.summary.map((x) => `- ${x}`), `- ${t.note}`);
+  return out;
+}
+
+/** 진입 시나리오 절 (P3-6-R4). 시나리오 문장은 모델 출력이므로 mdText로 이스케이프한다 (P3-5-R5) */
+function entryPlanLines(e: EntryPlanView): string[] {
+  const L = [`## ${e.heading}`, ''];
+  // 조건부 계획 고지는 시나리오가 있을 때만 (지금 진입안의 분할 표는 조건부 계획이 아니다)
+  if (e.cards.length) L.push(`> **${e.notice}**`, '', `> ${e.guide}`, '');
+  for (const w of e.warnings) L.push(`- ⚠ ${w}`);
+  if (e.warnings.length) L.push('');
+  if (e.mainTranches) L.push('### 지금 진입안의 분할 진입', ...trancheLines(e.mainTranches), '');
+  for (const c of e.cards) {
+    L.push(`### ${c.title} · ${c.recheck}`, '', `- ${e.notice}`, `- ${mdText(c.condition)}`);
+    for (const f of c.fields) L.push(`- ${f.label}: ${f.value}`);
+    L.push(`- 무효화 조건: ${list(c.invalidation)}`);
+    for (const w of c.warnings) L.push(`- ⚠ ${w}`);
+    if (c.tranches) L.push(...trancheLines(c.tranches));
+    L.push('', `> ${mdText(c.rationale)}`, '');
+  }
+  if (e.cards.length && e.validUntil) L.push(`시나리오 유효 기한: ${e.validUntil} (이후 만료, 다시 분석)`, '');
+  return L;
 }
 
 /** 사용한 포지션 요약·적용 계획·수량 계산 조건 (P2-5.1: 비율 정보와 제안 수량만, 총 자산·손실 한도 금액은 쓰지 않는다) */
@@ -115,6 +143,8 @@ export function renderMarkdown(r: Report): string {
       '',
     );
   }
+
+  if (v.entryPlan) L.push(...entryPlanLines(v.entryPlan));
 
   L.push('## 데이터 스냅샷', '');
   const s = r.snapshot;

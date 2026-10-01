@@ -1,5 +1,5 @@
 // 공통 코어 CLI (P1 명세 5.1). 브라우저 경로와 /floor가 같은 엔진 함수를 쓴다 (P1-5-R1).
-//   node src/cli/floor.ts analyze <종목> <모드> [--demo [--scenario <포지션 데모>]] [--json]      드라이버로 끝까지 실행 (실전: claude -p, 데모: fixture)
+//   node src/cli/floor.ts analyze <종목> <모드> [--demo [--scenario <데모 예시>]] [--json]      드라이버로 끝까지 실행 (실전: claude -p, 데모: fixture)
 //   node src/cli/floor.ts snapshot --symbol <종목> --mode <모드>        /floor 1단계: 스냅샷과 작업 생성
 //   node src/cli/floor.ts next --job <jobId>                             다음 역할과 입력·프롬프트·스키마 파일
 //   node src/cli/floor.ts submit --job <jobId> --role <단계> --file <출력 JSON>
@@ -369,6 +369,25 @@ function formatSummary(job: Job, seconds: string, now: Date): string {
     if (plan && d.action !== 'ADD') L.push(`  손절 ${plan.stopLoss ?? '-'}${plan.stopUpdated ? ' (갱신)' : ''} · 목표 ${plan.targets.join(', ') || '-'}`);
     else if (d.proposal) L.push(`  진입 ${d.proposal.entry.type} ${d.proposal.entry.min ?? '-'}~${d.proposal.entry.max ?? '-'} · 손절 ${d.proposal.stopLoss ?? '-'} · 목표 ${d.proposal.targets.join(', ') || '-'}`);
     for (const x of d.ruleEngine.violations) L.push(`  ✗ ${x.code}: ${x.message}`);
+    const e = pv.entryPlan;
+    if (e) {
+      // 진입 시나리오 (P3-6-R1): 조건부 계획임을 먼저 쓴다. 만료는 작업 시계 기준
+      const expired = e.validUntil !== null && Date.parse(e.validUntil) < now.getTime();
+      const table = (t: NonNullable<typeof e.mainTranches>, pad: string) => [
+        ...t.rows.map((x) => `${pad}${x.label} ${x.price} · 비중 ${x.weight}${x.quantity === null ? '' : ` · 수량 ${x.quantity} (누적 ${x.cumulative})`}`),
+        ...t.summary.map((x) => `${pad}${x}`), `${pad}${t.note}`,
+      ];
+      L.push('', e.cards.length > 0 ? `  ${e.heading} — ${expired ? e.expiredNotice : e.notice}` : `  ${e.heading}`);
+      for (const w of e.warnings) L.push(`  ! ${w}`);
+      if (e.mainTranches) L.push('  지금 진입안의 분할 진입', ...table(e.mainTranches, '    '));
+      for (const c of e.cards) {
+        L.push(`  [${c.title}] ${c.recheck}`, `    ${c.condition}`, `    ${c.fields.map((f) => `${f.label} ${f.value}`).join(' · ')}`);
+        for (const w of c.warnings) L.push(`    ! ${w}`);
+        if (c.tranches) L.push(...table(c.tranches, '    '));
+        L.push(`    무효화 조건: ${c.invalidation.join(' / ')}`);
+      }
+      if (e.cards.length > 0 || e.mainTranches) L.push(`  ${e.guide}`);
+    }
     L.push(`  ${pv.disclaimer}`); // P2-6-R2
   }
   if (r.report) L.push('', `리포트 ${r.report.md}`);
@@ -382,7 +401,7 @@ function formatChecks(checks: Check[]): string {
 }
 
 const USAGE = `사용법:
-  node src/cli/floor.ts analyze <종목> <모드> [--demo [--scenario <포지션 데모>]] [--json]
+  node src/cli/floor.ts analyze <종목> <모드> [--demo [--scenario <데모 예시>]] [--json]
   node src/cli/floor.ts snapshot --symbol <종목> --mode <모드> [--interface floor|web]
   node src/cli/floor.ts next --job <jobId>
   node src/cli/floor.ts submit --job <jobId> --role <단계> --file <출력 JSON>
