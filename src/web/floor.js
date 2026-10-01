@@ -563,7 +563,8 @@ function renderScenarios(e) {
   box.replaceChildren();
   if (!e) return;
   box.className = `scenarios${e.expired ? ' expired' : ''}`;
-  box.append(el('div', 'scn-heading', e.heading), el('div', 'scn-status', e.status), ...e.warnings.map((w) => el('div', 'scn-warn', w)));
+  // 조건 미충족·만료 문구는 시나리오 카드마다 붙인다. 지금 진입안의 분할 표는 조건부 계획이 아니다
+  box.append(el('div', 'scn-heading', e.heading), ...e.warnings.map((w) => el('div', 'scn-warn', w)));
   if (e.mainTranches) {
     const main = el('div', 'scn-card');
     main.append(el('div', 'scn-title', '지금 진입안의 분할 진입'), trancheTable(e.mainTranches));

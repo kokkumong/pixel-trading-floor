@@ -377,7 +377,7 @@ function formatSummary(job: Job, seconds: string, now: Date): string {
         ...t.rows.map((x) => `${pad}${x.label} ${x.price} · 비중 ${x.weight}${x.quantity === null ? '' : ` · 수량 ${x.quantity} (누적 ${x.cumulative})`}`),
         ...t.summary.map((x) => `${pad}${x}`), `${pad}${t.note}`,
       ];
-      L.push('', `  ${e.heading} — ${expired ? e.expiredNotice : e.notice}`);
+      L.push('', e.cards.length > 0 ? `  ${e.heading} — ${expired ? e.expiredNotice : e.notice}` : `  ${e.heading}`);
       for (const w of e.warnings) L.push(`  ! ${w}`);
       if (e.mainTranches) L.push('  지금 진입안의 분할 진입', ...table(e.mainTranches, '    '));
       for (const c of e.cards) {

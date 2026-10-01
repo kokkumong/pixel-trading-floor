@@ -53,7 +53,9 @@ function trancheLines(t: TrancheTable): string[] {
 
 /** 진입 시나리오 절 (P3-6-R4). 시나리오 문장은 모델 출력이므로 mdText로 이스케이프한다 (P3-5-R5) */
 function entryPlanLines(e: EntryPlanView): string[] {
-  const L = [`## ${e.heading}`, '', `> **${e.notice}**`, '', `> ${e.guide}`, ''];
+  const L = [`## ${e.heading}`, ''];
+  // 조건부 계획 고지는 시나리오가 있을 때만 (지금 진입안의 분할 표는 조건부 계획이 아니다)
+  if (e.cards.length) L.push(`> **${e.notice}**`, '', `> ${e.guide}`, '');
   for (const w of e.warnings) L.push(`- ⚠ ${w}`);
   if (e.warnings.length) L.push('');
   if (e.mainTranches) L.push('### 지금 진입안의 분할 진입', ...trancheLines(e.mainTranches), '');
@@ -65,7 +67,7 @@ function entryPlanLines(e: EntryPlanView): string[] {
     if (c.tranches) L.push(...trancheLines(c.tranches));
     L.push('', `> ${mdText(c.rationale)}`, '');
   }
-  if (e.validUntil) L.push(`시나리오 유효 기한: ${e.validUntil} (이후 만료, 다시 분석)`, '');
+  if (e.cards.length && e.validUntil) L.push(`시나리오 유효 기한: ${e.validUntil} (이후 만료, 다시 분석)`, '');
   return L;
 }
 
