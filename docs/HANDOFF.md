@@ -27,14 +27,27 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 16 | P3 신규 진입 명세(`P3-신규진입-명세`): 진입 시나리오 카드·분할 진입·NO_TRADE 후속 안내 | ✅ |
 | 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | ✅ |
 | 18 | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | ✅ |
+| 19 | Electron 스파이크(타입 제거 실행·asar·`claude` 경로 실측)와 P4 명세 (`P4-데스크톱앱-명세`). 데스크톱 셸은 `desktop/` 하위 패키지로 분리, 루트 런타임 의존성 0개 유지 | ✅ |
+| 20 | **데스크톱 셸: 메인 프로세스, 서버 기동·종료, 창 보안 설정, 단일 인스턴스, `FLOOR_HOME`=앱 데이터 폴더** (P4-1·2·4) | 다음 |
+| 21 | `claude` 탐색·PATH 보강·안내 대화상자·시작 doctor 연동 (순수 함수로 루트 테스트, P4-3) | 대기 |
+| 22 | 패키징: 맥 `.dmg`(arm64·x64), 아이콘, GitHub Actions. 윈도우 설치 파일은 빌드만 | 대기 |
+| 23 | 가이드 v1.9(지인용 설치·서명 없는 앱 경고·데이터 이관)와 맥 실기 스모크 → **P4 맥 끝**. 윈도우 실기 확인은 그 뒤 | 대기 |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
 없음
 
+## Phase 20 참고 (P4 데스크톱 앱)
+Phase 19(이슈 #43)로 `desktop/`(Electron 44.5.1 스파이크 `main.cjs`)와 `docs/PIXEL-TRADING-FLOOR-P4-데스크톱앱-명세-v0.1.md`를 만들었다. 실측과 결정은 그 명세 0장.
+- 이어서 할 일(Phase 20): `desktop/main.cjs`를 스파이크에서 정식 셸로 바꾼다 — 단일 인스턴스, 창 보안 설정(P4-4-R1·R2), 종료 처리(P4-1-R5), 편집 메뉴, `FLOOR_HOME`=`userData/data`(P4-2-R1). 테스트할 수 있는 판단(주소 허용·경로 검사·`webPreferences` 객체)은 Electron 없이 import되는 순수 모듈로 빼서 루트 `test/`에서 검증한다(P4-1-R2). 정확한 위치는 `[구현 시 결정]`(예: `desktop/lib/*.cjs`나 `src/desktop/*.ts` 중 루트 `tsc`가 검사할 수 있는 쪽)
+- 보안 수칙(사용자 제시 11개)은 P4 명세 4장 대조표가 기준이다. 스파이크 `desktop/main.cjs`·`preload.cjs`는 A1~A6을 이미 구현·실행 확인했다(창 `require`·`process` 없음, `window.open` null, 카메라·알림·위치·클립보드 거부, 외부 이동 차단). Phase 20은 `openExternalSafe`(R10)·`openDataFolder`·`getClaudeStatus`(R7)·URL 스킴 미등록(R11)을 정식 구현한다. **App Sandbox는 쓰지 않기로 했다(D9, 사용자 결정)**
+- 실행 방법(개발): `cd desktop && npm install && node node_modules/electron/install.js` 한 번, 이후 `node_modules/electron/dist/Electron.app/Contents/MacOS/Electron desktop`(저장소 루트에서). Electron 44는 `npm install`만으로는 바이너리를 받지 않는다
+- 스파이크 확인값: Node 24.21 내장·`.ts` 로드·`app.asar` 안 로드·짧은 PATH에서 claude 탐색 모두 통과(맥 arm64). 윈도우 `.cmd` claude는 `process.execPath`가 Electron이라 별도 처리 필요(P4-3-R5)
+- 맥 먼저, 윈도우는 맥 뒤(사용자 결정 2026-10-01). 중복 파일 `start-floor 2.cmd`·`start-floor-lan 2.cmd`·`.gitattributes 2`는 사용자가 삭제 여부를 정하지 않았다(untracked, 건드리지 않음)
+
 ## P3 구현 완료 후 참고 (개발 Phase 없음)
-Phase 18(이슈 #41)로 P3 신규 진입(진입 시나리오·분할 진입·관망 후속 안내) 구현이 끝났다. 진행표에 다음 Phase는 없다. 새 작업은 사용자와 범위를 정한 뒤 이슈를 만든다.
+Phase 18(이슈 #41)로 P3 신규 진입(진입 시나리오·분할 진입·관망 후속 안내) 구현이 끝났다. P3 개발 Phase는 없다. 다음 작업은 P4 데스크톱 앱(Electron, Phase 19~23, 이슈 #43부터)이다. 맥 먼저, 윈도우는 맥 뒤에 한다 (사용자 결정 2026-10-01).
 - 다음 논의 후보: macOS .app/.dmg 지인 배포(P3 구현 뒤 재개하기로 함), P1-11 본 측정(조합별 10회 이상), 아래 "남은 불확실성"
 - 쓸 파일: `src/core/rules/entryplan.ts`(규칙·계산), `src/core/rules/entryview.ts`(`entryPlanView` — 화면·리포트·CLI 공용 문구), `src/core/prompts/shared/scenarios.md`, `src/core/position/mask.ts`, `fixtures/demo/v1/manifest.json`의 `entryScenarios`, 테스트 `test/core/entry-plan.test.ts`·`entry-view.test.ts`, `test/job-helpers.ts`의 `sampleScenario`
 - Phase 17 결정 (유지):
@@ -126,3 +139,4 @@ P2(Phase 11~15) 구현은 끝났다. 남은 것은 사용자가 하거나 선택
 - 실측(sonnet, `/floor BTC scalp`, Phase 8 스모크, 2회째): 78초, 보고 비용 $0.39, 도구 Bash 12·Read 15·Write 5, 웹 도구 0건, 훅 거부 0건, 결과 ACE 관망. 1회째(훅 미적용) 101초 $0.50
 - 실측(sonnet, BTC 브라우저 경로 소표본, Phase 8): algorithm 2건 86~90초·호출 13·재시도 0, scalp 5건 36~43초. 산출(표본 부족, 미확정): algorithm maxDuration 111초·callTimeout 최대 19초, scalp 66초·24초
 - 실측(sonnet, BTC algorithm 실전 스모크, Phase 9): 86초·호출 13·재시도 0·비용 $0.345·PM 기각(NO_TRADE)·CLI 2.1.285. evidenceAudit 1건(RISKY `brief:ACE#c1` → 프롬프트 보완). 데모 fixture: algorithm 2건, scalp 0건
+- 실측(Phase 19 스파이크, 맥 arm64): Electron 44.5.1 = Node 24.21.0, `.ts` 직접 로드 가능(메인 프로세스 import·ELECTRON_RUN_AS_NODE·app.asar 안). 짧은 PATH(`/usr/bin:/bin:/usr/sbin:/sbin`)에서 `~/.local/bin/claude` 탐색 성공. 개발용 Electron.app 307MB, `app.asar`(src·config·fixtures) 2.4MB
