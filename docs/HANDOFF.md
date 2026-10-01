@@ -27,6 +27,11 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 16 | P3 신규 진입 명세(`P3-신규진입-명세`): 진입 시나리오 카드·분할 진입·NO_TRADE 후속 안내 | ✅ |
 | 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | ✅ |
 | 18 | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | ✅ |
+| 19 | Electron 스파이크(타입 제거 실행·asar·`claude` 경로 실측)와 P4 명세 (`P4-데스크톱앱-명세`). 데스크톱 셸은 `desktop/` 하위 패키지로 분리, 루트 런타임 의존성 0개 유지 | 다음 |
+| 20 | 데스크톱 셸: 메인 프로세스, 서버 기동·종료, 창 보안 설정, 단일 인스턴스, `FLOOR_HOME`=앱 데이터 폴더 | 대기 |
+| 21 | `claude` 탐색·PATH 보강·안내 대화상자·시작 doctor 연동 (순수 함수로 루트 테스트) | 대기 |
+| 22 | 패키징: 맥 `.dmg`(arm64·x64), 아이콘, GitHub Actions. 윈도우 설치 파일은 빌드만 | 대기 |
+| 23 | 가이드 v1.9(지인용 설치·서명 없는 앱 경고·데이터 이관)와 맥 실기 스모크 → **P4 맥 끝**. 윈도우 실기 확인은 그 뒤 | 대기 |
 
 ## 진행 중 (세션 인계)
 
@@ -34,7 +39,7 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 없음
 
 ## P3 구현 완료 후 참고 (개발 Phase 없음)
-Phase 18(이슈 #41)로 P3 신규 진입(진입 시나리오·분할 진입·관망 후속 안내) 구현이 끝났다. 진행표에 다음 Phase는 없다. 새 작업은 사용자와 범위를 정한 뒤 이슈를 만든다.
+Phase 18(이슈 #41)로 P3 신규 진입(진입 시나리오·분할 진입·관망 후속 안내) 구현이 끝났다. P3 개발 Phase는 없다. 다음 작업은 P4 데스크톱 앱(Electron, Phase 19~23, 이슈 #43부터)이다. 맥 먼저, 윈도우는 맥 뒤에 한다 (사용자 결정 2026-10-01).
 - 다음 논의 후보: macOS .app/.dmg 지인 배포(P3 구현 뒤 재개하기로 함), P1-11 본 측정(조합별 10회 이상), 아래 "남은 불확실성"
 - 쓸 파일: `src/core/rules/entryplan.ts`(규칙·계산), `src/core/rules/entryview.ts`(`entryPlanView` — 화면·리포트·CLI 공용 문구), `src/core/prompts/shared/scenarios.md`, `src/core/position/mask.ts`, `fixtures/demo/v1/manifest.json`의 `entryScenarios`, 테스트 `test/core/entry-plan.test.ts`·`entry-view.test.ts`, `test/job-helpers.ts`의 `sampleScenario`
 - Phase 17 결정 (유지):
