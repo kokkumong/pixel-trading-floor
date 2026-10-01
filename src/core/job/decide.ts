@@ -75,7 +75,7 @@ export function buildDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): Fin
     : null;
   const decidedAt = now.toISOString();
   return {
-    schemaVersion: 'decision/3',
+    schemaVersion: 'decision/4',
     jobId: r.jobId,
     snapshotId: s.snapshotId,
     mode: r.mode,
@@ -100,6 +100,8 @@ export function buildDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): Fin
     positionRef: held?.id ?? null,
     positionPlan: rejected ? rejectedPlan : o.positionPlan,
     sizing: rejected ? null : o.sizing,
+    // PM이 기각한 제안의 시나리오는 채택하지 않는다. 재진입 조건이 없다는 것만 남긴다 (P3-2-R1)
+    entryPlan: rejected && o.entryPlan ? { tranchePlan: null, trancheViolations: [], scenarios: [], dropped: [], warnings: ['NO_WAIT_PLAN'] } : o.entryPlan,
   };
 }
 
@@ -107,12 +109,12 @@ export function buildDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): Fin
 export function insufficientDecision(r: JobRecord, s: AnalysisSnapshot, now: Date): FinalDecision {
   const meta = MODE_META[r.mode];
   return {
-    schemaVersion: 'decision/3', jobId: r.jobId, snapshotId: s.snapshotId, mode: r.mode, resultClass: meta.resultClass,
+    schemaVersion: 'decision/4', jobId: r.jobId, snapshotId: s.snapshotId, mode: r.mode, resultClass: meta.resultClass,
     status: 'INSUFFICIENT_DATA', action: null, bias: null, unforcedAction: null, proposal: null,
     decidedAt: now.toISOString(), validUntil: null, confidence: null, reasonCodes: ['INSUFFICIENT_DATA'],
     ruleEngine: { verdict: 'BLOCKED', violations: [{ code: 'V-DATA-QUALITY', message: '필수 데이터 부족' }], warnings: s.dataQuality.warnings },
     risk: null, finalDecisionMaker: meta.finalDecisionMaker, pmDecision: null, modifiedFields: [],
     forcedDirection: r.mode === 'forced_direction', executionBackend: r.executionBackend,
-    positionRef: heldPosition(r)?.id ?? null, positionPlan: null, sizing: null,
+    positionRef: heldPosition(r)?.id ?? null, positionPlan: null, sizing: null, entryPlan: null,
   };
 }

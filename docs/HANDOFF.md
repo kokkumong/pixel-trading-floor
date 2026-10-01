@@ -25,13 +25,32 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 | 14 | 리포트·화면 표기·고지·마스킹·LAN·데모 fixture (P2-5·6·8) | ✅ |
 | 15 | macOS·Windows 시작 파일, 시작 시 doctor, 가이드 v1.6 (P2-7, P2-6-R5) → **P2 구현 끝** | ✅ |
 | 16 | P3 신규 진입 명세(`P3-신규진입-명세`): 진입 시나리오 카드·분할 진입·NO_TRADE 후속 안내 | ✅ |
-| 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | 대기 |
-| 18 | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | 대기 |
+| 17 | 스키마 v4(`proposal/4`·`decision/4`), 시나리오·분할 규칙, 파생 값(손익비·tranche 수량), 이전 버전 읽기 호환 (P3-1-T1~T4, P3-3, P3-4) | ✅ |
+| **18** | ACE·BLITZ·PM 프롬프트·`/floor` 투영, 리포트·화면 카드·마스킹, 데모 fixture, 가이드 개정 (P3-2, P3-5, P3-6) → **P3 구현 끝** | **다음** |
 
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
 없음
+
+## Phase 18 참고 (P3 구현 끝 Phase)
+Phase 17(이슈 #39, 스키마 v4·시나리오·분할 규칙·파생 값·마스킹 코어)이 끝났다. Phase 18은 프롬프트·표시·리포트·데모·가이드다 (P3-2, P3-5, P3-6).
+- 쓸 파일: `src/core/rules/entryplan.ts`(`checkTranches`·`averageEntry`·`planTranches`·`buildEntryPlan`), `schema/proposal.ts`(`ScenarioSchema`·`TrancheSchema`), `schema/decision.ts`(`EntryPlan` 등), `position/mask.ts`(`maskEntryPlan`·`maskTranchePlan`), `test/core/entry-plan.test.ts`
+- Phase 17 결정 (유지):
+  - 시나리오·분할의 **구조**(타입·필수 필드·가격 > 0·글자 수)는 스키마가 검사해 틀리면 `SCHEMA_ERROR` 재시도. **개수·기하·트리거·레버리지**는 규칙이 검사해 해당 항목만 제거(D31). 그래서 스키마의 시나리오 `entry.type`은 `market`도 받고 `V-SCN-SHAPE`가 제거한다
+  - `scenarios`·`tranches`가 없는 출력은 `[]`·`null`로 채워 읽는다(DSL `default`). 기존 데모 fixture·scripted 응답·Phase 18 전 프롬프트가 그대로 통과한다. JSON 스키마에서는 필수 필드다
+  - 모델이 쓴 원본은 `proposal`에 그대로 남고, 규칙을 통과한 결과는 `decision.entryPlan`에만 있다. **화면·리포트는 `entryPlan`만 읽는다**. `V-TRANCHE-MODE` 정규화(scalp·zone 아님)와 P3-1-R2(보유·강제 방향·데이터 부족은 `entryPlan = null`)도 규칙 엔진이 한다
+  - 경고는 `entryPlan.warnings`(`NO_WAIT_PLAN`·`SCN_DROPPED`·`TRANCHE_DROPPED`·`NO_EQUITY`)와 시나리오별 `warnings`(`LOW_REWARD_RISK`·`TRANCHE_DROPPED`)에만 둔다. `ruleEngine.warnings`에는 넣지 않았다(기존 화면·데모의 경고 0건 유지)
+  - `V-SCN-SHAPE`에 `invalidationConditions` 1~3개 포함. `PRIMARY` 2건·시나리오 3건 이상은 뒤쪽을 제거. SHAPE·DIR 위반이면 나머지 검사는 하지 않는다
+  - `V-SCN-TRIGGER`: 현재가를 모르면 제거. 숏 `BREAKOUT`은 `level < 현재가`이고 `entry.max ≤ level`
+  - `V-SCN-DISTANCE`·`V-TRANCHE-SPREAD`의 ATR은 스냅샷의 `atr14` 하나를 쓴다(시나리오 `timeframe`별 ATR은 스냅샷에 없음). ATR이 없으면 두 검사를 건너뛴다
+  - `V-SCN-DUP` 겹침 비율 = 겹친 길이 ÷ 더 좁은 구간의 길이. 한쪽이 지정가(점)이면 다른 구간 안에 있을 때 겹침. 최종 판정이 `ENTER_*`일 때만 검사
+  - `V-SCN-LEVERAGE`: 무기한인데 `leverage`가 null이어도 위반
+  - 기준 진입가: 분할이 있으면 가중 평균, 없으면 구간의 불리한 쪽(롱 `max`, 숏 `min`). 손익비·수량·위험 거리가 같은 값을 쓴다. 분할이 있으면 `sizing.suggestedQuantity` = 분할 수량 합계
+  - PM 기각: `entryPlan`은 빈 계획 + `NO_WAIT_PLAN`(기각된 제안의 시나리오는 채택하지 않음)
+  - 마스킹은 보안 사항이라 이번에 넣었다: `maskDecision`이 `entryPlan`의 수량·손실 금액·증거금을 가린다 (P3-6-T2의 코어 부분. 서버 경로 테스트는 Phase 18)
+- Phase 18로 넘긴 것: 프롬프트(ACE·BLITZ·PM)와 보유·강제 방향 JSON 스키마에서 `scenarios` 빼기, 시나리오 `evidenceRefs` 근거 검사(P3-1-R7, `auditEvidence`), 화면 카드·리포트 `## 진입 시나리오`·`reportSchemaVersion` 3, 서버 경로 마스킹 테스트(P3-6-T2), 데모 fixture, 가이드
+- 실측: Phase 17은 실제 claude 스모크를 하지 않았다(프롬프트가 Phase 18이라 의미 없음). Phase 18 끝에서 알고리즘·스캘핑 각 1회 스모크로 시나리오 출력 호출 수·시간·비용을 기록한다
 
 ## UI 개선 (이슈 #35, 개발 Phase 없음)
 - 방 벽 소품(`sprites.js drawProp`, `model.js ROOM_PROPS`), 분석 전 말풍선 `분석 대기 중…`, 하단 티커 띠 `GET /api/ticker`(30초, 표시 전용, 데모는 숨김). 명세 P0 v0.11 7.4·P0-7-T10, 가이드 v1.7 4-2·4-3-1

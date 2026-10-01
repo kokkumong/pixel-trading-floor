@@ -49,6 +49,8 @@ export function sampleProposal(input: RoleInput, over: Partial<ProposalOutput> =
     warnings: [],
     positionRef: null,
     sizeFraction: null,
+    scenarios: [],
+    tranches: null,
     ...(pos ? { action: 'HOLD', positionRef: pos.positionRef, entry: { type: 'market', min: null, max: null }, stopLoss: null, targets: [], leverage: pos.leverage } : {}),
     ...over,
   };

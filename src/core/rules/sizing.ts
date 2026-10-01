@@ -17,10 +17,10 @@ export interface SizingInput {
   existingRisk?: number | undefined;
 }
 
-const r2 = (x: number) => Math.round(x * 100) / 100;
+export const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /** 코인은 소수 6자리, 주식은 1주 단위로 내림한다 */
-function floorQty(q: number, instrumentId: string): number {
+export function floorQty(q: number, instrumentId: string): number {
   const f = instrumentId.startsWith('CRYPTO:') ? 1e6 : 1;
   return Math.floor(q * f + 1e-9) / f;
 }

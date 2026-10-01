@@ -42,12 +42,12 @@ export function held(pos: Partial<Position> = {}, o: { equity?: number | null; r
 /** applyRules 결과로 만든 최소 판정 (화면 표기 검사용) */
 export function decisionOf(o: ReturnType<typeof applyRules>, ctx: PositionContext | null, mode: Mode = 'scalp'): FinalDecision {
   return {
-    schemaVersion: 'decision/3', jobId: JOB, snapshotId: SNAP, mode, resultClass: mode === 'forced_direction' ? 'simulation' : 'analysis',
+    schemaVersion: 'decision/4', jobId: JOB, snapshotId: SNAP, mode, resultClass: mode === 'forced_direction' ? 'simulation' : 'analysis',
     status: o.status, action: o.action, bias: o.bias, unforcedAction: null, proposal: null,
     decidedAt: '2026-09-30T00:00:00Z', validUntil: null, confidence: null, reasonCodes: o.reasonCodes,
     ruleEngine: { verdict: o.verdict, violations: o.violations, warnings: o.warnings }, risk: o.risk,
     finalDecisionMaker: 'ACE', pmDecision: null, modifiedFields: [], forcedDirection: mode === 'forced_direction', executionBackend: 'subprocess_per_role',
-    positionRef: ctx?.position?.id ?? null, positionPlan: o.positionPlan, sizing: o.sizing,
+    positionRef: ctx?.position?.id ?? null, positionPlan: o.positionPlan, sizing: o.sizing, entryPlan: o.entryPlan,
   };
 }
 

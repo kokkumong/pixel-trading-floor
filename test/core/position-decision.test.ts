@@ -46,7 +46,7 @@ test('P2-2-T1 포지션 유무와 행동이 맞지 않으면 V-POS-STATE 스키�
   assert.deepEqual(codes(checkProposal(proposalOutput({ positionRef: POS }), proposalCtx())), ['V-POS-STATE']); // 없음인데 참조
   const ok = checkProposal(proposalOutput({ action: 'REDUCE', positionRef: POS, sizeFraction: 0.5 }), withPos);
   assert.ok(ok.ok);
-  assert.equal(ok.proposal.schemaVersion, 'proposal/3');
+  assert.equal(ok.proposal.schemaVersion, 'proposal/4');
   // 강제 방향은 포지션 행동을 쓰지 않는다
   assert.deepEqual(codes(checkProposal(proposalOutput({ action: 'HOLD', unforcedAction: 'NO_TRADE' }), proposalCtx('forced_direction'))), ['V-ACTION', 'V-POS-STATE']);
 });
@@ -83,8 +83,8 @@ test('P2-2-T2 롱 보유 + EXIT + BEARISH는 그대로 저장되고 전량 청�
     ACE: (input) => ({ output: sampleProposal(input, { action: 'EXIT', bias: 'BEARISH', entry: { type: 'market', min: null, max: null }, stopLoss: null, targets: [] }) }),
   });
   assert.equal(rec.state, 'COMPLETED');
-  assert.deepEqual([d?.schemaVersion, d?.status, d?.action, d?.bias, d?.positionRef], ['decision/3', 'VALID', 'EXIT', 'BEARISH', POS]);
-  assert.equal(d?.proposal?.schemaVersion, 'proposal/3');
+  assert.deepEqual([d?.schemaVersion, d?.status, d?.action, d?.bias, d?.positionRef], ['decision/4', 'VALID', 'EXIT', 'BEARISH', POS]);
+  assert.equal(d?.proposal?.schemaVersion, 'proposal/4');
   assert.equal(panelView(d!).headline, '전량 청산 검토');
 });
 

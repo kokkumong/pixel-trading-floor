@@ -81,6 +81,10 @@ claude -p --safe-mode --tools "" --no-session-persistence --output-format json \
   - 표시(`rules/display.ts` `panelView`): 유지·추가 진입 검토·일부 청산 검토 (N%)·전량 청산 검토, 톤 `caution`(REDUCE·EXIT·위험 경고), 강한 경고는 notes 맨 앞, 강제 방향 `포지션 무시 시뮬레이션`, 데이터 부족+보유 `포지션은 그대로이며 판정이 없음`
 - 화면·리포트 문구(P2-6, Phase 14): `panelView(d, now, pc)`가 `position`(`positionSummary`: 판정에 쓴 포지션 한 줄, 수량·총 자산 없음)과 `disclaimer`를 준다. NO_TRADE 주석은 북 확인 + 보유 없음이면 `NO_POSITION_BIAS_NOTE`, 그 밖은 `BIAS_NOTE`
 - `mask.ts`(P2-5-R4·R6): `maskSizing`·`maskDecision`·`maskPositionContext`·`maskReport`가 수량·손실 한도·증거금·계좌·보유 수량을 `[masked]`로 바꾼 사본을 만든다(가격·비율은 남김). 진단은 `positionCheck`로 건수만
+- 진입 계획(P3, Phase 17): `proposal/4`에 `scenarios`(구조는 스키마, 개수·기하·트리거·레버리지는 규칙)와 `tranches`가 추가됐다. 없으면 `[]`·`null`로 채워 읽는다(DSL `default`). `decision/4`의 `entryPlan`(`EntryPlan`·`ScenarioPlan`·`TranchePlan`·`DroppedScenario`)은 규칙을 통과한 결과만 담고, 화면·리포트는 이것만 읽는다. 모델 원본은 `proposal`에 그대로 남는다
+  - `rules/entryplan.ts`: `checkTranches`(V-TRANCHE-*), `averageEntry`(분할 가중 평균 진입가), `planTranches`(tranche별 수량), `buildEntryPlan`(V-SCN-SHAPE·DIR·TRIGGER·DISTANCE·DUP·LEVERAGE 적용, 위반 항목만 제거하고 `warnings`에 기록). 보유·강제 방향·데이터 부족이면 `entryPlan = null`, PM 기각이면 빈 계획 + `NO_WAIT_PLAN`
+  - 기준 진입가는 분할이 있으면 가중 평균, 없으면 구간의 불리한 쪽. 손익비·수량·위험 거리(`rules/risk.ts` `riskDistance`)가 같은 값을 쓴다. 분할이 있으면 `suggestedQuantity` = 분할 수량 합계. `rules/3`
+  - `position/mask.ts` `maskEntryPlan`·`maskTranchePlan`: `maskDecision`이 `entryPlan`의 수량·손실 금액·증거금을 가린다
 
 ## HTTP 서버 (src/server, src/web)
 - `npm start` = `node src/server/main.ts [--lan] [--port N] [--enable-project-zip] [--lan-allow-analyze]`. 기본 `127.0.0.1:8000`(`PORT` 환경변수), LAN은 `--lan` 또는 `FLOOR_LAN=1` → `0.0.0.0` 바인딩 + 사설 IPv4 인터페이스로 들어온 연결만 받음(`connection` 이벤트에서 `allowedLocalAddress`). 사설 주소가 없으면 시작하지 않음

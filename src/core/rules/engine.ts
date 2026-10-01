@@ -1,14 +1,15 @@
-// 결정론적 위험 규칙 엔진 (P0 명세 3.6, P1 명세 4.2·10.2, P2 포지션 명세 3장). 스키마 검증을 통과한 TradeProposal에만 적용한다.
+// 결정론적 위험 규칙 엔진 (P0 명세 3.6, P1 명세 4.2·10.2, P2 포지션 명세 3장, P3 신규 진입 명세 4장). 스키마 검증을 통과한 TradeProposal에만 적용한다.
 // 모델 프롬프트에 같은 규칙이 있어도 이 코드가 최종 기준이다 (P0-3-R2).
 import type { PositionContext } from '../position/context.ts';
-import type { PositionPlan, RiskInfo, RuleResult, RuleViolation, Sizing } from '../schema/decision.ts';
+import type { EntryPlan, PositionPlan, RiskInfo, RuleResult, RuleViolation, Sizing, TranchePlan } from '../schema/decision.ts';
 import type { TradeProposal } from '../schema/proposal.ts';
 import { MAX_LEVERAGE, MAX_VALID_MINUTES, type Action, type Bias, type DataQualityStatus, type Mode } from '../schema/types.ts';
+import { averageEntry, buildEntryPlan, checkTranches, planTranches, type TrancheCheck } from './entryplan.ts';
 import type { EvidenceIndex } from './evidence.ts';
 import { computeRisk, type RiskPrice } from './risk.ts';
 import { marginHeavy, suggestSize } from './sizing.ts';
 
-export const RULE_ENGINE_VERSION = 'rules/2';
+export const RULE_ENGINE_VERSION = 'rules/3';
 
 export interface RuleThresholds {
   assumedMaintenanceMargin: number; // P1-4.1
@@ -16,6 +17,11 @@ export interface RuleThresholds {
   stopNoiseAtrMultiple: number; // V-STOP-NOISE
   minEvidenceForEntry: number; // P1-10-R2 (HOLD·ADD도 같음, P2-4-R4)
   liqNearAtrMultiple: number; // V-POS-LIQ-NEAR
+  // P3 4장. 모두 실측 전 값이다 (P3 9.1-2)
+  scnMaxAtrDistance: number; // V-SCN-DISTANCE
+  scnDupOverlap: number; // V-SCN-DUP
+  trancheMinAtrSpread: number; // V-TRANCHE-SPREAD
+  minRewardRisk: number; // LOW_REWARD_RISK
 }
 
 export const DEFAULT_THRESHOLDS: RuleThresholds = {
@@ -24,6 +30,10 @@ export const DEFAULT_THRESHOLDS: RuleThresholds = {
   stopNoiseAtrMultiple: 1.0,
   minEvidenceForEntry: 2,
   liqNearAtrMultiple: 2,
+  scnMaxAtrDistance: 5,
+  scnDupOverlap: 0.5,
+  trancheMinAtrSpread: 0.2,
+  minRewardRisk: 1.5,
 };
 
 export interface RuleContext {
@@ -49,6 +59,7 @@ export interface RuleOutcome extends RuleResult {
   risk: RiskInfo | null;
   positionPlan: PositionPlan | null;
   sizing: Sizing | null;
+  entryPlan: EntryPlan | null;
 }
 
 export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
@@ -68,7 +79,7 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
     return {
       status: 'INSUFFICIENT_DATA', action: 'NO_TRADE', bias: p.bias, reasonCodes: ['INSUFFICIENT_DATA'],
       verdict: 'BLOCKED', violations: [{ code: 'V-DATA-QUALITY', message: '필수 데이터 부족' }], warnings,
-      validForMinutes: p.validForMinutes, risk: null, positionPlan: null, sizing: null,
+      validForMinutes: p.validForMinutes, risk: null, positionPlan: null, sizing: null, entryPlan: null,
     };
   }
 
@@ -106,6 +117,13 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
       ? { ...p, action: held.side === 'LONG' ? 'ENTER_LONG' : 'ENTER_SHORT', stopLoss: plan.stopLoss, targets: plan.targets, leverage: p.leverage ?? held.leverage }
       : null;
 
+  // 시나리오·분할 진입은 신규 진입 분석에만 쓴다 (P3-1-R2). 위반은 판정에 영향을 주지 않는다 (D31)
+  const planning = !forced && !held;
+  const topTranches: TrancheCheck = planning && entry
+    ? checkTranches(p.tranches, { mode: ctx.mode, long: entry.action === 'ENTER_LONG', entry: entry.entry, stopLoss: entry.stopLoss, atr14: ctx.atr14 }, t)
+    : { tranches: null, violations: [] };
+  const avgEntry = topTranches.tranches ? averageEntry(topTranches.tranches) : null;
+
   if (entry) {
     const long = entry.action === 'ENTER_LONG';
     // V-BIAS: 강제 방향 외 모드에서 행동과 방향 판단이 맞아야 한다
@@ -137,8 +155,9 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
   if (p.marketType === 'spot' && p.leverage !== null) violate('V-LEVERAGE-CAP', '현물은 레버리지 null', 'LEVERAGE_INVALID');
   if (p.leverage !== null && p.leverage > MAX_LEVERAGE) violate('V-LEVERAGE-CAP', `레버리지 상한 ${MAX_LEVERAGE}배 초과`, 'LEVERAGE_INVALID');
 
-  // V-LIQ-BUFFER / V-STOP-NOISE (P1-4.2). 사용자가 청산가를 넣은 포지션은 V-POS-LIQ-BUFFER로 대신한다
-  const risk = entry && held?.liquidationPrice == null ? computeRisk(entry, riskPrice, t.assumedMaintenanceMargin) : null;
+  // V-LIQ-BUFFER / V-STOP-NOISE (P1-4.2). 사용자가 청산가를 넣은 포지션은 V-POS-LIQ-BUFFER로 대신한다.
+  // 분할 진입은 가중 평균 진입가가 기준이다 (P3-3-R5)
+  const risk = entry && held?.liquidationPrice == null ? computeRisk(entry, riskPrice, t.assumedMaintenanceMargin, avgEntry) : null;
   if (risk) {
     const limit = risk.roughMarginLimitPercent / 100;
     const stop = risk.stopDistancePercent / 100;
@@ -195,8 +214,15 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
   // V-RISK-BUDGET · 수량 제안 (P2-3.3). 총 자산이 없으면 제안하지 않는다
   let sizing: Sizing | null = null;
   const equity = pc?.account.equity ?? null;
+  // 분할 진입 수량은 가중 평균 진입가 기준 (D30). 총 자산이 없으면 가격·비중만 남긴다 (P3-3-R6)
+  let tranchePlan: TranchePlan | null = topTranches.tranches && entry && entry.stopLoss !== null
+    ? planTranches(topTranches.tranches, {
+      stopLoss: entry.stopLoss, riskBudget: pc && equity !== null ? (equity * pc.account.riskPerTradePercent) / 100 : null,
+      instrumentId: pc?.instrumentId ?? p.instrumentId, marketType: p.marketType, leverage: entry.leverage,
+    })
+    : null;
   if (pc && entry && entry.stopLoss !== null && equity !== null) {
-    const entryPrice = entry.entry.type === 'market' ? cur
+    const entryPrice = avgEntry !== null ? avgEntry : entry.entry.type === 'market' ? cur
       : entry.action === 'ENTER_LONG' ? entry.entry.max : entry.entry.min;
     let existingRisk: number | undefined;
     if (held) {
@@ -209,6 +235,9 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
         instrumentId: pc.instrumentId, marketType: pc.marketType, currency: pc.account.currency, equity,
         riskPerTradePercent: pc.account.riskPerTradePercent, entryPrice, stopLoss: entry.stopLoss, leverage: entry.leverage, existingRisk,
       });
+    }
+    if (sizing && tranchePlan?.totalQuantity != null) {
+      sizing = { ...sizing, suggestedQuantity: tranchePlan.totalQuantity, marginRequired: tranchePlan.marginRequired };
     }
     if (sizing && sizing.suggestedQuantity <= 0) {
       if (held) violate('V-RISK-BUDGET', `남은 손실 한도 ${sizing.addableRisk} ${sizing.currency} — 추가 진입 여유 없음`, 'RISK_BUDGET_FULL');
@@ -242,10 +271,26 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
       // 강등되면 모델의 갱신·수량 제안은 쓰지 않는다
       if (plan && held) plan = { ...plan, stopLoss: held.stopLoss, targets: held.targets, stopUpdated: false };
       sizing = null;
+      tranchePlan = null;
     }
   }
   if (p.action === 'NO_TRADE') reasonCodes.unshift('NO_EDGE');
   if (plan && action !== 'REDUCE') plan = { ...plan, sizeFraction: null };
+
+  // 진입 시나리오 (P3 4장). 강등된 NO_TRADE도 전부 다시 검사해 통과한 것만 남긴다 (P3-2-R2)
+  let entryPlan: EntryPlan | null = null;
+  if (planning) {
+    const ref = basis?.price ?? null;
+    const entering = entry !== null && (action === 'ENTER_LONG' || action === 'ENTER_SHORT');
+    const lo = !entering ? null : entry.entry.type === 'market' ? ref : entry.entry.min;
+    const hi = !entering ? null : entry.entry.type === 'market' ? ref : entry.entry.max;
+    entryPlan = buildEntryPlan({
+      scenarios: p.scenarios, mode: ctx.mode, marketType: p.marketType, bias: p.bias, modelNoTrade: p.action === 'NO_TRADE',
+      main: lo !== null && hi !== null ? { long: action === 'ENTER_LONG', lo, hi } : null,
+      cur, atr14: ctx.atr14, validForMinutes, positionContext: pc,
+      top: { tranchePlan, violations: topTranches.violations },
+    }, t);
+  }
 
   return {
     status: action === 'NO_TRADE' ? 'NO_TRADE' : 'VALID',
@@ -259,6 +304,7 @@ export function applyRules(p: TradeProposal, ctx: RuleContext): RuleOutcome {
     risk,
     positionPlan: plan,
     sizing,
+    entryPlan,
   };
 }
 

@@ -10,7 +10,7 @@ const codes = (r: { ok: boolean; errors?: { code: string }[] }) => (r.ok ? [] : 
 test('정상 제안서는 통과하고 시스템 필드가 붙는다', () => {
   const r = checkProposal(proposalOutput(), proposalCtx());
   assert.ok(r.ok);
-  assert.equal(r.proposal.schemaVersion, 'proposal/3');
+  assert.equal(r.proposal.schemaVersion, 'proposal/4');
   assert.equal(r.proposal.jobId, JOB);
   assert.equal(r.proposal.author, 'ACE');
 });

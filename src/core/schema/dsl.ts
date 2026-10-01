@@ -11,6 +11,8 @@ interface Base {
   readonly description?: string;
   /** 이 노드에서 난 오류에 붙일 규칙 코드. 없으면 상위 노드의 코드를 쓰고, 최상위 기본값은 V-PARSE */
   readonly code?: string;
+  /** 객체 필드가 없을 때 채울 값. 이전 버전 출력 읽기용이며 JSON 스키마에서는 여전히 필수 필드다 */
+  readonly default?: unknown;
 }
 export interface StrS extends Base {
   readonly kind: 'string';
@@ -154,6 +156,10 @@ function walk(s: Schema, v: unknown, path: string, inherited: string, errors: Sc
       const out: Record<string, unknown> = {};
       for (const [key, child] of Object.entries(s.props)) {
         if (!(key in src) || src[key] === undefined) {
+          if ((child as Schema).default !== undefined) {
+            out[key] = structuredClone((child as Schema).default);
+            continue;
+          }
           errors.push({ code: (child as Schema).code ?? code, path: `${path}.${key}`, message: '필수 필드 누락' });
           continue;
         }
