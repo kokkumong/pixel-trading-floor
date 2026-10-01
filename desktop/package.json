@@ -1,0 +1,10 @@
+{
+  "name": "pixel-trading-floor-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PIXEL TRADING FLOOR 데스크톱 셸 (Electron). 서버·웹 코드는 Electron을 모른다",
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "^44.5.1"
+  }
+}

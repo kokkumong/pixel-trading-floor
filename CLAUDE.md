@@ -7,6 +7,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - `docs/PIXEL-TRADING-FLOOR-P1-명세-v*.md` — 첫 실전 분석 전 기능 (상태 머신, 레지스트리, 지표 정의, 위험 거리, /floor 코어, 리포트, 보안, 데모·진단, 근거 인용)
 - `docs/PIXEL-TRADING-FLOOR-P2-포지션-명세-v*.md` — 보유 포지션 입력과 포지션 인지 판정 (`P2-<n>-R<m>`, `P2-<n>-T<m>`). P0 결정 D3(포지션 입력 없음)를 폐기한다. 구현은 Phase 12~15 (완료)
 - `docs/PIXEL-TRADING-FLOOR-P3-신규진입-명세-v*.md` — 보유가 없는 사용자의 신규 진입 지원: 진입 시나리오 카드, 분할 진입, `NO_TRADE` 후속 안내 (`P3-<n>-R<m>`, `P3-<n>-T<m>`). 명세는 Phase 16, 구현은 Phase 17·18 (완료)
+- `docs/PIXEL-TRADING-FLOOR-P4-데스크톱앱-명세-v*.md` — 지인 배포용 Electron 데스크톱 앱(맥 먼저): 셸 구조, 데이터 위치, claude 탐색, 창 보안, 패키징 (`P4-<n>-R<m>`, `P4-<n>-T<m>`). 명세는 Phase 19, 구현은 Phase 20~23
 - `docs/PIXEL-TRADING-FLOOR-구조-보완안-v*.md` — 목표 구조, 우선순위(5장), P2
 - 문서 버전은 수시로 올라간다. 파일명을 외우지 말고 `ls docs/`로 최신 파일을 찾는다
 - 구현 범위: P0와 P1 전체(완료), P2 포지션(Phase 12~15, 완료), P3 신규 진입(Phase 17~18, 완료). `/floor`는 처음부터 공통 코어 구조로 만든다 (과도기 `lightweight`는 스키마에만 존재)
@@ -19,7 +20,7 @@ AI 에이전트 13명(역할)이 시장 데이터를 분석·토론·심사해 �
 - Node >= 22.18, TypeScript를 **네이티브 타입 제거**로 직접 실행 (`node src/cli/floor.ts`). 빌드·`dist/` 없음
 - 지울 수 있는 문법만: `enum`·`namespace`·매개변수 프로퍼티 금지 → 유니온 리터럴과 `as const` 객체
 - 상대 import는 `.ts` 확장자까지 쓴다. 타입만 가져올 때는 `import type`
-- **런타임 의존성 0개**. `node:` 내장 모듈만. devDependencies는 `typescript`, `@types/node`뿐
+- **런타임 의존성 0개**. `node:` 내장 모듈만. devDependencies는 `typescript`, `@types/node`뿐. 예외: 데스크톱 셸(P4)은 `desktop/` 하위 패키지에만 Electron·electron-builder를 devDependency로 두고, 루트·`src/`는 Electron을 모른다
 - 웹 UI(`src/web/`)는 빌드 없는 순수 JS + `// @ts-check`
 - 검증: `npm run verify` (= `tsc --noEmit` 두 번(서버 `tsconfig.json`, 웹 JS `tsconfig.web.json` checkJs) + `node --test`). 커밋 전 항상 통과시킨다. Claude는 출력이 짧은 `npm run -s verify:quiet`(같은 검사, dot 리포터)를 쓴다
 - 테스트 이름은 명세 검증 ID로 시작한다: `test('P0-3-T1 롱 손절가 역전 → NO_TRADE', ...)`
