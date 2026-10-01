@@ -36,7 +36,25 @@ Phase 하나 = 이슈 하나 = PR 하나. 세션은 구현 세션과 마무리 �
 ## 진행 중 (세션 인계)
 
 <!-- Phase 도중 세션을 나눌 때만 채운다. 형식은 next-phase 스킬 "중간 인계" 참고. PR 병합 전에 "Phase N+1 참고"로 옮기고 "없음"으로 되돌린다 -->
-없음
+- Phase: 20, 이슈 #47, 브랜치 `feature/47-phase20-desktop-shell`
+- 다음 단계: 마무리 (4 인계 갱신 → 5 PR·병합 → 6 보고). 구현은 끝났고 `verify:quiet` 통과, push 완료
+- 통과 기준 (전부 `test/desktop/shell.test.ts`): P4-1-T1 ✅ / P4-2-T1 ✅ / P4-2-T2 ✅ / P4-4-T1 ✅ / P4-4-T2 ✅ / P4-4-T3 ✅ / P4-4-T4 ✅ / P4-4-T5 ✅ / P4-4-T7 ✅ / P4-4-T6 ✅ (스모크, 아래 실측). 추가 테스트: P4-1-R1·P4-4-R4(서버 인자·환경), P4-1-R3(앱 이름), P4-4-R3·P4-1-R6(로그 토큰 가림)
+- 바꾼 파일: `desktop/main.cjs`(스파이크 → 정식 셸), `desktop/preload.cjs`(API 3개), `desktop/smoke.cjs`(신규), `src/desktop/shell.ts`(신규), `test/desktop/shell.test.ts`(신규)
+- 결정:
+  - 순수 모듈 위치는 `src/desktop/shell.ts` (루트 `tsc`·테스트가 검사하고, 패키징 포함 목록 `src/`에 이미 들어간다). `main.cjs`가 `import()`로 불러 쓴다. preload는 샌드박스라 `.ts`를 못 불러서 채널 이름을 글자 그대로 두고 P4-4-T4가 `IPC_CHANNELS`와 같은지 검사한다
+  - 종료: `window-all-closed` → `app.quit()` → `will-quit`에서 `preventDefault` 후 `shutdown()` → **`app.exit(0)`**. `will-quit`을 막은 뒤 `app.quit()`을 다시 부르면 앱이 끝나지 않았다(Electron 44.5.1 실측)
+  - 이동 차단·새 창 차단은 `web-contents-created`에서 모든 webContents에 건다. https 새 창 요청만 `openExternalSafe`로 기본 브라우저에 넘긴다
+  - 서버 환경에서 `FLOOR_LAN`·`PORT`를 걷어 낸다(`serverEnv`). 서버 로그는 `LogBuffer`(최근 200줄, `?t=` 가림)로 메모리에만 두고 메뉴 도움말 → "서버 로그 보기"가 대화상자로 최근 40줄을 보여 준다
+  - 데이터 폴더 열기는 `shell.openPath(FLOOR_HOME)`(`showItemInFolder`는 안 씀). 메뉴 도움말 → "데이터 폴더 열기"와 `floorDesktop.openDataFolder()`로 연다. **웹 설정 화면의 버튼(P4-2-R4)은 아직 없다** → Phase 21에서 `window.floorDesktop`이 있을 때만 보이게 추가
+  - `getClaudeStatus()`는 지금 `{ found }`만 준다(기존 `findClaudeExecutable`). Phase 21이 탐색 확장·안내로 바꾼다
+  - 패키징본은 `--remote-debugging-port`·`-pipe`가 있으면 바로 끝내고 `devTools: false`, 개발자 도구 메뉴 없음. fuses는 Phase 22
+  - 개발 실행 전용 환경변수: `FLOOR_DESKTOP_SMOKE=<결과 파일>`(스모크 후 종료), `FLOOR_DESKTOP_USERDATA=<폴더>`(userData 바꾸기). 둘 다 `app.isPackaged`면 무시. `desktop/smoke.cjs`는 패키징에 넣지 않는다(Phase 22 포함 목록에서 제외)
+  - P4 명세는 고치지 않았다(v0.1 그대로)
+- 남은 일:
+  1. 4단계: 진행표 20 ✅·21 다음, "Phase 20 참고" → "Phase 21 참고"로 바꾸고 위 결정을 옮긴다. `docs/ARCHITECTURE.md`에 데스크톱 셸 절 추가, CLAUDE.md 계층 지도에 `desktop/`·`src/desktop` 한 줄 추가
+  2. 5단계: PR(`Close #47`) → 검사 통과 시 병합
+  3. 미확인: "분석 중 창 닫기 확인" 대화상자(P4-1-R5)는 코드만 있고 실제 분석 중에 눌러 보지 않았다. Phase 23 실기 스모크 항목에 넣는다
+- 실측 (맥 arm64, 개발용 Electron 44.5.1, 2026-10-01): 스모크 `FLOOR_DESKTOP_SMOKE` — 창에서 `require`·`process`·`module`·`Buffer` 모두 `undefined`, 노출 키 `getAppInfo,getClaudeStatus,openDataFolder`, `window.open`(http·javascript) `null`, 카메라 `NotAllowedError`, 알림 `denied`, 위치 `denied:1`, 클립보드 읽기 `NotAllowedError`, 외부 주소 이동 뒤에도 주소가 서버 origin 그대로, 창 1개, 창 제목 `PIXEL TRADING FLOOR`, 데이터 폴더 `userData/data` 생성. 두 번째 실행은 바로 종료(단일 인스턴스), 스모크 종료·SIGTERM 뒤 프로세스가 남지 않음
 
 ## Phase 20 참고 (P4 데스크톱 앱)
 Phase 19(이슈 #43)로 `desktop/`(Electron 44.5.1 스파이크 `main.cjs`)와 `docs/PIXEL-TRADING-FLOOR-P4-데스크톱앱-명세-v0.1.md`를 만들었다. 실측과 결정은 그 명세 0장.
