@@ -82,3 +82,53 @@ test('강제 방향 모드의 ACE·BLITZ 출력 스키마는 NO_TRADE를 행동 
   assert.ok('openIssues' in (jsonSchemaFor('BEAR', 'algorithm') as any).properties);
   assert.ok('pmDecision' in (jsonSchemaFor('PM', 'algorithm') as any).properties);
 });
+
+// ── P3-5 진입 시나리오 프롬프트 ──
+
+// Phase 17(P2 끝) 시점의 해시. 시나리오 도입으로 이 역할들의 프롬프트가 바뀌면 안 된다
+const P2_HASHES: Record<string, [flat: string, held: string]> = {
+  TARO: ['65949862eea8', '65949862eea8'], DIANA: ['b1b0ab3c94b1', 'b1b0ab3c94b1'], NOVA: ['57bc69e9ff0e', '57bc69e9ff0e'],
+  VIBE: ['61c3f0aaafcc', '61c3f0aaafcc'], BULL: ['0e35ff1680b4', '0e35ff1680b4'], BEAR: ['341551b3843b', '341551b3843b'],
+  GUARD: ['65936d3c4459', 'a63d62d24727'], RISKY: ['1b9e95d89e73', 'c627a0b22c21'], SAFE: ['0533536ef195', '494425dc51a5'],
+  NEUTRAL: ['b6cdb1792ed3', '0dd7cdaac12a'],
+};
+
+test('P3-5-T1 분석가 4명·BULL·BEAR·GUARD·RISKY·SAFE·NEUTRAL 프롬프트와 출력 스키마가 P2와 같다', () => {
+  for (const [role, [flat, held]] of Object.entries(P2_HASHES) as [Role, [string, string]][]) {
+    for (const mode of MODES) {
+      assert.equal(prompts.hash(role, mode, false), flat, `${role} ${mode}`);
+      if (mode !== 'forced_direction') assert.equal(prompts.hash(role, mode, true), held, `${role} ${mode} 보유`);
+      assert.ok(!prompts.systemPrompt(role, mode).includes('scenarios'), `${role} ${mode}`);
+      assert.ok(!JSON.stringify(jsonSchemaFor(role, mode)).includes('scenarios'), `${role} ${mode} 스키마`);
+    }
+  }
+});
+
+test('P3-5-T2 제안서 작성자 프롬프트에 NO_TRADE일 때 PRIMARY 시나리오 규칙과 수량 비제안 규칙이 있다', () => {
+  for (const [role, mode] of [['ACE', 'algorithm'], ['ACE', 'scalp'], ['BLITZ', 'scalp'], ['PM', 'algorithm']] as const) {
+    const p = prompts.systemPrompt(role, mode);
+    const at = `${mode} ${role}`;
+    assert.match(p, /NO_TRADE이면 `role`이 PRIMARY인 시나리오를 반드시 1건 쓴다/, at); // (a)
+    assert.match(p, /근거를 찾을 수 있는 값만 쓴다/, at); // (b)
+    assert.match(p, /수량·금액은 어디에도 쓰지 않는다/, at); // (c)
+    assert.match(p, /scalp 모드는 항상 null/, at); // (d)
+    assert.match(p, /지금 진입하라는 신호가 아니다/, at); // (e)
+    // 금액·수량·총 자산 값이나 필드가 프롬프트에 없다
+    for (const secret of ['quantity', 'equity', 'riskPerTrade', '총 자산', 'USDT ']) assert.ok(!p.includes(secret), `${at}: ${secret}`);
+  }
+  assert.match(prompts.systemPrompt('PM', 'algorithm'), /`scenarios`·`tranches`도 수정 대상/); // P3-5-R3
+});
+
+test('P3-1-R2 보유·강제 방향의 제안 프롬프트에는 시나리오 규칙이 없고 ACE·BLITZ 출력 스키마에 scenarios·tranches가 없다', () => {
+  const props = (role: Role, mode: Mode, held = false) => Object.keys((jsonSchemaFor(role, mode, held) as any).properties);
+  for (const [role, mode, held] of [['ACE', 'forced_direction', false], ['BLITZ', 'forced_direction', false], ['ACE', 'algorithm', true], ['BLITZ', 'scalp', true], ['ACE', 'scalp', true]] as const) {
+    assert.ok(!prompts.systemPrompt(role, mode, held).includes('## 진입 시나리오'), `${role} ${mode}`);
+    assert.ok(!props(role, mode, held).includes('scenarios') && !props(role, mode, held).includes('tranches'), `${role} ${mode}`);
+  }
+  assert.ok(!prompts.systemPrompt('PM', 'algorithm', true).includes('## 진입 시나리오'));
+  for (const [role, mode] of [['ACE', 'algorithm'], ['BLITZ', 'scalp'], ['ACE', 'scalp']] as const) {
+    assert.ok(props(role, mode).includes('scenarios') && props(role, mode).includes('tranches'), `${role} ${mode}`);
+    const required = (jsonSchemaFor(role, mode) as any).required as string[];
+    assert.ok(required.includes('scenarios'), `${role} ${mode} 필수`);
+  }
+});

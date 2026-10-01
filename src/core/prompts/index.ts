@@ -1,5 +1,6 @@
 // 역할별 시스템 프롬프트와 출력 스키마 (P0-4-R7, P0-3-R4, P0-5-R6). 프롬프트 버전은 내용 해시로 자동 계산한다 (P1-6-R3).
 // 구성: shared/common + (브리핑 역할: shared/briefing | 제안 역할: shared/proposal + no-trade 또는 forced) + roles/<역할>
+// 보유 없는 신규 진입 분석: 제안 역할에 shared/scenarios를 붙인다 (P3-5-R2)
 // 보유 포지션이 있는 작업: 제안 역할은 no-trade 대신 shared/position, 포지션을 보는 검토 역할은 shared/position-review를 붙인다 (P2-4-R3)
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -21,7 +22,9 @@ function parts(role: Role, mode: Mode, held: boolean): string[] {
   if (BRIEFING_ROLES.includes(role)) out.push('shared/briefing.md');
   if (held && REVIEW_ROLES.includes(role)) out.push('shared/position-review.md');
   if (role === 'ACE' || role === 'BLITZ' || role === 'PM') {
-    out.push('shared/proposal.md', mode === 'forced_direction' && role !== 'PM' ? 'shared/forced.md' : held ? 'shared/position.md' : 'shared/no-trade.md');
+    const forced = mode === 'forced_direction' && role !== 'PM';
+    out.push('shared/proposal.md', forced ? 'shared/forced.md' : held ? 'shared/position.md' : 'shared/no-trade.md');
+    if (!forced && !held) out.push('shared/scenarios.md'); // P3-5-R2
   }
   out.push(`roles/${role}.md`);
   return out;
@@ -53,13 +56,17 @@ export function createPromptSet(dir: string | URL = PROMPT_DIR): PromptSet {
 
 export const prompts: PromptSet = createPromptSet();
 
-const withActions = (actions: readonly string[], description: string) => ({
-  ...ProposalOutputSchema,
-  props: { ...ProposalOutputSchema.props, action: en(actions, { description }) },
-});
+/** entryPlan: false면 scenarios·tranches를 스키마에서 뺀다 (P3-1-R2. 없는 필드는 읽을 때 []·null로 채워진다) */
+const withActions = (actions: readonly string[], description: string, entryPlan = false) => {
+  const { scenarios, tranches, ...rest } = ProposalOutputSchema.props;
+  return {
+    ...ProposalOutputSchema,
+    props: { ...rest, action: en(actions, { description }), ...(entryPlan ? { scenarios, tranches } : {}) },
+  };
+};
 /** CLI 스키마 단계에서 모드·포지션 유무에 맞지 않는 행동을 막는다 (검증 코드 V-ACTION·V-POS-STATE는 그대로 적용) */
 const ForcedProposalSchema = withActions(ALLOWED_ACTIONS.forced_direction, 'forced_direction: ENTER_LONG 또는 ENTER_SHORT만');
-const EntryProposalSchema = withActions(ENTRY_ACTIONS, '보유 포지션 없음: 근거가 약하면 NO_TRADE 선택 가능');
+const EntryProposalSchema = withActions(ENTRY_ACTIONS, '보유 포지션 없음: 근거가 약하면 NO_TRADE 선택 가능', true);
 const HeldProposalSchema = withActions(POSITION_ACTIONS, '보유 포지션 있음: HOLD·ADD·REDUCE·EXIT 중 하나');
 
 /** claude --json-schema에 넘길 역할별 출력 스키마. held: 작업에 보유 포지션이 있음 */

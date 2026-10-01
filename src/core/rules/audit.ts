@@ -14,6 +14,7 @@ export const EVIDENCE_ISSUE_LABEL = {
   VALUE_MISMATCH: '수치 불일치',
   NO_BRIEF_REF: '브리핑 인용 없음',
   UNSOURCED_NUMBER: '근거 없는 새 수치',
+  NO_SCENARIO_REF: '시나리오 근거 없음',
 } as const;
 export type EvidenceIssueKind = keyof typeof EVIDENCE_ISSUE_LABEL;
 
@@ -135,6 +136,14 @@ export function auditEvidence(input: AuditInput, index: EvidenceIndex): Evidence
     if (fresh.length) issue('UNSOURCED_NUMBER', d.speaker, at, null, `브리핑에 없는 수치 ${fresh.map((n) => n.text).join(', ')} (snap:·derived: 근거 없음)`);
   }
 
-  for (const p of input.proposals) unresolved(p.author, p.evidenceRefs, {});
+  for (const p of input.proposals) {
+    unresolved(p.author, p.evidenceRefs, {});
+    // P3-1-R7: 시나리오마다 유효한 형식의 참조 1개 이상 (proposal/3 이전 기록에는 scenarios가 없다)
+    (p.scenarios ?? []).forEach((s, i) => {
+      const n = `시나리오 ${i + 1}`;
+      for (const ref of s.evidenceRefs) if (!index.has(ref)) issue('UNRESOLVED_REF', p.author, {}, ref, `${n}: ${ref}: 스냅샷·지표·브리핑에 없는 참조`);
+      if (s.evidenceRefs.length === 0) issue('NO_SCENARIO_REF', p.author, {}, null, `${n}: 가격 근거 참조(evidenceRefs)가 없음`);
+    });
+  }
   return out;
 }

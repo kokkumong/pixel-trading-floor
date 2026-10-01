@@ -14,8 +14,8 @@ import type { DebateStopReason, ExecutionBackend, Mode, ResultClass, Role } from
 import { APP_VERSION, CORE_VERSION } from '../version.ts';
 import type { CallRecord } from '../job/budget.ts';
 
-/** 2: positionContext 추가 (P2-2-R4). 1은 이전 리포트 읽기용 */
-export const REPORT_SCHEMA_VERSION = 2;
+/** 3: 진입 시나리오(decision/4 entryPlan) 추가 (P3-6-R4), 2: positionContext 추가 (P2-2-R4). 1·2는 이전 리포트 읽기용 */
+export const REPORT_SCHEMA_VERSION = 3;
 
 export interface ReportMeta {
   /** claude --version 결과. 확인할 수 없으면 'unknown', 데모는 'none' */
@@ -23,7 +23,7 @@ export interface ReportMeta {
 }
 
 export interface Report {
-  reportSchemaVersion: 1 | typeof REPORT_SCHEMA_VERSION;
+  reportSchemaVersion: 1 | 2 | typeof REPORT_SCHEMA_VERSION;
   appVersion: string;
   coreVersion: string;
   interface: 'web' | 'floor';

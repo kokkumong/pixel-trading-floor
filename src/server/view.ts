@@ -5,6 +5,7 @@ import { isTerminal, type JobState } from '../core/job/state.ts';
 import { needsDiagnostics } from '../core/live.ts';
 import { maskDecision, maskSizing } from '../core/position/mask.ts';
 import { panelView, sizingNote, type PanelView } from '../core/rules/display.ts';
+import { entryPlanView } from '../core/rules/entryview.ts';
 import type { Role } from '../core/schema/types.ts';
 import { redact } from './security.ts';
 
@@ -60,15 +61,18 @@ export function jobView(r: JobRecord, now: Date, home: string = homedir()): JobV
   };
 }
 
-/** LAN 기기에 보내는 작업 보기: 수량 제안의 금액·수량을 가린다 (P2-5-R6). 보유 요약(가격·비율)과 문구는 남긴다 */
+/** LAN 기기에 보내는 작업 보기: 수량 제안과 시나리오의 금액·수량을 가린다 (P2-5-R6, P3-6-R4). 보유 요약(가격·비율)과 문구는 남긴다 */
 export function maskJobView(v: JobView): JobView {
-  const s = v.finalDecision?.sizing;
-  if (!s) return v;
-  const hidden = sizingNote(maskSizing(s)!);
-  const shown = sizingNote(s);
+  const d = v.finalDecision;
+  if (!d || (!d.sizing && !d.entryPlan)) return v;
+  const s = d.sizing;
+  const hidden = s ? sizingNote(maskSizing(s)!) : '';
+  const shown = s ? sizingNote(s) : null;
+  const masked = maskDecision(d);
   return {
     ...v,
-    finalDecision: maskDecision(v.finalDecision),
-    panel: v.panel && { ...v.panel, notes: v.panel.notes.map((n) => (n === shown ? hidden : n)) },
+    finalDecision: masked,
+    // 시나리오 카드의 수량·손실 금액도 가린 판정에서 다시 만든다 (P3-6-R4)
+    panel: v.panel && { ...v.panel, notes: v.panel.notes.map((n) => (n === shown ? hidden : n)), entryPlan: entryPlanView(masked) },
   };
 }

@@ -104,7 +104,7 @@ export class ReportStore {
   private read(file: string): Report | null {
     try {
       const r = JSON.parse(readFileSync(file, 'utf8')) as Report;
-      return r && (r.reportSchemaVersion === 1 || r.reportSchemaVersion === REPORT_SCHEMA_VERSION) && isJobId(r.jobId) && r.finalDecision ? r : null;
+      return r && Number.isInteger(r.reportSchemaVersion) && r.reportSchemaVersion >= 1 && r.reportSchemaVersion <= REPORT_SCHEMA_VERSION && isJobId(r.jobId) && r.finalDecision ? r : null;
     } catch {
       return null; // 깨진 파일은 목록에서 뺀다
     }

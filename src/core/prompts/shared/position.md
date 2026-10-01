@@ -12,3 +12,4 @@
 - 손절은 넓히지 않는다 (롱: 기존보다 낮추기 금지, 숏: 높이기 금지). 넓히는 갱신은 코드가 무시한다.
 - `stopDistancePercent`가 음수면 현재가가 이미 손절가를 넘은 상태다. `liquidationDistancePercent`가 작으면 청산 위험이 가깝다.
 - 수량은 제안하지 않는다. 수량은 코드가 사용자의 손실 한도로 계산한다.
+- `scenarios`(진입 시나리오)와 `tranches`(분할 진입)는 보유 포지션 판정에서 쓰지 않는다. 출력 형식에 필드가 있으면 `scenarios`는 빈 배열, `tranches`는 null로 둔다.

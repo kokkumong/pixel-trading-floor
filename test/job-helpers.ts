@@ -7,7 +7,7 @@ import { createEngine, type Engine } from '../src/core/job/engine.ts';
 import { JobStore } from '../src/core/job/store.ts';
 import type { ModelRequest } from '../src/core/model/driver.ts';
 import { createScriptedDriver, type ScriptedDriver, type Step } from '../src/core/model/scripted.ts';
-import type { ProposalOutput } from '../src/core/schema/proposal.ts';
+import type { ProposalOutput, Scenario } from '../src/core/schema/proposal.ts';
 import type { Role } from '../src/core/schema/types.ts';
 
 export function tempEngine(at: Date): { engine: Engine; store: JobStore; root: string } {
@@ -52,6 +52,20 @@ export function sampleProposal(input: RoleInput, over: Partial<ProposalOutput> =
     scenarios: [],
     tranches: null,
     ...(pos ? { action: 'HOLD', positionRef: pos.positionRef, entry: { type: 'market', min: null, max: null }, stopLoss: null, targets: [], leverage: pos.leverage } : {}),
+    ...over,
+  };
+}
+
+/** 기준 가격 아래 0.3% 눌림 롱 시나리오: 구간 −0.4%~−0.2%, 손절 −1.2%, 목표 +2% (손익비 2.2, 20배 증거금 소진 거리 안) */
+export function sampleScenario(input: RoleInput, over: Partial<Scenario> = {}): Scenario {
+  const px = input.priceBasis!.last!;
+  return {
+    role: 'PRIMARY', side: 'LONG',
+    trigger: { kind: 'PULLBACK', level: px * 0.997, timeframe: input.mode === 'algorithm' ? '4h' : '15m', confirmation: '종가가 기준 가격 위에서 마감' },
+    entry: { type: 'zone', min: px * 0.996, max: px * 0.998 },
+    stopLoss: px * 0.988, targets: [px * 1.02], leverage: input.marketType === 'perpetual' ? 10 : null, tranches: null,
+    invalidationConditions: ['손절가 이탈'], recheckAfterMinutes: 60,
+    evidenceRefs: ['derived:rsi14'], rationale: '지지 구간 재확인 뒤 진입 후보',
     ...over,
   };
 }
