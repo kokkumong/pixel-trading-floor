@@ -90,7 +90,7 @@ function card(s: ScenarioPlan): ScenarioCard {
     { label: '목표', value: s.targets.join(' · ') },
     { label: '손익비', value: `${s.rewardRisk} (첫 목표 기준)` },
   ];
-  if (s.leverage !== null) fields.push({ label: '레버리지', value: `${s.leverage}배${s.risk ? ` · 손절 거리 ${s.risk.stopDistancePercent}%` : ''}` });
+  if (s.leverage !== null) fields.push({ label: '레버리지', value: `${s.leverage}배${s.risk ? ` · 손절 거리 ${Number(s.risk.stopDistancePercent.toFixed(2))}%` : ''}` });
   if (s.sizing && !s.tranchePlan) fields.push({ label: '수량', value: `${s.sizing.suggestedQuantity} (${s.sizing.assumptions.join(' · ')})` });
   const warnings: string[] = [];
   if (s.warnings.includes('LOW_REWARD_RISK')) warnings.push(`손익비 낮음: 첫 목표까지 보상이 손절 위험의 ${s.rewardRisk}배`);
